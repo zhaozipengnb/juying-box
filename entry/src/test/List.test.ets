@@ -4,6 +4,7 @@ import codingTest from './Coding.test';
 import configDecoderTest from './ConfigDecoder.test';
 import cmsJsonApiTest from './CmsJsonApi.test';
 import configStoreTest from './ConfigStore.test';
+import appStateTest from './AppState.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -12,4 +13,5 @@ export default function testsuite() {
   configDecoderTest();
   cmsJsonApiTest();
   configStoreTest();
+  appStateTest();
 }
