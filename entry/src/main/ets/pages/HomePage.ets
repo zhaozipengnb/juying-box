@@ -169,7 +169,7 @@ export struct HomePage {
           TextInput({ placeholder: '搜索影片…', text: this.searchKey })
             .layoutWeight(1).height(40)
             .onChange((v: string) => { this.searchKey = v; })
-            .onSubmit(() => { this.doSearch(); })
+            .onSubmit(() => { if (this.searching) { return; } this.doSearch(); })
           Button('搜索')
             .height(40)
             .enabled(!this.searching && this.searchKey.trim().length > 0)
@@ -199,6 +199,19 @@ export struct HomePage {
         }
         .scrollable(ScrollDirection.Horizontal)
         .width('100%')
+      }
+
+      // 搜索态标题栏：显示当前关键词与「返回浏览」入口（仅搜索结果就绪时展示）
+      if (this.kind === 'search' && this.items.length > 0) {
+        Row() {
+          Text(`“${this.searchKey}” 的结果`).fontSize(14).fontColor('#666666').layoutWeight(1)
+          Text('返回浏览').fontSize(14).fontColor('#007DFF')
+            .onClick(() => {
+              if (this.loading || this.searching) { return; }
+              this.showSearch = false;
+              this.loadHome();
+            })
+        }.width('100%').padding({ left: 12, right: 12, top: 8 })
       }
 
       if (this.errMsg !== '') {
