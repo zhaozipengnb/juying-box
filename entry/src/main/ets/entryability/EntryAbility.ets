@@ -16,6 +16,9 @@ export default class EntryAbility extends UIAbility {
     preferences.getPreferences(context, 'okvideo_config').then((pref: preferences.Preferences) => {
       const store = new ConfigStore(new PreferencesKVStore(pref));
       return AppState.instance.initFromStore(store);
+    }).catch((e: Object) => {
+      // 装配失败兜底：preferences 打开或恢复链路异常时降级到配置页，用户可重新输入订阅
+      AppState.instance.phase = 'config';
     });
   }
 
