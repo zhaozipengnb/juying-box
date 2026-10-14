@@ -83,7 +83,9 @@ export struct HomePage {
     try {
       const pr: PageResult = await d.categoryContent(tid, pg);
       if (AppState.instance.driver !== d) { return; }
-      this.items = replace ? pr.items : this.items.concat(pr.items);
+      // 追加前按 vodId 去重，避免源站分页边界重叠导致重复项
+      const fresh = pr.items.filter((m: Movie): boolean => !this.items.some((o: Movie): boolean => o.vodId === m.vodId));
+      this.items = replace ? pr.items : this.items.concat(fresh);
       this.page = pr.page;
       this.pageCount = pr.pageCount;
       this.kind = 'category';
@@ -219,6 +221,7 @@ export struct HomePage {
         Column({ space: 8 }) {
           Text('加载失败：' + this.errMsg).fontSize(13).fontColor('#E53935')
           Button('重试').onClick(() => { this.retry(); })
+          Button('重新配置').onClick(() => { AppState.instance.clearConfig(); })
         }
         .width('100%')
         .margin({ top: 60 })

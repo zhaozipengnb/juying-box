@@ -34,6 +34,7 @@ export class AppState {
 
   async loadFromUrl(url: string): Promise<boolean> {
     this.errMsg = '';
+    console.info('OKV loadFromUrl start url=' + url);
     try {
       let content: string | Uint8Array;
       if (this.testFetchText !== undefined) {
@@ -45,6 +46,7 @@ export class AppState {
         content = new Uint8Array(r.body);
       }
       const config = decodeConfigContent(content);
+      console.info('OKV decoded sites=' + config.sites.length + ' bytes=' + content.length);
       if (config.sites.length === 0) {
         this.errMsg = '订阅中没有可用站点';
         this.phase = 'config';
@@ -54,8 +56,10 @@ export class AppState {
       this.subUrl = url;
       this.buildDriver(config.sites[0]);
       this.phase = 'home';
+      console.info('OKV phase->home ok');
       return true;
     } catch (e) {
+      console.info('OKV loadFromUrl ERR ' + (e instanceof Error ? e.message : String(e)));
       this.errMsg = e instanceof Error ? e.message : String(e);
       this.phase = 'config';
       return false;
@@ -84,6 +88,17 @@ export class AppState {
       if (s.key === key) { this.buildDriver(s); return true; }
     }
     return false;
+  }
+
+  // 清空当前配置回到订阅输入页（坏订阅自救入口）
+  clearConfig(): void {
+    if (this.store !== null) { this.store.clear(); }
+    this.config = null;
+    this.currentSite = null;
+    this.driver = null;
+    this.subUrl = '';
+    this.errMsg = '';
+    this.phase = 'config';
   }
 
   // 订阅加载成功后持久化当前配置（fire-and-forget，调用方无需等待）
