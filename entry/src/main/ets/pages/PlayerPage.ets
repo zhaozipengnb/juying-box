@@ -34,6 +34,7 @@ export struct PlayerPage {
     .onReady((ctx: NavDestinationContext) => {
       const p = ctx.pathInfo.param as PlayerParam;
       if (p !== null && p !== undefined) { this.ep = p.ep; }
+      else { this.errMsg = '播放参数缺失'; }  // 兜底：无参数直接进错误终态，避免永久 Loading
     })
     .onBackPressed(() => { return false; })
   }

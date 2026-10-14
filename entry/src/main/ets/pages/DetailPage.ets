@@ -9,6 +9,7 @@ export struct DetailPage {
   @Local lineIdx: number = 0;
   @Local loading: boolean = false;
   @Local errMsg: string = '';
+  @Local descExpanded: boolean = false;  // 简介展开/收起
   private movie: Movie | null = null;
 
   aboutToAppear(): void {
@@ -50,9 +51,13 @@ export struct DetailPage {
         }.alignItems(HorizontalAlign.Start).layoutWeight(1)
       }.width('100%').padding(12)
 
+      // 简介默认 6 行截断，点击展开/收起
       Text(this.detail!.desc === '' ? '暂无简介' : this.detail!.desc)
-        .fontSize(13).fontColor('#444444').maxLines(6)
+        .fontSize(13).fontColor('#444444').maxLines(this.descExpanded ? 99 : 6)
         .padding({ left: 12, right: 12 })
+        .onClick(() => { this.descExpanded = !this.descExpanded; })
+      Text('点击简介' + (this.descExpanded ? '收起' : '展开'))
+        .fontSize(11).fontColor('#999999').padding({ left: 12, top: 2 })
 
       if (this.detail!.lines.length > 0) {
         Scroll() {
