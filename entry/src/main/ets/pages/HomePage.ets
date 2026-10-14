@@ -112,6 +112,7 @@ export struct HomePage {
       this.errMsg = '';
     } catch (e) {
       this.errMsg = e instanceof Error ? e.message : String(e);
+      this.kind = 'search'; // 搜索失败也归位搜索态，重试时按搜索重放
     } finally {
       this.searching = false;
     }
