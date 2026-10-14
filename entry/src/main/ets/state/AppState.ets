@@ -1,7 +1,7 @@
 // 全局状态（V2）：配置 + 当前站点 + 引擎实例。测试可注入 testFetchText 替代真网络。
 import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, FetchText, decodeConfigContent } from 'common';
 import { httpFetch } from '../net/HttpClient';
-import { ConfigStore } from './ConfigStore';
+import { ConfigStore, serializeConfig } from './ConfigStore';
 
 export type AppPhase = 'initing' | 'config' | 'home';
 
@@ -16,6 +16,8 @@ export class AppState {
   @Trace errMsg: string = '';
   // 测试钩子：非 undefined 时替代真实 httpFetch（生产代码不设置）
   testFetchText?: FetchText = undefined;
+  // 持久化存储引用：EntryAbility 装配后持有，供 persistCurrent 落盘（对象非观察目标，不加 @Trace）
+  store: ConfigStore | null = null;
 
   makeFetchText(): FetchText {
     if (this.testFetchText !== undefined) { return this.testFetchText; }
@@ -61,6 +63,7 @@ export class AppState {
   }
 
   async initFromStore(store: ConfigStore): Promise<void> {
+    this.store = store;
     this.phase = 'initing';
     const stored = store.load();
     if (stored === null) { this.phase = 'config'; return; }
@@ -81,5 +84,12 @@ export class AppState {
       if (s.key === key) { this.buildDriver(s); return true; }
     }
     return false;
+  }
+
+  // 订阅加载成功后持久化当前配置（fire-and-forget，调用方无需等待）
+  persistCurrent(): void {
+    if (this.store !== null && this.config !== null && this.subUrl !== '') {
+      this.store.save(this.subUrl, serializeConfig(this.subUrl, this.config));
+    }
   }
 }
