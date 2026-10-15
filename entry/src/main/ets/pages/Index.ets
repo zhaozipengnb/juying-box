@@ -9,10 +9,12 @@ import { PlayerPage } from './PlayerPage';
 @Entry
 @ComponentV2
 struct Index {
+  app: AppState = AppState.instance;
   build() {
     Navigation(Nav.stack) {
-      if (AppState.instance.phase === 'config') { ConfigPage() }
-      else if (AppState.instance.phase === 'home') { HomePage() }
+
+      if (this.app.phase === 'config') { ConfigPage() }
+      else if (this.app.phase === 'home') { Text('HOME分支已命中').fontSize(30) }
       else { Column() { Text('正在加载…') }.width('100%').height('100%').justifyContent(FlexAlign.Center) }
     }
     .mode(NavigationMode.Stack)
@@ -21,9 +23,15 @@ struct Index {
     .navDestination(this.pagesMap)
   }
 
+  aboutToAppear(): void {
+    // 冷启动已恢复配置 → 直接路由进首页（initFromStore 通常先于首帧完成）
+    if (this.app.phase === 'home') { Nav.stack.replacePath({ name: 'Home' }); }
+  }
+
   @Builder
   pagesMap(name: string) {
-    if (name === 'Detail') { DetailPage() }
+    if (name === 'Home') { HomePage() }
+    else if (name === 'Detail') { DetailPage() }
     else if (name === 'Player') { PlayerPage() }
   }
 }

@@ -9,6 +9,8 @@ type ResultKind = 'home' | 'category' | 'search';
 
 @ComponentV2
 export struct HomePage {
+  // 持有 AppState 实例：V2 观察要求经组件成员访问 @Trace（静态链式访问不建立依赖）
+  app: AppState = AppState.instance;
   @Local sites: string[] = [];        // 站点名列表（与 siteKeys 同序，Select 展示用）
   @Local siteKeys: string[] = [];     // 站点 key 列表
   @Local siteIdx: number = 0;
@@ -31,12 +33,12 @@ export struct HomePage {
   }
 
   private driver(): SiteDriver | null {
-    return AppState.instance.driver;
+    return this.app.driver;
   }
 
   // 从 AppState 同步站点列表（订阅已装配好，此处仅映射 UI 展示状态）
   private refreshSites(): void {
-    const cfg = AppState.instance.config;
+    const cfg = this.app.config;
     if (cfg === null) { return; }
     const names: string[] = [];
     const keys: string[] = [];
@@ -46,7 +48,7 @@ export struct HomePage {
     }
     this.sites = names;
     this.siteKeys = keys;
-    const curKey: string = AppState.instance.currentSite?.key ?? '';
+    const curKey: string = this.app.currentSite?.key ?? '';
     this.siteIdx = Math.max(0, keys.indexOf(curKey));
   }
 
@@ -58,7 +60,7 @@ export struct HomePage {
     this.errMsg = '';
     try {
       const hc: HomeContent = await d.getHomeContent();
-      if (AppState.instance.driver !== d) { return; }   // 站点已切换，丢弃过期响应
+      if (this.app.driver !== d) { return; }   // 站点已切换，丢弃过期响应
       this.cats = hc.categories.map((c: Category): string => c.name);
       this.catKeys = hc.categories.map((c: Category): string => c.tid);
       this.catIdx = 0;
@@ -82,7 +84,7 @@ export struct HomePage {
     this.errMsg = '';
     try {
       const pr: PageResult = await d.categoryContent(tid, pg);
-      if (AppState.instance.driver !== d) { return; }
+      if (this.app.driver !== d) { return; }
       // 追加前按 vodId 去重，避免源站分页边界重叠导致重复项
       const fresh = pr.items.filter((m: Movie): boolean => !this.items.some((o: Movie): boolean => o.vodId === m.vodId));
       this.items = replace ? pr.items : this.items.concat(fresh);
@@ -106,7 +108,7 @@ export struct HomePage {
     this.errMsg = '';
     try {
       const pr: PageResult = await d.searchContent(kw, false);
-      if (AppState.instance.driver !== d) { return; }
+      if (this.app.driver !== d) { return; }
       this.items = pr.items;
       this.page = 1;
       this.pageCount = 1;
@@ -131,6 +133,7 @@ export struct HomePage {
   }
 
   build() {
+    NavDestination() {
     Column() {
       // 顶栏：站点切换 + 搜索入口
       Row({ space: 8 }) {
@@ -143,7 +146,7 @@ export struct HomePage {
           .onSelect((idx: number) => {
             if (idx === this.siteIdx || this.loading || this.searching) { return; }
             this.siteIdx = idx;
-            if (AppState.instance.switchSite(this.siteKeys[idx] ?? '')) {
+            if (this.app.switchSite(this.siteKeys[idx] ?? '')) {
               this.loadHome();
             }
           })
@@ -221,7 +224,7 @@ export struct HomePage {
         Column({ space: 8 }) {
           Text('加载失败：' + this.errMsg).fontSize(13).fontColor('#E53935')
           Button('重试').onClick(() => { this.retry(); })
-          Button('重新配置').onClick(() => { AppState.instance.clearConfig(); })
+          Button('重新配置').onClick(() => { this.app.clearConfig(); Nav.stack.clear(); })
         }
         .width('100%')
         .margin({ top: 60 })
@@ -245,5 +248,7 @@ export struct HomePage {
     }
     .width('100%')
     .height('100%')
+    }
+    .hideTitleBar(true)
   }
 }
