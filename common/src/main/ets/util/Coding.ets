@@ -52,10 +52,10 @@ export function b64encode(b: Uint8Array): string {
     const b0 = b[i];
     const b1 = i + 1 < b.length ? b[i + 1] : 0;
     const b2 = i + 2 < b.length ? b[i + 2] : 0;
-    out += B64[b0 >> 2];
-    out += B64[((b0 & 0x03) << 4) | (b1 >> 4)];
-    out += i + 1 < b.length ? B64[((b1 & 0x0f) << 2) | (b2 >> 6)] : '=';
-    out += i + 2 < b.length ? B64[b2 & 0x3f] : '=';
+    out += B64.charAt(b0 >> 2);
+    out += B64.charAt(((b0 & 0x03) << 4) | (b1 >> 4));
+    out += i + 1 < b.length ? B64.charAt(((b1 & 0x0f) << 2) | (b2 >> 6)) : '=';
+    out += i + 2 < b.length ? B64.charAt(b2 & 0x3f) : '=';
   }
   return out;
 }
