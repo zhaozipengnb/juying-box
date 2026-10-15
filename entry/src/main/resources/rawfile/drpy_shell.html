@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!--
+  drpy 壳页面：drpy JS 插件运行环境
+  职责：
+    1) fetch 劫持——插件的网络请求经 window.arktsReq.__req(id,url,opts) 入队到 ArkTS（绕跨域/统一 UA），
+       ArkTS 完成后执行 __arktsResolve(id, resultJson) 回传（resultJson 为 {status,body(base64),headers} 的 JSON 字符串）
+    2) __drpy.init(cfgJson, drpyUrl, extUrl)——ArkTS 已把 drpy2/ext 代码注入为 window.__DRPY / window.__EXT
+       （export default 已替换），此处把站点配置交给运行时 init
+    3) __drpy.call(method, ...args)——分派到 __DRPY 对应方法，JSON 字符串返回（供 runJavaScriptExt 取值）
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>drpy-shell</title>
+</head>
+<body>
+<script>
+  // ---------- 网络代理桥 ----------
+  window.__pending = {};   // id -> resolve（fetch 劫持挂起）
+  window.__results = {};   // id -> resultJson（ArkTS 回传落点）
+
+  // ArkTS 完成网络请求后调用：写入结果并唤醒挂起的 fetch
+  window.__arktsResolve = function (id, resultJson) {
+    window.__results[id] = resultJson;
+    var p = window.__pending[id];
+    if (p) { delete window.__pending[id]; p(resultJson); }
+  };
+
+  function b64ToUint8Array(b64) {
+    var bin = atob(b64);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) { arr[i] = bin.charCodeAt(i); }
+    return arr;
+  }
+
+  // fetch 劫持：所有请求转 ArkTS 网络栈（在 import drpy 运行时之前安装）
+  window.fetch = async function (url, opts) {
+    var id = 'r' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    var payload = new Promise(function (resolve) { window.__pending[id] = resolve; });
+    var optJson = JSON.stringify({
+      method: (opts && opts.method) || 'GET',
+      headers: (opts && opts.headers) || {},
+      body: (opts && opts.body) ? String(opts.body) : ''
+    });
+    window.arktsReq.req(id, String(url), optJson);
+    var resultJson = await payload;
+    var r = JSON.parse(resultJson);
+    if (r.error) { throw new Error('代理请求失败: ' + r.error); }
+    var bodyStream = b64ToUint8Array(r.body);
+    return new Response(bodyStream, { status: r.status, headers: r.headers });
+  };
+
+  // ---------- DRPY 分派 ----------
+  window.__drpyReady = false;
+  window.__DRPY = null;
+  window.__EXT = null;
+
+  window.__drpy = {
+    // ArkTS 注入 __DRPY/__EXT 后调用：把站点配置交给运行时
+    init: async function (cfgJson, drpyUrl, extUrl) {
+      var drpy = window.__DRPY;
+      if (!drpy) { throw new Error('drpy 运行时未注入'); }
+      var cfg = JSON.parse(cfgJson);
+      // ext 插件代码已注入为 __EXT；drpy2 的 init 约定接收站点配置 JSON 字符串
+      var extArg = window.__EXT ? window.__EXT : (cfg.ext || '');
+      await drpy.init(JSON.stringify({
+        skey: cfg.skey, name: cfg.name, type: cfg.type, api: cfg.api,
+        ext: extArg, header: cfg.header, timeout: cfg.timeout
+      }));
+      window.__drpyReady = true;
+    },
+    // 方法分派：home/homeVod/category/detail/play/search
+    call: async function (method) {
+      if (!window.__drpyReady) { throw new Error('drpy 未就绪'); }
+      var args = Array.prototype.slice.call(arguments, 1);
+      var fn = window.__DRPY[method];
+      if (typeof fn !== 'function') { throw new Error('未知方法: ' + method); }
+      var r = await fn.apply(null, args);
+      return typeof r === 'string' ? r : JSON.stringify(r);
+    }
+  };
+
+  // 通知 ArkTS 壳脚本就绪（ ArkTS onPageEnd 亦感知，此为双保险）
+  console.info('OKV shell ready');
+</script>
+</body>
+</html>
