@@ -5,6 +5,15 @@ import { ConfigStore, serializeConfig } from './ConfigStore';
 
 export type AppPhase = 'initing' | 'config' | 'home';
 
+// 错误信息提取：Error/BusinessError/普通对象统一取 message（避免 [object Object]）
+function errText(e: Object): string {
+  if (e instanceof Error) { return e.message; }
+  const m = (e as Record<string, Object>)['message'];
+  if (typeof m === 'string' && m !== '') { return m; }
+  return JSON.stringify(e);
+}
+
+
 @ObservedV2
 export class AppState {
   static instance: AppState = new AppState();
@@ -52,6 +61,13 @@ export class AppState {
         this.phase = 'config';
         return false;
       }
+      // MVP 引擎仅支持 type 1（CMS JSON）；type 3（JS 插件）需 Spider 引擎，下阶段实现
+      const cmsCount = config.sites.filter((s: SiteConfig): boolean => s.type === 1).length;
+      if (cmsCount === 0) {
+        this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但全部为 JS 插件类型（暂不支持，当前仅支持 CMS JSON 类型站点）';
+        this.phase = 'config';
+        return false;
+      }
       this.config = config;
       this.subUrl = url;
       this.buildDriver(config.sites[0]);
@@ -59,8 +75,9 @@ export class AppState {
       console.info('OKV phase->home ok');
       return true;
     } catch (e) {
-      console.info('OKV loadFromUrl ERR ' + (e instanceof Error ? e.message : String(e)));
-      this.errMsg = e instanceof Error ? e.message : String(e);
+      const msg = errText(e as Object);
+      console.info('OKV loadFromUrl ERR ' + msg);
+      this.errMsg = msg;
       this.phase = 'config';
       return false;
     }

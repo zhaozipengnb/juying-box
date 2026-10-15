@@ -7,6 +7,14 @@ import { Category, HomeContent, Movie, PageResult, SiteDriver } from 'common';
 // 网格数据来源：决定触底翻页方式（home/search 的 pageCount 固定 1 不翻页，category 按 tid+页码追加）与错误重试入口
 type ResultKind = 'home' | 'category' | 'search';
 
+// 错误信息提取：Error/BusinessError/普通对象统一取 message
+function errText(e: Object): string {
+  if (e instanceof Error) { return e.message; }
+  const m = (e as Record<string, Object>)['message'];
+  if (typeof m === 'string' && m !== '') { return m; }
+  return JSON.stringify(e);
+}
+
 @ComponentV2
 export struct HomePage {
   // 持有 AppState 实例：V2 观察要求经组件成员访问 @Trace（静态链式访问不建立依赖）
@@ -70,7 +78,7 @@ export struct HomePage {
       this.kind = 'home';
       this.errMsg = '';
     } catch (e) {
-      this.errMsg = e instanceof Error ? e.message : String(e);
+      this.errMsg = errText(e as Object);
     } finally {
       this.loading = false;
     }
@@ -93,7 +101,7 @@ export struct HomePage {
       this.kind = 'category';
       this.errMsg = '';
     } catch (e) {
-      this.errMsg = e instanceof Error ? e.message : String(e);
+      this.errMsg = errText(e as Object);
     } finally {
       this.loading = false;
     }
@@ -115,7 +123,7 @@ export struct HomePage {
       this.kind = 'search';
       this.errMsg = '';
     } catch (e) {
-      this.errMsg = e instanceof Error ? e.message : String(e);
+      this.errMsg = errText(e as Object);
       this.kind = 'search'; // 搜索失败也归位搜索态，重试时按搜索重放
     } finally {
       this.searching = false;
