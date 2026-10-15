@@ -2,7 +2,8 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { AppState } from '../main/ets/state/AppState';
 import { ConfigStore, KVStore, serializeConfig } from '../main/ets/state/ConfigStore';
-import { decodeConfigContent, TvboxConfig } from 'common';
+import { decodeConfigContent, TvboxConfig, SiteConfig, CmsJsonApi } from 'common';
+import { DrpyDriver } from '../main/ets/spider/DrpyDriver';
 
 // 内存 KVStore 假实现（模拟 preferences 行为）
 class FakeKVStore implements KVStore {
@@ -76,8 +77,7 @@ export default function appStateTest() {
       expect(app.currentSite?.key === 'b').assertTrue();
       expect(app.switchSite('nope')).assertFalse();
     });
-    it('jar_site_routing_skipped_and_switch_rejected', 0, async () => {
-      // 影视仓型订阅：首站是 csp_* JAR 类名源（不可当 URL 下载），后面跟一个 CMS 活站
+    it('jar_site_routing_skipped_and_switch_rejected', 0, async () => {      // 影视仓型订阅：首站是 csp_* JAR 类名源（不可当 URL 下载），后面跟一个 CMS 活站
       const jarSub = `{"sites":[`
         + `{"key":"j1","name":"JAR站","type":3,"api":"csp_Gz360"},`
         + `{"key":"c1","name":"CMS站","type":1,"api":"https://c.example/api"}]}`
@@ -107,6 +107,50 @@ export default function appStateTest() {
       expect(ok).assertFalse();
       expect(app.phase === 'config').assertTrue();
       expect(app.errMsg.includes('JAR')).assertTrue();
+    });
+    it('builtin_sites_merged_and_routed', 0, async () => {
+      // 内置源：随订阅合并、key 不冲突、可切换且路由到 drpy 引擎（api 为 builtin://）
+      const mkBuiltin = (): SiteConfig => {
+        return {
+          key: 'builtin_bx', name: '兄弟影视(内置)', type: 3, api: 'builtin://drpy2.min.js',
+          searchable: 1, quickSearch: 1, filterable: 0,
+          timeout: 15000, playerType: 0, jar: '', ext: 'builtin://兄弟影视.js', header: {}
+        };
+      };
+      const app = new AppState();
+      app.setBuiltins([mkBuiltin()]);
+      const responses: Map<string, string> = new Map();
+      responses.set('https://sub.example/conf', '{"sites":[{"key":"a","name":"站点A","type":1,"api":"https://a.example/api"}]}');
+      responses.set('https://a.example/api?ac=list', SITE_JSON);
+      responses.set('https://a.example/api?ac=videolist&pg=1', '{"list":[]}');
+      app.testFetchText = makeFakeFetch(responses);
+      const ok = await app.loadFromUrl('https://sub.example/conf');
+      expect(ok).assertTrue();
+      expect(app.config?.sites.length === 2).assertTrue();       // 订阅 1 + 内置 1
+      expect(app.switchSite('builtin_bx')).assertTrue();
+      expect(app.driver instanceof DrpyDriver).assertTrue();     // builtin:// → drpy 引擎
+      expect(app.switchSite('a')).assertTrue();
+      expect(app.driver instanceof CmsJsonApi).assertTrue();
+    });
+    it('builtin_merge_idempotent', 0, async () => {
+      // 同一实例重复加载订阅（内置已在持久化合并结果里）不产生重复站点
+      const mkBuiltin = (): SiteConfig => {
+        return {
+          key: 'builtin_bx', name: '兄弟影视(内置)', type: 3, api: 'builtin://drpy2.min.js',
+          searchable: 1, quickSearch: 1, filterable: 0,
+          timeout: 15000, playerType: 0, jar: '', ext: '', header: {}
+        };
+      };
+      const app = new AppState();
+      app.setBuiltins([mkBuiltin()]);
+      const responses: Map<string, string> = new Map();
+      responses.set('https://sub.example/conf', '{"sites":[{"key":"a","name":"站点A","type":1,"api":"https://a.example/api"}]}');
+      responses.set('https://a.example/api?ac=list', SITE_JSON);
+      responses.set('https://a.example/api?ac=videolist&pg=1', '{"list":[]}');
+      app.testFetchText = makeFakeFetch(responses);
+      await app.loadFromUrl('https://sub.example/conf');
+      await app.loadFromUrl('https://sub.example/conf');
+      expect(app.config?.sites.length === 2).assertTrue();
     });
   });
 }

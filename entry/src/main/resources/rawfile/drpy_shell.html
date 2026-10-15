@@ -349,6 +349,20 @@ self.onmessage = function (ev) {
 <script>
   var __callResults = {};
   var __initDone = false;
+  var worker = null;
+
+  function __wireWorker(w) {
+    w.onmessage = function (ev) {
+      var m = ev.data;
+      if (m.type === 'log') { console.info('OKV-WORKER: ' + m.msg); return; }
+      if (m.type === 'result') {
+        console.info('OKV-DBG result id=' + m.id + ' vtype=' + typeof m.value + ' v=' + String(m.value).substring(0, 60));
+        __callResults[m.id] = m.value;
+        if (m.id === '__init__' && m.value.indexOf('__error') < 0) { __initDone = true; }
+      }
+    };
+    w.onerror = function (e) { console.error('OKV-WORKER-ERR: ' + (e.message || 'unknown')); };
+  }
 
   // Worker 创建：优先相对 URL（部分内核允许），失败降级为内联源 Blob（resource:// 不透明 origin 下的正道）
   function __makeWorker() {
@@ -370,26 +384,17 @@ self.onmessage = function (ev) {
       return null;
     }
   }
-  var worker = __makeWorker();
-
-  if (worker !== null) {
-    worker.onmessage = function (ev) {
-      var m = ev.data;
-      if (m.type === 'log') { console.info('OKV-WORKER: ' + m.msg); return; }
-      if (m.type === 'result') {
-        console.info('OKV-DBG result id=' + m.id + ' vtype=' + typeof m.value + ' v=' + String(m.value).substring(0, 60));
-        __callResults[m.id] = m.value;
-        if (m.id === '__init__' && m.value.indexOf('__error') < 0) { __initDone = true; }
-      }
-    };
-    worker.onerror = function (e) { console.error('OKV-WORKER-ERR: ' + (e.message || 'unknown')); };
-  }
 
   // ArkTS 调用：注入代码文本后转发 init（libs 为 drpy2 的 ES module 依赖文本，见 worker init）
   window.__workerInit = function (cfgJson) {
     __initDone = false;
     delete __callResults['__init__'];
+    // 每次 init 重建 Worker：drpy2 引导含 Object.defineProperty(Object.prototype,…) 等非幂等全局注入，
+    // 跨 skey 复用同一 Worker 二次 eval 必报 Cannot redefine；重建即天然作用域隔离
+    if (worker !== null) { try { worker.terminate(); } catch (e0) { /* 终止失败忽略 */ } }
+    worker = __makeWorker();
     if (worker === null) { return; }
+    __wireWorker(worker);
     worker.postMessage({ type: 'init', drpy2Code: window.__drpy2Code || '', extCode: window.__extCode || '', libs: window.__drpyLibs || {}, cfgJson: cfgJson, callId: '__init__' });
   };
   // ArkTS 调用：同步发起 call（返回 id），结果经 Worker 异步回写

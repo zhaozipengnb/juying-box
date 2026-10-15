@@ -25,7 +25,8 @@ export function siteEngine(site: SiteConfig): SiteEngine {
   if (site.type === 0) { return 'xml'; }
   if (site.type === 1) { return 'cms'; }
   if (site.type === 3) {
-    if (/^https?:\/\//i.test(site.api.trim())) { return 'js'; }
+    // builtin:// 为包内 drpy 源（运行时与规则在 rawfile/builtin，经桥本地加载）
+    if (/^https?:\/\//i.test(site.api.trim()) || site.api.trim().startsWith('builtin://')) { return 'js'; }
     return 'jar';
   }
   return 'unknown';

@@ -1,9 +1,11 @@
 // 全局状态（V2）：配置 + 当前站点 + 引擎实例。测试可注入 testFetchText 替代真网络。
 import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, XmlCmsDriver, FetchText, decodeConfigContent,
-  siteEngine, isSiteSupported, resolveSiteUrls } from 'common';
+  parseTvboxConfig, siteEngine, isSiteSupported, resolveSiteUrls } from 'common';
 import { httpFetch } from '../net/HttpClient';
 import { ConfigStore, serializeConfig } from './ConfigStore';
 import { DrpyDriver } from '../spider/DrpyDriver';
+import { resourceManager } from '@kit.LocalizationKit';
+import { util } from '@kit.ArkTS';
 
 export type AppPhase = 'initing' | 'config' | 'home';
 
@@ -80,6 +82,7 @@ export class AppState {
       const config = decodeConfigContent(content);
       console.info('OKV decoded sites=' + config.sites.length + ' bytes=' + content.length);
       resolveSiteUrls(config, url);
+      this.mergeBuiltins(config);
       if (config.sites.length === 0) {
         this.errMsg = '订阅中没有可用站点';
         this.phase = 'config';
@@ -116,6 +119,7 @@ export class AppState {
       // 存的是 serializeConfig 序列化后的 JSON 字符串，直接走解码链文本分支
       const config = decodeConfigContent(stored.configJson);
       resolveSiteUrls(config, stored.url);   // 旧版本持久化数据里的相对路径同样归一
+      this.mergeBuiltins(config);
       if (config.sites.length === 0) { this.phase = 'config'; return; }
       this.config = config;
       this.subUrl = stored.url;
@@ -123,7 +127,10 @@ export class AppState {
       if (first === null) { this.phase = 'config'; return; }
       this.buildDriver(first);
       this.phase = 'home';
-    } catch (e) { this.phase = 'config'; }
+    } catch (e) {
+      console.info('OKV initFromStore ERR ' + (e instanceof Error ? e.message : JSON.stringify(e)));
+      this.phase = 'config';
+    }
   }
 
   switchSite(key: string): boolean {
@@ -153,6 +160,40 @@ export class AppState {
   persistCurrent(): void {
     if (this.store !== null && this.config !== null && this.subUrl !== '') {
       this.store.save(this.subUrl, serializeConfig(this.subUrl, this.config));
+    }
+  }
+
+  // ---------- 内置源（builtin://：运行时与规则打包在 rawfile/builtin，随订阅合并，跨重启可用） ----------
+  private builtins: SiteConfig[] = [];
+  private builtinsLoaded: boolean = false;
+
+  // 注入内置站点（纯逻辑，测试可直调；EntryAbility 经 initBuiltins 从 rawfile 装载）
+  setBuiltins(sites: SiteConfig[]): void {
+    this.builtins = sites;
+    this.builtinsLoaded = true;
+  }
+
+  // 从 rawfile/builtin/sites.json 装载内置站点；失败降级为空（不影响订阅本身）
+  async initBuiltins(resMgr: resourceManager.ResourceManager): Promise<void> {
+    if (this.builtinsLoaded) { return; }
+    try {
+      const u8 = await resMgr.getRawFileContent('builtin/sites.json');
+      const text = new util.TextDecoder('utf-8').decodeToString(u8);
+      const raw = JSON.parse(text) as Record<string, Object>;
+      this.setBuiltins(parseTvboxConfig(raw).sites);
+      hilog.info(0x0000, 'OKV', 'builtins loaded %{public}d', this.builtins.length);
+    } catch (e) {
+      this.builtinsLoaded = true;
+      hilog.error(0x0000, 'OKV', 'builtins load ERR %{public}s', e instanceof Error ? e.message : JSON.stringify(e));
+    }
+  }
+
+  // 把内置站点追加进订阅（key 已存在则跳过——持久化的合并结果二次解码时天然幂等）
+  private mergeBuiltins(config: TvboxConfig): void {
+    if (this.builtins.length === 0) { return; }
+    const have = new Set<string>(config.sites.map((s: SiteConfig): string => s.key));
+    for (const b of this.builtins) {
+      if (!have.has(b.key)) { config.sites.push(b); }
     }
   }
 }

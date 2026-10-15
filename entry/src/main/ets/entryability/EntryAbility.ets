@@ -13,11 +13,14 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
     // 装配持久化：preferences 就绪后从存储恢复配置（loadContent 先行渲染 initing 态，不阻塞首帧）
     const context = this.context.getApplicationContext();
-    preferences.getPreferences(context, 'okvideo_config').then((pref: preferences.Preferences) => {
+    preferences.getPreferences(context, 'okvideo_config').then(async (pref: preferences.Preferences) => {
       const store = new ConfigStore(new PreferencesKVStore(pref));
+      // 内置源先行装载（rawfile/builtin，失败降级为空），随后恢复订阅并合并
+      await AppState.instance.initBuiltins(this.context.resourceManager);
       return AppState.instance.initFromStore(store);
     }).catch((e: Object) => {
       // 装配失败兜底：preferences 打开或恢复链路异常时降级到配置页，用户可重新输入订阅
+      hilog.error(DOMAIN, 'testTag', '装配链路异常: %{public}s', e instanceof Error ? e.message : JSON.stringify(e));
       AppState.instance.phase = 'config';
     });
   }

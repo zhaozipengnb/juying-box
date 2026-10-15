@@ -134,6 +134,10 @@ export class DrpyWebBridge {
   }
 
   private async downloadText(url: string): Promise<string> {
+    // 内置源：builtin://<文件名> 直接读 rawfile/builtin/（规则与运行时随包分发，不走网络）
+    if (url.startsWith('builtin://')) {
+      return this.readRawfile('builtin/' + url.substring('builtin://'.length));
+    }
     const r = await httpFetch(url, {});
     if (r.status !== 200) { throw new Error(`脚本下载失败 HTTP ${r.status}: ${url}`); }
     return r.text();

@@ -43,6 +43,9 @@ export default function modelTest() {
       expect(siteEngine(mkSite(3, 'https://a.example/drpy/x.js')) === 'js').assertTrue();
       expect(siteEngine(mkSite(3, 'http://a.example/x.js?token=1')) === 'js').assertTrue();
       expect(siteEngine(mkSite(3, 'HTTPS://a.example/X.JS')) === 'js').assertTrue();
+      // type 3 + builtin:// → 包内 drpy 源
+      expect(siteEngine(mkSite(3, 'builtin://drpy2.min.js')) === 'js').assertTrue();
+      expect(isSiteSupported(mkSite(3, 'builtin://drpy2.min.js'))).assertTrue();
       // type 3 + 非 URL（csp_* 类名 / 空串 / 裸词）→ JAR spider
       expect(siteEngine(mkSite(3, 'csp_Gz360')) === 'jar').assertTrue();
       expect(siteEngine(mkSite(3, 'csp_Douban')) === 'jar').assertTrue();
