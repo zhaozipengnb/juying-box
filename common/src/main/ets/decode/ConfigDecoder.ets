@@ -8,10 +8,30 @@ export class ConfigDecodeError extends Error {
   constructor(msg: string) { super(msg); }
 }
 
-// JSON5 宽松解析：过滤行首 // 注释后 JSON.parse（URL 中的 // 在字符串内部，不受影响）
+// JSON5 宽松解析（真实订阅源形态，单遍全文扫描——字符串状态跨行延续）：
+// 字符串外剥 // 注释（到行尾）、字符串内保留转义对；随后剥全部控制字符
+// （修字符串内原始换行如 "优\n酷"、脏 \t/\r 等）→ JSON.parse
 function parseJson5ish(text: string): Record<string, Object> {
-  const lines = text.split('\n').filter((l: string): boolean => !l.trim().startsWith('//'));
-  return JSON.parse(lines.join('\n')) as Record<string, Object>;
+  let out = '';
+  let inStr = false;
+  const n = text.length;
+  let i = 0;
+  while (i < n) {
+    const c = text.charAt(i);
+    if (inStr) {
+      if (c === '\\' && i + 1 < n) { out += c; out += text.charAt(i + 1); i += 2; continue; }
+      if (c === '"') { inStr = false; }
+      out += c; i++; continue;
+    }
+    if (c === '/' && i + 1 < n && text.charAt(i + 1) === '/') {
+      while (i < n && text.charAt(i) !== '\n') { i++; }
+      continue;
+    }
+    if (c === '"') { inStr = true; }
+    out += c; i++;
+  }
+  out = out.replace(/[\u0000-\u001f\u007f]/g, '');
+  return JSON.parse(out) as Record<string, Object>;
 }
 
 // 整体 base64 层：可能带盐前缀，试偏移 0..16；成功返回解析对象，失败返回 null

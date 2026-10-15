@@ -35,5 +35,17 @@ export default function configDecoderTest() {
       try { decodeConfigContent('随便乱写'); } catch (e) { threw = e instanceof ConfigDecodeError; }
       expect(threw).assertTrue();
     });
+    it('dirty_realworld_json5', 0, () => {
+      // 真实订阅源脏数据：字符串值内含原始换行/制表符 + 行首注释 + 行尾注释（真实源 xhztv 形态）
+      const dirty =
+        '{\n"sites":[\n//注释站点行\n' +
+        '{"key":"a","name":"优\n酷站","type":1,"api":"http://a/api.php","filterable":1},\n' +
+        '{"key":"b","name":"脏\t名","type":1,"api":"http://b/api.php"} // 行尾注释\n' +
+        ']}';
+      const cfg = decodeConfigContent(dirty);
+      expect(cfg.sites.length).assertEqual(2);
+      expect(cfg.sites[0].name).assertEqual('优酷站');
+      expect(cfg.sites[1].name).assertEqual('脏名');
+    });
   });
 }
