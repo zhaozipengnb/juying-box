@@ -10,7 +10,9 @@ const SITE: SiteConfig = {
 // fixture：合成 MacCMS 响应（非真实站点数据）
 const FIXTURE: Record<string, string> = {
   'http://demo/api.php?ac=list':
-    '{"class":[{"type_id":1,"type_name":"电影"},{"type_id":2,"type_name":"剧集"}],"list":[{"vod_id":11,"vod_name":"片A","vod_pic":"http://p/a.jpg","vod_remarks":"全10集"}]}',
+    '{"class":[{"type_id":1,"type_name":"电影"},{"type_id":2,"type_name":"剧集"}],"list":[{"vod_id":11,"vod_name":"片A","vod_pic":"","vod_remarks":""}]}',
+  'http://demo/api.php?ac=videolist&pg=1':
+    '{"page":1,"pagecount":3,"list":[{"vod_id":11,"vod_name":"片A","vod_pic":"http://p/a.jpg","vod_remarks":"全10集"}]}',
   'http://demo/api.php?ac=videolist&t=1&pg=1':
     '{"page":1,"pagecount":3,"list":[{"vod_id":11,"vod_name":"片A","vod_pic":"http://p/a.jpg","vod_remarks":"全10集"},{"vod_id":12,"vod_name":"片B","vod_pic":"","vod_remarks":"HD"}]}',
   'http://demo/api.php?ac=detail&ids=11':

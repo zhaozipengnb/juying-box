@@ -1,7 +1,7 @@
 // DrpyDriver 单元测试：注入 fake bridge（固定 JSON 返回），断言 DRPY 返回 → common 模型解析正确性；
 // 附 AppState.buildDriver 类型路由用例（type 3 → DrpyDriver、type 1 → CmsJsonApi）
 import { describe, it, expect } from '@ohos/hypium';
-import { CmsJsonApi, SiteConfig } from 'common';
+import { CmsJsonApi, XmlCmsDriver, SiteConfig } from 'common';
 import { AppState } from '../main/ets/state/AppState';
 import { DrpyDriver, IDrpyBridge } from '../main/ets/spider/DrpyDriver';
 
@@ -43,7 +43,9 @@ const SEARCH_JSON = '{"list":[{"vod_id":11,"vod_name":"片A","vod_pic":"http://p
 // 订阅 fixture：混合站点（type 3 打头）与纯 drpy 站点
 const SUB_MIXED = '{"sites":[{"key":"d","name":"DRPY站","type":3,"api":"http://demo/drpy.js"},{"key":"c","name":"CMS站","type":1,"api":"https://c.example/api"}]}';
 const SUB_PURE_DRPY = '{"sites":[{"key":"d1","name":"DRPY1","type":3,"api":"http://x/1.js"},{"key":"d2","name":"DRPY2","type":3,"api":"http://x/2.js"}]}';
-const SUB_UNSUPPORTED = '{"sites":[{"key":"z","name":"Z","type":0,"api":"http://x/z"}]}';
+const SUB_UNSUPPORTED = '{"sites":[{"key":"z","name":"Z","type":4,"api":"http://x/z"}]}';
+// type 0 XML 采集站路由
+const SUB_XML = '{"sites":[{"key":"x1","name":"XML站","type":0,"api":"https://x.example/api.php/provide/vod/at/xml/"}]}';
 
 // 经 testFetchText 注入订阅文本走 loadFromUrl，触发 buildDriver 路由
 async function loadSub(subJson: string): Promise<AppState> {
@@ -152,6 +154,12 @@ export default function drpyDriverTest() {
       const app = await loadSub(SUB_UNSUPPORTED);
       expect(app.phase === 'config').assertTrue(); // 全部为不支持类型仍拒绝
       expect(app.errMsg !== '').assertTrue();
+    });
+    it('app_state_route_type0_to_xml_driver', 0, async () => {
+      const app = await loadSub(SUB_XML);
+      expect(app.phase === 'home').assertTrue();
+      const isXml = app.driver instanceof XmlCmsDriver;
+      expect(isXml).assertTrue(); // type 0 → XmlCmsDriver
     });
   });
 }

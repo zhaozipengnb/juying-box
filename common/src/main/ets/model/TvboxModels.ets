@@ -15,13 +15,14 @@ export interface TvboxConfig {
   sites: SiteConfig[]; lives: LiveGroupConfig[]; parses: ParseConfig[];
 }
 
-// 站点引擎形态分类：cms=type1 CMS JSON；js=type3 drpy JS 插件（api 为 http(s) URL）；
+// 站点引擎形态分类：cms=type1 CMS JSON；xml=type0 MacCMS XML 采集（TVBox 约定 type 0 即 XML）；
+// js=type3 drpy JS 插件（api 为 http(s) URL）；
 // jar=type3 TVBox JAR spider（api 为 csp_* 类名等非 URL 形态，实体在配置 spider/jar 指向的 Android JAR 内，
-// JS 引擎无法执行）；unknown=其余类型。判据是「api 是否为 http(s) URL」而非 csp_ 前缀——TVBox 语义下
-// type3 的 api 非 URL 即 JAR 类名。
-export type SiteEngine = 'cms' | 'js' | 'jar' | 'unknown';
+// JS 引擎无法执行）；unknown=其余类型。type3 判据是「api 是否为 http(s) URL」而非 csp_ 前缀。
+export type SiteEngine = 'cms' | 'xml' | 'js' | 'jar' | 'unknown';
 
 export function siteEngine(site: SiteConfig): SiteEngine {
+  if (site.type === 0) { return 'xml'; }
   if (site.type === 1) { return 'cms'; }
   if (site.type === 3) {
     if (/^https?:\/\//i.test(site.api.trim())) { return 'js'; }
@@ -30,10 +31,10 @@ export function siteEngine(site: SiteConfig): SiteEngine {
   return 'unknown';
 }
 
-// 当前引擎（CMS JSON + drpy JS）可驱动的站点
+// 当前引擎（CMS JSON + XML 采集 + drpy JS）可驱动的站点
 export function isSiteSupported(site: SiteConfig): boolean {
   const e = siteEngine(site);
-  return e === 'cms' || e === 'js';
+  return e === 'cms' || e === 'xml' || e === 'js';
 }
 
 // 站点 api/ext 的相对路径（./ ../ 开头）对订阅 URL 绝对化，就地修改。

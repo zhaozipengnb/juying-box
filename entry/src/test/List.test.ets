@@ -6,6 +6,7 @@ import cmsJsonApiTest from './CmsJsonApi.test';
 import configStoreTest from './ConfigStore.test';
 import appStateTest from './AppState.test';
 import drpyDriverTest from './DrpyDriver.test';
+import xmlCmsDriverTest from './XmlCmsDriver.test';
 import idnTest from './Idn.test';
 
 export default function testsuite() {
@@ -17,5 +18,6 @@ export default function testsuite() {
   configStoreTest();
   appStateTest();
   drpyDriverTest();
+  xmlCmsDriverTest();
   idnTest();
 }

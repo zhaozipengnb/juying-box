@@ -8,3 +8,4 @@ export * from './src/main/ets/model/VideoModels';
 export * from './src/main/ets/decode/ConfigDecoder';
 export * from './src/main/ets/engine/SiteDriver';
 export * from './src/main/ets/engine/CmsJsonApi';
+export * from './src/main/ets/engine/XmlCmsDriver';

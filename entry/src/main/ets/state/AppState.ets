@@ -1,5 +1,5 @@
 // 全局状态（V2）：配置 + 当前站点 + 引擎实例。测试可注入 testFetchText 替代真网络。
-import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, FetchText, decodeConfigContent,
+import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, XmlCmsDriver, FetchText, decodeConfigContent,
   siteEngine, isSiteSupported, resolveSiteUrls } from 'common';
 import { httpFetch } from '../net/HttpClient';
 import { ConfigStore, serializeConfig } from './ConfigStore';
@@ -39,8 +39,9 @@ export class AppState {
   }
 
   // 站点引擎路由：type 3 且 api 为 http(s) URL（drpy JS 插件）→ DrpyDriver（Web 容器引擎）；
-  // type 1（CMS JSON）→ CmsJsonApi；type 3 非 URL（csp_* 类名 = TVBox JAR spider，实体在 Android JAR 内，
-  // 不可当 URL 下载）及其他类型不支持，不建 driver（首站选择/switchSite 均经 isSiteSupported 过滤，此处兜底）。
+  // type 1（CMS JSON）→ CmsJsonApi；type 0（MacCMS XML 采集）→ XmlCmsDriver；
+  // type 3 非 URL（csp_* 类名 = TVBox JAR spider，实体在 Android JAR 内，不可当 URL 下载）及其他类型不支持，
+  // 不建 driver（首站选择/switchSite 均经 isSiteSupported 过滤，此处兜底）。
   private buildDriver(site: SiteConfig): void {
     const engine = siteEngine(site);
     if (engine === 'js') {
@@ -49,6 +50,9 @@ export class AppState {
     } else if (engine === 'cms') {
       this.currentSite = site;
       this.driver = new CmsJsonApi(site, this.makeFetchText());
+    } else if (engine === 'xml') {
+      this.currentSite = site;
+      this.driver = new XmlCmsDriver(site, this.makeFetchText());
     }
   }
 
@@ -84,7 +88,7 @@ export class AppState {
       // 站点支持门槛：CMS（type 1）与 drpy JS 插件（type 3 且 api 为 URL）可用；csp_* 等 JAR 类名源不支持
       const usableCount = config.sites.filter((s: SiteConfig): boolean => isSiteSupported(s)).length;
       if (usableCount === 0) {
-        this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但没有本引擎支持的源（支持 CMS JSON 与 drpy JS 插件；csp_* 等 JAR 类名源暂不支持）';
+        this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但没有本引擎支持的源（支持 CMS JSON、XML 采集与 drpy JS 插件；csp_* 等 JAR 类名源暂不支持）';
         this.phase = 'config';
         return false;
       }

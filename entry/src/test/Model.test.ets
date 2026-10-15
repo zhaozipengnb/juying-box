@@ -47,10 +47,11 @@ export default function modelTest() {
       expect(siteEngine(mkSite(3, 'csp_Gz360')) === 'jar').assertTrue();
       expect(siteEngine(mkSite(3, 'csp_Douban')) === 'jar').assertTrue();
       expect(siteEngine(mkSite(3, '')) === 'jar').assertTrue();
-      // 其余类型 → unknown
-      expect(siteEngine(mkSite(0, 'https://a.example/x')) === 'unknown').assertTrue();
+      // type 0 → XML 采集（TVBox 约定）；其余类型 → unknown
+      expect(siteEngine(mkSite(0, 'https://a.example/api.php/provide/vod/at/xml')) === 'xml').assertTrue();
+      expect(isSiteSupported(mkSite(0, 'https://a.example/api.php/provide/vod/at/xml'))).assertTrue();
       expect(siteEngine(mkSite(4, 'csp_X')) === 'unknown').assertTrue();
-      // 支持面：cms + js，jar / unknown 不支持
+      // 支持面：cms + xml + js，jar / unknown 不支持
       expect(isSiteSupported(mkSite(1, 'https://a.example/api.php'))).assertTrue();
       expect(isSiteSupported(mkSite(3, 'https://a.example/x.js'))).assertTrue();
       expect(isSiteSupported(mkSite(3, 'csp_Gz360'))).assertFalse();

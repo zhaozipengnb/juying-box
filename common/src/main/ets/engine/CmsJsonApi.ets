@@ -80,12 +80,15 @@ export class CmsJsonApi implements SiteDriver {
   }
 
   async getHomeContent(): Promise<HomeContent> {
-    const obj = await this.getJson('?ac=list');
-    const classes = (obj['class'] ?? []) as Record<string, Object>[];
+    // 分类取 ac=list（不带图片字段）；条目取 ac=videolist&pg=1（完整字段，否则大量站首页无封面）
+    const [clsObj, listObj] = await Promise.all([
+      this.getJson('?ac=list'), this.getJson('?ac=videolist&pg=1')
+    ]);
+    const classes = (clsObj['class'] ?? []) as Record<string, Object>[];
     const categories: Category[] = classes.map((c: Record<string, Object>): Category => {
       return { tid: toStr(field(c, 'type_id'), ''), name: toStr(field(c, 'type_name'), '') };
     });
-    const list = (obj['list'] ?? []) as Record<string, Object>[];
+    const list = (listObj['list'] ?? []) as Record<string, Object>[];
     return { categories: categories, items: list.map(pickMovie) };
   }
 
