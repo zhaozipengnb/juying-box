@@ -4,10 +4,14 @@
 //       DRPY 方法调用（runJavaScriptExt + 超时）。
 // 注意：V2 观察在 Navigation 根内容失效的同类 SDK 问题不影响本桥（全部命令式 API）。
 import { webview } from '@kit.ArkWeb';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { SiteConfig, b64encode } from 'common';
 import { httpFetch, HttpFetchOptions } from '../net/HttpClient';
 
+const TAG = 'OKV-WEB';
+
 const CALL_TIMEOUT_MS = 10000;
+const INIT_TIMEOUT_MS = 20000;
 
 // drpy2 运行时 init 接收的站点配置（JSON 字符串化后传入）
 // 网络代理回传结构（base64 body 供 JS 侧还原字节流）
@@ -28,20 +32,7 @@ export struct DrpyWebContainer {
     Web({ src: $rawfile('drpy_shell.html'), controller: DrpyWebBridge.instance.controller })
       .width(1).height(1).opacity(0.01)
       .javaScriptAccess(true)
-      .javaScriptProxy({
-        object: new DrpyJsApi(),
-        name: 'arktsReq',
-        methodList: ['req'],
-        controller: DrpyWebBridge.instance.controller
-      })
       .onPageEnd(() => { DrpyWebBridge.instance.onShellLoaded(); })
-  }
-}
-
-// 暴露给 JS 的同步入口对象（fetch 劫持通过它入队网络请求）
-export class DrpyJsApi {
-  req(id: string, url: string, optsJson: string): void {
-    DrpyWebBridge.instance.dispatchReq(id, url, optsJson);
   }
 }
 
@@ -54,34 +45,9 @@ export class DrpyWebBridge {
 
   onShellLoaded(): void { this.shellLoaded = true; }
 
-  // JS 网络请求入队（同步返回，异步回传）
-  dispatchReq(id: string, url: string, optsJson: string): void {
-    let opts: Record<string, Object> = {};
-    try { opts = JSON.parse(optsJson) as Record<string, Object>; } catch (e) { /* 空对象兜底 */ }
-    const headersRaw = (opts['headers'] ?? {}) as Record<string, Object>;
-    const headers: Record<string, string> = {};
-    const keys = Object.keys(headersRaw);
-    for (const k of keys) { headers[k] = `${headersRaw[k]}`; }
-    const method = typeof opts['method'] === 'string' ? opts['method'] as string : 'GET';
-    const fetchOpts: HttpFetchOptions = { method: method, headers: headers };
-    httpFetch(url, fetchOpts).then((r) => {
-      const reqResult: DrpyReqResult = {
-        status: r.status,
-        body: b64encode(new Uint8Array(r.body)),
-        headers: r.headers
-      };
-      const resultJson = JSON.stringify(reqResult);
-      return this.controller.runJavaScriptExt(`__arktsResolve("${id}", ${JSON.stringify(resultJson)})`);
-    }).catch((e: Object) => {
-      const msg = e instanceof Error ? e.message : JSON.stringify(e);
-      return this.controller.runJavaScriptExt(`__arktsResolve("${id}", ${JSON.stringify(JSON.stringify({ error: msg }))})`);
-    }).catch((e: Object) => {
-      // 回传失败（页面已销毁/超时）静默；JS 侧由自身超时兜底
-    });
-  }
-
   // 确保运行时就绪：注入 drpy2 与 ext 脚本（export default → window.__DRPY/__EXT 兼容替换，规避 module 跨域）+ init
   async ensureReady(cfg: SiteConfig): Promise<void> {
+    hilog.info(0x0000, TAG, `ensureReady skey=${cfg.key} shellLoaded=${this.shellLoaded} cur=${this.currentSkey}`);
     if (this.shellLoaded && this.currentSkey === cfg.key && this.pendingInit !== null) {
       await this.pendingInit;
       return;
@@ -92,24 +58,41 @@ export class DrpyWebBridge {
   }
 
   private async doInit(cfg: SiteConfig): Promise<void> {
+    hilog.info(0x0000, TAG, 'doInit begin');
     await this.waitShell();
+    hilog.info(0x0000, TAG, 'shell ready, downloading scripts');
     // 1) 下载运行时与插件脚本
     const drpyCode = await this.downloadText(cfg.api);
     let extCode = '';
     if (cfg.ext !== '') { try { extCode = await this.downloadText(cfg.ext); } catch (e) { /* ext 失败不阻塞 init */ } }
+    hilog.info(0x0000, TAG, `ext source ${extCode.length}B captured`);
     // 2) ES module 兼容注入：export default X → window.__DRPY = X（最后一处）
+    hilog.info(0x0000, TAG, `drpy2 downloaded ${drpyCode.length}B, ext ${extCode.length}B`);
     const drpyInjected = replaceDefaultExport(drpyCode, '__DRPY');
     await this.runJs(drpyInjected);
-    if (extCode !== '') {
-      await this.runJs(replaceDefaultExport(extCode, '__EXT'));
-    }
-    // 3) init（drpy2 init 接收站点配置 JSON 字符串；ext 通过 cfg.ext 传递）
+    hilog.info(0x0000, TAG, 'drpy2 injected');
+
+    // 3) Worker init：代码文本注入壳页面 → 转发 Worker → 轮询完成标志
+    await this.runJs(`window.__drpy2Code = ${JSON.stringify(drpyCode)}`);
+    await this.runJs(`window.__extCode = ${JSON.stringify(extCode)}`);
     const initCfg: DrpyInitCfg = {
       skey: cfg.key, name: cfg.name, type: cfg.type, api: cfg.api,
       ext: cfg.ext, header: cfg.header, timeout: cfg.timeout
     };
-    const cfgJson = JSON.stringify(initCfg);
-    await this.runJs(`globalThis.__drpy.init(${JSON.stringify(cfgJson)})`);
+    await this.runJs(`__workerInit(${JSON.stringify(JSON.stringify(initCfg))})`);
+    await this.waitForFlag('__drpyInitDone()', 'drpy init', INIT_TIMEOUT_MS);
+    hilog.info(0x0000, TAG, 'drpy init done');
+  }
+
+  // 轮询壳页面标志函数（Worker 异步完成的等待）
+  private async waitForFlag(flagExpr: string, what: string, timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const v = await this.runJs(flagExpr);
+      if (v !== '') { return; }
+      await new Promise<void>((res) => setTimeout(res, 200));
+    }
+    throw new Error(`${what} 超时`);
   }
 
   private async waitShell(): Promise<void> {
@@ -127,18 +110,33 @@ export class DrpyWebBridge {
   }
 
   private async runJs(code: string): Promise<string> {
-    const r = await this.controller.runJavaScriptExt(code);
-    return r.getString();
+    try {
+      const r = await this.controller.runJavaScriptExt(code);
+      return r.getString();
+    } catch (e) {
+      hilog.error(0x0000, TAG, 'runJs ERR %{public}s', e instanceof Error ? e.message : JSON.stringify(e));
+      throw e as Error;
+    }
   }
 
   // 调用 DRPY 方法（契约：返回 JSON 字符串；10s 超时）
+  // 发起走 __workerCall（同步返回 id），结果经 Worker 回写后轮询 __drpyResult 取回
   async call(method: string, args: string[]): Promise<string> {
-    const argsLiteral = args.map((a: string): string => JSON.stringify(a)).join(',');
-    const p = this.runJs(`globalThis.__drpy.call(${JSON.stringify(method)}${args.length > 0 ? ',' + argsLiteral : ''})`);
-    const timeout = new Promise<string>((_, rej) => {
-      setTimeout(() => { rej(new Error(`DRPY.${method} 调用超时`)); }, CALL_TIMEOUT_MS);
-    });
-    return Promise.race([p, timeout]);
+    hilog.info(0x0000, TAG, `call ${method} args=${args.join(',')}`);
+    const argsJson = JSON.stringify(args);
+    const callId = (await this.runJs(`__workerCall(${JSON.stringify(method)}, ${JSON.stringify(argsJson)})`)).replace(/"/g, '');
+    const deadline = Date.now() + CALL_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const r = await this.runJs(`__drpyResult(${JSON.stringify(callId)})`);
+      if (r !== '') {
+        hilog.info(0x0000, TAG, `call ${method} done ${r.length}B: ${r.substring(0, 100)}`);
+        const parsed = JSON.parse(r) as Record<string, Object>;
+        if (parsed['__error'] !== undefined) { throw new Error(`${parsed['__error']}`); }
+        return r;
+      }
+      await new Promise<void>((res) => setTimeout(res, 200));
+    }
+    throw new Error(`DRPY.${method} 调用超时`);
   }
 
   destroy(): void {

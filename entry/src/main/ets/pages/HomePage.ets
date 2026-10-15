@@ -1,5 +1,6 @@
 // 首页：站点 Select 切换 / 分类横滑 Tabs / MovieGrid 影片网格 / 触底分页 / 搜索入口
 import { AppState } from '../state/AppState';
+import { DrpyWebContainer } from '../spider/DrpyWebBridge';
 import { Nav } from '../nav/Nav';
 import { MovieGrid } from '../components/MovieGrid';
 import { Category, HomeContent, Movie, PageResult, SiteDriver } from 'common';
@@ -142,6 +143,8 @@ export struct HomePage {
 
   build() {
     NavDestination() {
+    // drpy JS 插件运行环境（1x1 不可见；Home 是栈底 NavDestination，常驻存活覆盖 Detail/Player 调用期）
+    DrpyWebContainer()
     Column() {
       // 顶栏：站点切换 + 搜索入口
       Row({ space: 8 }) {
