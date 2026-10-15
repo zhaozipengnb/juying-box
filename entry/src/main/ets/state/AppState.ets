@@ -2,6 +2,7 @@
 import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, FetchText, decodeConfigContent } from 'common';
 import { httpFetch } from '../net/HttpClient';
 import { ConfigStore, serializeConfig } from './ConfigStore';
+import { DrpyDriver } from '../spider/DrpyDriver';
 
 export type AppPhase = 'initing' | 'config' | 'home';
 
@@ -36,9 +37,14 @@ export class AppState {
     };
   }
 
+  // 站点类型路由：type 3（drpy JS 插件）→ DrpyDriver（Web 容器 Spider 引擎）；其余（type 1 CMS JSON）→ CmsJsonApi
   private buildDriver(site: SiteConfig): void {
     this.currentSite = site;
-    this.driver = new CmsJsonApi(site, this.makeFetchText());
+    if (site.type === 3) {
+      this.driver = new DrpyDriver(site);
+    } else {
+      this.driver = new CmsJsonApi(site, this.makeFetchText());
+    }
   }
 
   async loadFromUrl(url: string): Promise<boolean> {
@@ -61,10 +67,10 @@ export class AppState {
         this.phase = 'config';
         return false;
       }
-      // MVP 引擎仅支持 type 1（CMS JSON）；type 3（JS 插件）需 Spider 引擎，下阶段实现
-      const cmsCount = config.sites.filter((s: SiteConfig): boolean => s.type === 1).length;
-      if (cmsCount === 0) {
-        this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但全部为 JS 插件类型（暂不支持，当前仅支持 CMS JSON 类型站点）';
+      // 站点类型门槛：type 1（CMS JSON）与 type 3（drpy JS 插件）均已支持，其余类型拒绝
+      const usableCount = config.sites.filter((s: SiteConfig): boolean => s.type === 1 || s.type === 3).length;
+      if (usableCount === 0) {
+        this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但全部为不支持的类型（当前支持 CMS JSON 与 JS 插件类型站点）';
         this.phase = 'config';
         return false;
       }

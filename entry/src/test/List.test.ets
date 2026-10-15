@@ -5,6 +5,7 @@ import configDecoderTest from './ConfigDecoder.test';
 import cmsJsonApiTest from './CmsJsonApi.test';
 import configStoreTest from './ConfigStore.test';
 import appStateTest from './AppState.test';
+import drpyDriverTest from './DrpyDriver.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -14,4 +15,5 @@ export default function testsuite() {
   cmsJsonApiTest();
   configStoreTest();
   appStateTest();
+  drpyDriverTest();
 }
