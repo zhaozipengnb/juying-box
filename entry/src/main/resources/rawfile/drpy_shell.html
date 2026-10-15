@@ -20,6 +20,7 @@
     var m = ev.data;
     if (m.type === 'log') { console.info('OKV-WORKER: ' + m.msg); return; }
     if (m.type === 'result') {
+      console.info('OKV-DBG result id=' + m.id + ' vtype=' + typeof m.value + ' v=' + String(m.value).substring(0, 60));
       __callResults[m.id] = m.value;
       if (m.id === '__init__' && m.value.indexOf('__error') < 0) { __initDone = true; }
     }
