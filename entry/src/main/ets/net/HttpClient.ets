@@ -2,6 +2,7 @@
 // TDD 说明：本文件依赖 @ohos.net.http，无法本地单测，真机验证在收口阶段执行
 import { http } from '@kit.NetworkKit';
 import { utf8Decode } from 'common';
+import { toPunycodeUrl } from './Idn';
 
 export interface HttpFetchOptions {
   method?: string;                      // 默认 GET
@@ -16,6 +17,7 @@ export interface HttpFetchResult {
 }
 
 export async function httpFetch(url: string, opts?: HttpFetchOptions): Promise<HttpFetchResult> {
+  url = toPunycodeUrl(url);  // 中文域名转 punycode（模拟器/部分设备 DNS 不解析 IDN）
   const client = http.createHttp();
   // 默认 UA 提取为显式类型常量（?? 右侧对象字面量需显式类型，arkts-no-untyped-obj-literals）
   const defaultHeaders: Record<string, string> = { 'User-Agent': 'okhttp/3.15' };

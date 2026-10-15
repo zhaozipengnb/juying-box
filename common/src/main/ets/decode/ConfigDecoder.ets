@@ -31,6 +31,7 @@ function parseJson5ish(text: string): Record<string, Object> {
     out += c; i++;
   }
   out = out.replace(/[\u0000-\u001f\u007f]/g, '');
+  out = out.replace(/,(\s*[\]}])/g, '$1');  // 剥尾逗号（JSON5 宽松，影视仓源实测使用）
   return JSON.parse(out) as Record<string, Object>;
 }
 

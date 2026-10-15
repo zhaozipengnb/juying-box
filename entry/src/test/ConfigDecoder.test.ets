@@ -35,6 +35,13 @@ export default function configDecoderTest() {
       try { decodeConfigContent('随便乱写'); } catch (e) { threw = e instanceof ConfigDecodeError; }
       expect(threw).assertTrue();
     });
+    it('trailing_comma_json5', 0, () => {
+      // 真实源（影视仓）形态：数组/对象尾部多余逗号
+      const tc = '{"sites":[{"key":"a","name":"甲站","type":1,"api":"http://a/api.php",},{"key":"b","name":"乙站","type":1,"api":"http://b/api.php",},],}';
+      const cfg = decodeConfigContent(tc);
+      expect(cfg.sites.length).assertEqual(2);
+      expect(cfg.sites[1].name).assertEqual('乙站');
+    });
     it('dirty_realworld_json5', 0, () => {
       // 真实订阅源脏数据：字符串值内含原始换行/制表符 + 行首注释 + 行尾注释（真实源 xhztv 形态）
       const dirty =
