@@ -5,6 +5,8 @@
 // 注意：V2 观察在 Navigation 根内容失效的同类 SDK 问题不影响本桥（全部命令式 API）。
 import { webview } from '@kit.ArkWeb';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { common } from '@kit.AbilityKit';
+import { util } from '@kit.ArkTS';
 import { SiteConfig, b64encode } from 'common';
 import { httpFetch, HttpFetchOptions } from '../net/HttpClient';
 
@@ -23,6 +25,11 @@ interface DrpyInitCfg {
   skey: string; name: string; type: number; api: string;
   ext: string; header: Record<string, string>; timeout: number;
 }
+
+// drpy2 的 ES module 依赖库文本（rawfile 内置，worker init 时装载，见 drpy_worker.js）
+interface DrpyLibs {
+  cryptojs: string; cheerio: string; template: string; gbk: string;
+}
 const REQ_TIMEOUT_MS = 15000;
 
 @ComponentV2
@@ -32,7 +39,7 @@ export struct DrpyWebContainer {
     Web({ src: $rawfile('drpy_shell.html'), controller: DrpyWebBridge.instance.controller })
       .width(1).height(1).opacity(0.01)
       .javaScriptAccess(true)
-      .onPageEnd(() => { DrpyWebBridge.instance.onShellLoaded(); })
+      .onPageEnd(() => { DrpyWebBridge.instance.onShellLoaded(getContext(this) as common.Context); })
   }
 }
 
@@ -42,8 +49,13 @@ export class DrpyWebBridge {
   private shellLoaded: boolean = false;
   private currentSkey: string = '';
   private pendingInit: Promise<void> | null = null;
+  private appCtx: common.Context | null = null;   // 壳页面加载时捕获，用于读 rawfile 依赖库
+  private libsInjected: boolean = false;
 
-  onShellLoaded(): void { this.shellLoaded = true; }
+  onShellLoaded(ctx: common.Context): void {
+    this.shellLoaded = true;
+    this.appCtx = ctx;
+  }
 
   // 确保运行时就绪：注入 drpy2 与 ext 脚本（export default → window.__DRPY/__EXT 兼容替换，规避 module 跨域）+ init
   async ensureReady(cfg: SiteConfig): Promise<void> {
@@ -66,13 +78,10 @@ export class DrpyWebBridge {
     let extCode = '';
     if (cfg.ext !== '') { try { extCode = await this.downloadText(cfg.ext); } catch (e) { /* ext 失败不阻塞 init */ } }
     hilog.info(0x0000, TAG, `ext source ${extCode.length}B captured`);
-    // 2) ES module 兼容注入：export default X → window.__DRPY = X（最后一处）
     hilog.info(0x0000, TAG, `drpy2 downloaded ${drpyCode.length}B, ext ${extCode.length}B`);
-    const drpyInjected = replaceDefaultExport(drpyCode, '__DRPY');
-    await this.runJs(drpyInjected);
-    hilog.info(0x0000, TAG, 'drpy2 injected');
 
-    // 3) Worker init：代码文本注入壳页面 → 转发 Worker → 轮询完成标志
+    // 2) Worker init：依赖库 + 代码文本注入壳页面 → 转发 Worker → 轮询完成标志
+    await this.ensureLibs();
     await this.runJs(`window.__drpy2Code = ${JSON.stringify(drpyCode)}`);
     await this.runJs(`window.__extCode = ${JSON.stringify(extCode)}`);
     const initCfg: DrpyInitCfg = {
@@ -84,12 +93,33 @@ export class DrpyWebBridge {
     hilog.info(0x0000, TAG, 'drpy init done');
   }
 
-  // 轮询壳页面标志函数（Worker 异步完成的等待）
+  // drpy2 依赖库一次性注入壳页面（跨 skey 复用；文本较大，避免每次 init 重复传输）
+  private async ensureLibs(): Promise<void> {
+    if (this.libsInjected) { return; }
+    const cryptojs = await this.readRawfile('crypto-js.js');
+    const cheerio = await this.readRawfile('cheerio.min.js');
+    const template = await this.readRawfile('template.js');
+    const gbk = await this.readRawfile('gbk.js');
+    const libs: DrpyLibs = { cryptojs: cryptojs, cheerio: cheerio, template: template, gbk: gbk };
+    await this.runJs(`window.__drpyLibs = ${JSON.stringify(libs)}`);
+    this.libsInjected = true;
+    hilog.info(0x0000, TAG, 'drpy libs injected');
+  }
+
+  private readRawfile(name: string): Promise<string> {
+    if (this.appCtx === null) { return Promise.reject(new Error('桥无上下文（壳页面未加载）')); }
+    return this.appCtx.resourceManager.getRawFileContent(name).then((u8: Uint8Array): string => {
+      const td = new util.TextDecoder('utf-8');
+      return td.decodeToString(u8);
+    });
+  }
+
+  // 轮询壳页面标志函数（Worker 异步完成的等待）；标志以 '1'/'0' 表达（见壳页面 __drpyInitDone）
   private async waitForFlag(flagExpr: string, what: string, timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      const v = await this.runJs(flagExpr);
-      if (v !== '') { return; }
+      const v = this.unwrap(await this.runJs(flagExpr));
+      if (v === '1') { return; }
       await new Promise<void>((res) => setTimeout(res, 200));
     }
     throw new Error(`${what} 超时`);
@@ -124,10 +154,10 @@ export class DrpyWebBridge {
   async call(method: string, args: string[]): Promise<string> {
     hilog.info(0x0000, TAG, `call ${method} args=${args.join(',')}`);
     const argsJson = JSON.stringify(args);
-    const callId = (await this.runJs(`__workerCall(${JSON.stringify(method)}, ${JSON.stringify(argsJson)})`)).replace(/"/g, '');
+    const callId = this.unwrap(await this.runJs(`__workerCall(${JSON.stringify(method)}, ${JSON.stringify(argsJson)})`));
     const deadline = Date.now() + CALL_TIMEOUT_MS;
     while (Date.now() < deadline) {
-      const r = await this.runJs(`__drpyResult(${JSON.stringify(callId)})`);
+      const r = this.unwrap(await this.runJs(`__drpyResult(${JSON.stringify(callId)})`));
       if (r !== '') {
         hilog.info(0x0000, TAG, `call ${method} done ${r.length}B: ${r.substring(0, 100)}`);
         const parsed = JSON.parse(r) as Record<string, Object>;
@@ -144,11 +174,13 @@ export class DrpyWebBridge {
     this.currentSkey = '';
     this.pendingInit = null;
   }
-}
 
-// ES module 兼容：把末尾的 export default X 替换为 window.<global> = X
-function replaceDefaultExport(code: string, globalName: string): string {
-  const idx = code.lastIndexOf('export default');
-  if (idx < 0) { return code; }
-  return code.substring(0, idx) + `window.${globalName} =` + code.substring(idx + 'export default'.length);
+  // ArkWeb getString 以 JSON 形式回传表达式结果（字符串带引号、'' → '""'）。
+  // 不还原会把 '""' 误判为已完成/有结果——init 轮询假阳性、call 结果污染的根源。
+  private unwrap(raw: string): string {
+    if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) {
+      try { return JSON.parse(raw) as string; } catch (e) { /* 非法转义退回原样 */ }
+    }
+    return raw;
+  }
 }

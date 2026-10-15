@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <!--
-  drpy 壳页面 v2：Worker 宿主
+  drpy 壳页面 v3：Worker 宿主（内联 Worker 源 + Blob 降级）
   架构：ArkTS 注入 drpy2/ext 代码文本 → 本页转发给 Worker → Worker 内同步 XHR 网络栈原生执行 drpy2
   （drpy2 的宿主 req 为同步语义，仅 Worker 线程合法；主线程禁同步 XHR，故运行时必须置于 Worker）
+  关键点：resource://rawfile 页面为不透明 origin（null），Worker 构造器拒绝相对/绝对 resource 脚本
+  （SecurityError: cannot be accessed from origin 'null'）。故将 Worker 源内联于本页
+  （type="text/plain" 不执行），经 Blob URL 创建——blob 继承页面 origin，构造不再跨源。
   协议：
     ArkTS → 本页 → Worker：__workerInit(cfgJson)（drpy2/ext 代码先经 window.__drpy2Code/__extCode 注入）
                         __workerCall(id, method, argsJson)
@@ -11,30 +14,387 @@
 <html>
 <head><meta charset="utf-8"><title>drpy-shell</title></head>
 <body>
+<script id="workerSrc" type="text/plain">
+// drpy Worker：drpy2 运行时与插件的隔离执行环境
+// 关键：Worker 线程允许同步 XHR——为 drpy2 提供宿主要求的同步 req()（主线程被禁，必须在此）
+// 消息协议：
+//   主线程 → { type:'init', drpy2Code, extCode, libs:{cryptojs,cheerio,template,gbk}, cfgJson }
+//   主线程 → { type:'call', method, args: string[] }
+//   Worker → { type:'log', msg } / { type:'result', id, value }（call 结果，value 为 JSON 字符串或 {__error}）
+// 依赖装载：drpy2.min.js 为 ES module（import cheerio/crypto-js/模板/gbkTool），经经典 eval 执行前
+//   由 libs 文本预置同名全局、剥离 import 语句（见 init 分支）——单次 eval 保证模块级作用域一致。
+
+// Worker 无 window：drpy2 内部引用 window 的点需兜底
+if (typeof window === 'undefined') { globalThis.window = globalThis; }
+if (typeof document === 'undefined') {
+  // 极简 document 桩：drpy2 个别路径引用（DOM 解析在 ArkTS 代理模式下不触达）
+  globalThis.document = { createElement: function () { return { style: {} }; } };
+}
+
+// ---------- 宿主同步网络层（drpy2 的 req 依赖） ----------
+function syncReq(url, obj) {
+  obj = obj || {};
+  var x = new XMLHttpRequest();
+  x.open((obj.method || 'GET'), url, false);  // 同步 XHR：Worker 内合法
+  var hs = obj.headers || {};
+  var ks = Object.keys(hs);
+  for (var i = 0; i < ks.length; i++) {
+    try { x.setRequestHeader(ks[i], hs[ks[i]]); } catch (e) { /* 非法头忽略 */ }
+  }
+  try { x.send(obj.body || null); } catch (e) {
+    return { content: '', headers: {}, error: String(e) };
+  }
+  var headers = {};
+  var raw = x.getAllResponseHeaders().trim().split(/[\r\n]+/);
+  for (var j = 0; j < raw.length; j++) {
+    var kv = raw[j].split(': ');
+    if (kv.length >= 2) { headers[kv[0].toLowerCase()] = kv.slice(1).join(': '); }
+  }
+  // 诊断：网络结果明细（CORS 拦截时 status=0、responseText 空）
+  if (x.status === 0 || x.responseText.length === 0) {
+    self.postMessage({ type: 'log', msg: 'XHR SUSPECT url=' + url.substring(0, 60) + ' status=' + x.status + ' len=' + x.responseText.length });
+  }
+  return { content: x.responseText, headers: headers, status: x.status };
+}
+
+// drpy2 期望的宿主 req：返回 {content, headers}
+globalThis.req = function (url, obj) {
+  var r = syncReq(url, obj);
+  if (r.error) { throw new Error('req failed: ' + r.error); }
+  return { content: r.content, headers: r.headers };
+};
+
+// ---------- TVBox 宿主内建：pdfh/pdfa/pd（jsoup 链式选择器）----------
+// drpy2 的 defaultParser={pdfh,pdfa,pd} 直接引用这三个全局（TVBox QuickJS 内建），
+// 语义基准为 hipy htmlParser.py（drpy3 移植对接指南 §4.2），用打包的 cheerio 实现。
+// 选择器语法：'&&' 分段，最后一段为取值器（Text/Html/属性名，支持 '||' 属性回退），
+// 段内支持 tag/.class/#id 与 :eq/:lt/:gt/:first/:last/:not/:contains/--剔除。
+var NOADD_INDEX = ':eq|:lt|:gt|:first|:last|:not|:even|:odd|:has|:contains|:matches|:empty|^body$|^#';
+var URLJOIN_ATTR = '(url|src|href|-original|-src|-play|-url|style)$|^(data-|url-|src-)';
+var SPECIAL_URL = '^(ftp|magnet|thunder|ws):';
+
+function htest(text, string) { try { return new RegExp(text, 'im').test(string); } catch (e) { return false; } }
+function hcontains(text, match) { return String(text).indexOf(match) > -1; }
+function hunescape(s) {
+  return String(s)
+    .replace(/&#x([0-9a-fA-F]+);/g, function (_, h) { return String.fromCodePoint(parseInt(h, 16)); })
+    .replace(/&#(\d+);/g, function (_, d) { return String.fromCodePoint(parseInt(d, 10)); })
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+function squashText(s) { return String(s).replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, ''); }
+
+// 海阔表达式转原生：自动补 :eq(0)（pyquery 语义；:eq 由 getParseInfo 拆出不再进 CSS 引擎）
+function parseHikerToJq(parse, first) {
+  if (hcontains(parse, '&&')) {
+    var parts = parse.split('&&');
+    var out = [];
+    for (var i = 0; i < parts.length; i++) {
+      var ps = parts[i].split(' ').pop();
+      if (!htest(NOADD_INDEX, ps)) {
+        if (!first && i >= parts.length - 1) { out.push(parts[i]); }
+        else { out.push(parts[i] + ':eq(0)'); }
+      } else { out.push(parts[i]); }
+    }
+    return out.join(' ');
+  }
+  var ps2 = parse.split(' ').pop();
+  if (!htest(NOADD_INDEX, ps2) && first) { return parse + ':eq(0)'; }
+  return parse;
+}
+
+function getParseInfo(nparse) {
+  var excludes = [], index = 0, rule = nparse;
+  if (hcontains(nparse, ':eq')) {
+    rule = nparse.split(':eq')[0];
+    var pos = nparse.split(':eq')[1];
+    if (hcontains(rule, '--')) { excludes = rule.split('--').slice(1); rule = rule.split('--')[0]; }
+    else if (hcontains(pos, '--')) { excludes = pos.split('--').slice(1); pos = pos.split('--')[0]; }
+    try { index = parseInt(pos.split('(')[1].split(')')[0], 10); } catch (e) { /* 位置缺失默认 0 */ }
+  } else if (hcontains(nparse, '--')) {
+    rule = nparse.split('--')[0];
+    excludes = nparse.split('--').slice(1);
+  }
+  return { rule: rule, index: index, excludes: excludes };
+}
+
+// cheerio 不支持 jQuery 风格 :first/:last/:lt/:gt/:even/:odd，拆出尾缀用集合运算实现
+function cssSelect($, ret, rule) {
+  var m = rule.match(/^(.*?):(first|last|lt|gt|even|odd)(?:\((\d+)\))?$/);
+  var base = rule, op = null, arg = 0;
+  if (m) { base = m[1]; op = m[2]; arg = m[3] === undefined ? 0 : parseInt(m[3], 10); }
+  ret = (ret === null) ? $(base) : ret.find(base);
+  if (op === 'first') { ret = ret.first(); }
+  else if (op === 'last') { ret = ret.last(); }
+  else if (op === 'lt') { ret = ret.slice(0, arg); }
+  else if (op === 'gt') { ret = ret.slice(arg + 1); }
+  else if (op === 'even') { ret = ret.filter(function (i) { return i % 2 === 0; }); }
+  else if (op === 'odd') { ret = ret.filter(function (i) { return i % 2 === 1; }); }
+  return ret;
+}
+
+function parseOneRule($, nparse, ret) {
+  try {
+    var info = getParseInfo(nparse);
+    var notPrefix = info.rule, notRegex = '', notEnd = '';
+    if (hcontains(info.rule, ':not')) {
+      notPrefix = info.rule.split(':not')[0];
+      var m = info.rule.match(/:not\((.*)\)(.*)/);
+      if (m) { notRegex = m[1] || ''; notEnd = m[2] || ''; }
+    }
+    ret = cssSelect($, ret, notPrefix);
+    if (notRegex) { ret = ret.not(notRegex); }
+    if (notEnd) { ret = cssSelect($, ret, notEnd); }
+    if (hcontains(nparse, ':eq')) { ret = ret.eq(info.index); }
+    if (info.excludes.length && ret && ret.length) {
+      ret = ret.clone();  // 克隆后剔除，避免污染后续查询
+      for (var i = 0; i < info.excludes.length; i++) { ret.find(info.excludes[i]).remove(); }
+    }
+    return ret;
+  } catch (e) {
+    self.postMessage({ type: 'log', msg: 'parseOneRule ERR ' + String(e).substring(0, 80) });
+    return null;
+  }
+}
+
+globalThis.pdfa = function (html, parse) {
+  if (!html || !parse) { return []; }
+  parse = parseHikerToJq(String(parse), false);
+  var $ = cheerio.load(String(html));
+  var ret = null;
+  var parses = parse.split(' ');
+  for (var i = 0; i < parses.length; i++) {
+    ret = parseOneRule($, parses[i], ret);
+    if (!ret || ret.length === 0) { return []; }
+  }
+  var out = [];
+  ret.each(function (_, el) { out.push($.html(el)); });
+  return out;
+};
+
+globalThis.pdfh = function (html, parse, base_url) {
+  if (!html || !parse) { return ''; }
+  html = String(html); parse = String(parse);
+  var $ = cheerio.load(html);
+  if (parse === 'body&&Text' || parse === 'Text') { return squashText($('body').text()); }
+  if (parse === 'body&&Html' || parse === 'Html') { return hunescape($.root().html() || ''); }
+  var option = null;
+  if (hcontains(parse, '&&')) {
+    var segs = parse.split('&&');
+    option = segs.pop();
+    parse = segs.join('&&');
+  }
+  parse = parseHikerToJq(parse, true);
+  var ret = null;
+  var parses = parse.split(' ');
+  for (var i = 0; i < parses.length; i++) {
+    ret = parseOneRule($, parses[i], ret);
+    if (!ret || ret.length === 0) { return ''; }
+  }
+  if (option) {
+    if (option === 'Text') { return squashText(ret.text()); }
+    if (option === 'Html') { return hunescape(ret.html() || ''); }
+    var options = option.split('||');
+    for (var oi = 0; oi < options.length; oi++) {
+      var opt = options[oi];
+      var v = ret.attr(opt) || '';
+      if (opt.toLowerCase().indexOf('style') >= 0 && v.indexOf('url(') >= 0) {
+        var um = v.match(/url\((.*?)\)/);
+        if (um) { v = um[1].replace(/^['"]|['"]$/g, ''); }
+      }
+      if (v && base_url && htest(URLJOIN_ATTR, opt) && !htest(SPECIAL_URL, v)) {
+        if (v.indexOf('http') >= 0) { v = v.substring(v.indexOf('http')); }
+        else { v = joinUrl(base_url, v); }
+      }
+      if (v) { return v; }
+    }
+    return '';
+  }
+  return $.html(ret);
+};
+
+globalThis.pd = function (html, parse, base_url) { return globalThis.pdfh(html, parse, base_url || ''); };
+
+// URL 拼接（drpy2 的 urljoin 包装它；WHATWG URL 语义，与 urllib.parse.urljoin 对齐）
+globalThis.joinUrl = function (fromPath, nowPath) {
+  try {
+    if (!nowPath) { return nowPath || ''; }
+    return new URL(nowPath, fromPath || undefined).href;
+  } catch (e) { return nowPath || ''; }
+};
+
+// 本地 KV（多源命名空间隔离；内存版，验证 cookie 等跨重启不保）
+var __localStore = {};
+globalThis.local = {
+  get: function (key, k, v) {
+    var ns = __localStore[key];
+    var val = ns ? ns[k] : undefined;
+    return (val === undefined || val === null) ? (v === undefined ? null : v) : val;
+  },
+  set: function (key, k, v) {
+    if (!__localStore[key]) { __localStore[key] = {}; }
+    __localStore[key][k] = String(v);
+  },
+  delete: function (key, k) { if (__localStore[key]) { delete __localStore[key][k]; } }
+};
+
+// 批量请求（源码事实标准；Worker 同步 XHR 下退化为顺序执行，结果按序对齐、单项失败返回 ''）
+globalThis.batchFetch = function (items) {
+  var out = [];
+  if (!Array.isArray(items)) { return out; }
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i] || {};
+    try {
+      var r = syncReq(it.url, it.options || {});
+      out.push(r.content || '');
+    } catch (e) { out.push(''); }
+  }
+  return out;
+};
+
+// 供 drpy2 顶层 `fetch = request` 覆盖前的占位（运行时注入后自行覆盖，无需宿主 fetch）
+
+// ---------- ES module 兼容改写 ----------
+// 剥离 import 语句（drpy2 的依赖已由 libs 预置为全局）
+// 覆盖四种形态：import X from"..." / import{A,B}from"..." / import * as X from"..." / import"..."
+function stripImports(code) {
+  return code.replace(
+    /import\s*(?:\{[^}]*\}|\*\s*as\s+[^\s;'"]+|[^\s;'"{()+]+)?\s*(?:from\s*)?["'][^"']*["'];?/g,
+    '');
+}
+// export{A as b,C as default} → return {b:A,default:C,...}（取最后一个 export{...}；配 IIFE 隔离库作用域）
+function namedExportsToReturn(code) {
+  var m = code.match(/export\s*\{([^}]*)\}\s*;?\s*$/);
+  if (!m) { return code; }
+  var items = m[1].split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s.length > 0; });
+  var pairs = items.map(function (s) {
+    var mm = s.match(/^(\S+)\s+as\s+(\S+)$/);
+    return mm ? (mm[2] + ':' + mm[1]) : (s + ':' + s);
+  });
+  return code.substring(0, m.index) + 'return {' + pairs.join(',') + '};';
+}
+// export default X → return X（取最后一处）
+function defaultExportToReturn(code) {
+  var idx = code.lastIndexOf('export default');
+  if (idx < 0) { return code; }
+  return code.substring(0, idx) + 'return ' + code.substring(idx + 'export default'.length);
+}
+// export default X → globalThis.<name> = X（取最后一处）
+function defaultExportToGlobal(code, name) {
+  var idx = code.lastIndexOf('export default');
+  if (idx < 0) { return code; }
+  return code.substring(0, idx) + 'globalThis.' + name + ' =' + code.substring(idx + 'export default'.length);
+}
+
+// ---------- 消息处理 ----------
+var inited = false;
+
+self.onmessage = function (ev) {
+  var m = ev.data;
+  if (m.type === 'init') {
+    try {
+      // 依赖装载 + 运行时注入。库各自包 IIFE 隔离顶层标识符（压缩短名会与 drpy2 撞车，如 rc），
+      // 仅以约定全局导出（cheerio/模板/gbkTool/CryptoJS）；drpy2 本体最后 eval（export default → __DRPY）
+      var libs = m.libs || {};
+      var boot = '';
+      if (libs.cryptojs) { boot += libs.cryptojs + ';\n'; }  // UMD 自带 IIFE → self.CryptoJS
+      if (libs.cheerio) {
+        // 命名空间整体挂全局：drpy2 用 cheerio.jp(...)，插件用 cheerio.load(...)
+        boot += 'globalThis.cheerio = (function(){\n' + namedExportsToReturn(libs.cheerio) + '\n})();\n';
+      }
+      if (libs.template) {
+        boot += 'globalThis.模板 = (function(){\n' + defaultExportToReturn(libs.template) + '\n})();\n';
+      }
+      if (libs.gbk) {
+        boot += 'globalThis.gbkTool = (function(){\n'
+          + libs.gbk.replace(/export\s+function\s+gbkTool/, 'function gbkTool') + '\nreturn gbkTool;\n})();\n';
+      }
+      boot += defaultExportToGlobal(stripImports(m.drpy2Code), '__DRPY');
+      self.eval(boot);
+      var drpy = globalThis.__DRPY;
+      if (!drpy) { throw new Error('drpy 运行时注入失败（无 __DRPY）'); }
+      // 对接规范：init(源码字符串) 传插件源码（其内 eval 出 rule）；无 ext 的源退回站点配置
+      drpy.init(m.extCode || m.cfgJson);
+      inited = true;
+      self.postMessage({ type: 'log', msg: 'init ok' });
+      // 必须回传 __init__ 结果置位壳页面 __initDone（否则桥侧 init 轮询 20s 超时）
+      self.postMessage({ type: 'result', id: m.callId, value: 'ok' });
+    } catch (e) {
+      self.postMessage({ type: 'log', msg: 'init ERR: ' + String(e) });
+      self.postMessage({ type: 'result', id: m.callId, value: JSON.stringify({ __error: 'init: ' + String(e) }) });
+    }
+    return;
+  }
+  if (m.type === 'call') {
+    if (!inited) {
+      self.postMessage({ type: 'result', id: m.id, value: JSON.stringify({ __error: 'drpy 未就绪' }) });
+      return;
+    }
+    (async function () {
+      try {
+        var fn = globalThis.__DRPY[m.method];
+        if (typeof fn !== 'function') { throw new Error('未知方法: ' + m.method); }
+        var r = await fn.apply(null, m.args);
+        var out = typeof r === 'string' ? r : JSON.stringify(r);
+        self.postMessage({ type: 'result', id: m.id, value: out === undefined ? '' : out });
+      } catch (e) {
+        self.postMessage({ type: 'result', id: m.id, value: JSON.stringify({ __error: String(e) }) });
+      }
+    })();
+    return;
+  }
+};
+</script>
 <script>
-  var worker = new Worker('drpy_worker.js');
   var __callResults = {};
   var __initDone = false;
 
-  worker.onmessage = function (ev) {
-    var m = ev.data;
-    if (m.type === 'log') { console.info('OKV-WORKER: ' + m.msg); return; }
-    if (m.type === 'result') {
-      console.info('OKV-DBG result id=' + m.id + ' vtype=' + typeof m.value + ' v=' + String(m.value).substring(0, 60));
-      __callResults[m.id] = m.value;
-      if (m.id === '__init__' && m.value.indexOf('__error') < 0) { __initDone = true; }
+  // Worker 创建：优先相对 URL（部分内核允许），失败降级为内联源 Blob（resource:// 不透明 origin 下的正道）
+  function __makeWorker() {
+    try {
+      var w = new Worker('drpy_worker.js');
+      console.info('OKV worker created via relative url');
+      return w;
+    } catch (e1) {
+      console.info('OKV worker relative url rejected: ' + e1.message);
     }
-  };
-  worker.onerror = function (e) { console.error('OKV-WORKER-ERR: ' + (e.message || 'unknown')); };
+    try {
+      var src = document.getElementById('workerSrc').textContent;
+      var url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+      var w2 = new Worker(url);
+      console.info('OKV worker created via blob url');
+      return w2;
+    } catch (e2) {
+      console.error('OKV worker blob create failed: ' + e2.message);
+      return null;
+    }
+  }
+  var worker = __makeWorker();
 
-  // ArkTS 调用：注入代码文本后转发 init
+  if (worker !== null) {
+    worker.onmessage = function (ev) {
+      var m = ev.data;
+      if (m.type === 'log') { console.info('OKV-WORKER: ' + m.msg); return; }
+      if (m.type === 'result') {
+        console.info('OKV-DBG result id=' + m.id + ' vtype=' + typeof m.value + ' v=' + String(m.value).substring(0, 60));
+        __callResults[m.id] = m.value;
+        if (m.id === '__init__' && m.value.indexOf('__error') < 0) { __initDone = true; }
+      }
+    };
+    worker.onerror = function (e) { console.error('OKV-WORKER-ERR: ' + (e.message || 'unknown')); };
+  }
+
+  // ArkTS 调用：注入代码文本后转发 init（libs 为 drpy2 的 ES module 依赖文本，见 worker init）
   window.__workerInit = function (cfgJson) {
     __initDone = false;
     delete __callResults['__init__'];
-    worker.postMessage({ type: 'init', drpy2Code: window.__drpy2Code || '', extCode: window.__extCode || '', cfgJson: cfgJson, callId: '__init__' });
+    if (worker === null) { return; }
+    worker.postMessage({ type: 'init', drpy2Code: window.__drpy2Code || '', extCode: window.__extCode || '', libs: window.__drpyLibs || {}, cfgJson: cfgJson, callId: '__init__' });
   };
   // ArkTS 调用：同步发起 call（返回 id），结果经 Worker 异步回写
   window.__workerCall = function (method, argsJson) {
+    if (worker === null) { return 'noworker'; }
     var id = 'c' + Math.random().toString(36).slice(2);
     var args = JSON.parse(argsJson);
     worker.postMessage({ type: 'call', method: method, args: args, id: id });
@@ -48,9 +408,10 @@
     console.info('OKV-WARN: call result was ' + typeof v + ', stringified');
     return JSON.stringify(v);
   };
-  window.__drpyInitDone = function () { return __initDone ? '1' : ''; };
+  // 返回 '1'/'0' 而非 '1'/''：ArkWeb getString 以 JSON 形式回传字符串（'' → '""'），空串判据会假阳性
+  window.__drpyInitDone = function () { return __initDone ? '1' : '0'; };
 
-  console.info('OKV shell v2 ready');
+  console.info('OKV shell v3 ready');
 </script>
 </body>
 </html>
