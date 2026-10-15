@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash .claude/scripts/build.sh)",
+      "Bash(bash .claude/scripts/test.sh)",
+      "Bash(bash /Users/zhaozipeng/DevEcoStudioProjects/okvideo-hap/.claude/scripts/build.sh)",
+      "Bash(bash /Users/zhaozipeng/DevEcoStudioProjects/okvideo-hap/.claude/scripts/test.sh)",
+      "Bash(node /Applications/DevEco-Studio.app/Contents/tools/hvigor/hvigor/bin/hvigor.js *)",
+      "Bash(/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc *)",
+      "Bash(H=/Applications/DevEco-Studio.app/Contents/sdk/default/openharmony/toolchains/hdc*)",
+      "Bash(/Applications/DevEco-Studio.app/Contents/tools/emulator/Emulator *)",
+      "Bash(/Users/zhaozipeng/.claude/plugins/marketplaces/superpowers-dev/skills/subagent-driven-development/scripts/task-brief *)",
+      "Bash(/Users/zhaozipeng/.claude/plugins/marketplaces/superpowers-dev/skills/subagent-driven-development/scripts/review-package *)",
+      "Bash(/Users/zhaozipeng/.claude/plugins/marketplaces/superpowers-dev/skills/subagent-driven-development/scripts/sdd-workspace *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git show *)",
+      "Bash(rm -rf entry/build)",
+      "Bash(rm -rf entry/.test)",
+      "Bash(chmod +x .claude/scripts/*)"
+    ]
+  }
+}
