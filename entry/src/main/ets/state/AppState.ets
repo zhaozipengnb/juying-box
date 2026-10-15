@@ -1,6 +1,6 @@
 // 全局状态（V2）：配置 + 当前站点 + 引擎实例。测试可注入 testFetchText 替代真网络。
 import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, FetchText, decodeConfigContent,
-  siteEngine, isSiteSupported } from 'common';
+  siteEngine, isSiteSupported, resolveSiteUrls } from 'common';
 import { httpFetch } from '../net/HttpClient';
 import { ConfigStore, serializeConfig } from './ConfigStore';
 import { DrpyDriver } from '../spider/DrpyDriver';
@@ -75,6 +75,7 @@ export class AppState {
       }
       const config = decodeConfigContent(content);
       console.info('OKV decoded sites=' + config.sites.length + ' bytes=' + content.length);
+      resolveSiteUrls(config, url);
       if (config.sites.length === 0) {
         this.errMsg = '订阅中没有可用站点';
         this.phase = 'config';
@@ -110,6 +111,7 @@ export class AppState {
     try {
       // 存的是 serializeConfig 序列化后的 JSON 字符串，直接走解码链文本分支
       const config = decodeConfigContent(stored.configJson);
+      resolveSiteUrls(config, stored.url);   // 旧版本持久化数据里的相对路径同样归一
       if (config.sites.length === 0) { this.phase = 'config'; return; }
       this.config = config;
       this.subUrl = stored.url;

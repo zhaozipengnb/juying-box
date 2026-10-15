@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { toInt, parseTvboxConfig, siteEngine, isSiteSupported, SiteConfig } from 'common';
+import { toInt, parseTvboxConfig, siteEngine, isSiteSupported, resolveUrl, resolveSiteUrls,
+  SiteConfig, TvboxConfig } from 'common';
 
 // 便捷构造站点（仅填分类函数关注的字段，其余给默认值）
 function mkSite(type: number, api: string): SiteConfig {
@@ -54,6 +55,48 @@ export default function modelTest() {
       expect(isSiteSupported(mkSite(3, 'https://a.example/x.js'))).assertTrue();
       expect(isSiteSupported(mkSite(3, 'csp_Gz360'))).assertFalse();
       expect(isSiteSupported(mkSite(4, 'x'))).assertFalse();
+    });
+    it('resolveUrl_basics', 0, () => {
+      // 绝对引用原样（含大小写协议、非 http scheme）
+      expect(resolveUrl('https://a.com/x/c.json', 'https://b.com/y.js')).assertEqual('https://b.com/y.js');
+      expect(resolveUrl('https://a.com/x/c.json', 'HTTP://b.com/y.js')).assertEqual('HTTP://b.com/y.js');
+      // 协议相对 / 根相对
+      expect(resolveUrl('https://a.com/x/c.json', '//cdn.a.com/l.js')).assertEqual('https://cdn.a.com/l.js');
+      expect(resolveUrl('https://a.com/x/c.json', '/lib/l.js')).assertEqual('https://a.com/lib/l.js');
+      // 文件级 base：目录相对
+      expect(resolveUrl('https://a.com/x/c.json', './drpy_libs/drpy2.min.js'))
+        .assertEqual('https://a.com/x/drpy_libs/drpy2.min.js');
+      expect(resolveUrl('https://a.com/x/c.json', '../js/n.js')).assertEqual('https://a.com/js/n.js');
+      // 目录级 base（尾 /）：./ 不产生重复段
+      expect(resolveUrl('https://a.com/x/', './l.js')).assertEqual('https://a.com/x/l.js');
+      // 裸相对按目录拼接；ref 带原样保留 query
+      expect(resolveUrl('https://a.com/x/c.json', 'lib/l.js')).assertEqual('https://a.com/x/lib/l.js');
+      expect(resolveUrl('https://a.com/x/c.json', './l.js?token=1')).assertEqual('https://a.com/x/l.js?token=1');
+      // 相对引用不继承 base 的 query
+      expect(resolveUrl('https://a.com/x/c.json?u=1', './l.js')).assertEqual('https://a.com/x/l.js');
+      // base 非标准形态：原样返回 ref
+      expect(resolveUrl('Not a url', './l.js')).assertEqual('./l.js');
+      // 端口保留
+      expect(resolveUrl('http://a.com:81/x/c.json', './l.js')).assertEqual('http://a.com:81/x/l.js');
+    });
+    it('resolveSiteUrls_inplace', 0, () => {
+      const raw = JSON.parse('{'
+        + '"sites":['
+        + '{"key":"rel","name":"相对","type":3,"api":"./drpy_libs/drpy2.min.js","ext":"./drpy_js/北川.js"},'
+        + '{"key":"jar","name":"类名","type":3,"api":"csp_Gz360"},'
+        + '{"key":"abs","name":"绝对","type":1,"api":"https://c.example/api"},'
+        + '{"key":"objext","name":"对象ext","type":3,"api":"https://d.example/x.js","ext":"{\\"url\\":\\"./rel/\\"}"}'
+        + ']}') as Record<string, Object>;
+      const cfg = parseTvboxConfig(raw);
+      resolveSiteUrls(cfg, 'https://sub.example/box/8.10.json');
+      expect(cfg.sites[0].api).assertEqual('https://sub.example/box/drpy_libs/drpy2.min.js');
+      expect(cfg.sites[0].ext).assertEqual('https://sub.example/box/drpy_js/北川.js');
+      // 类名与绝对地址不动；object 形态 ext（'{' 开头 JSON 串）天然不命中
+      expect(cfg.sites[1].api).assertEqual('csp_Gz360');
+      expect(cfg.sites[2].api).assertEqual('https://c.example/api');
+      expect(cfg.sites[3].ext).assertEqual('{"url":"./rel/"}');
+      // 相对化后变为受支持的 drpy 站
+      expect(isSiteSupported(cfg.sites[0])).assertTrue();
     });
   });
 }

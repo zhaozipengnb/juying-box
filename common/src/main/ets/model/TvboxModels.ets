@@ -1,5 +1,6 @@
 // TVBox 配置模型与解析：字段宽松取值 + ext 统一为 string（object 形态 JSON 序列化为字符串，Spider 期再解）。
 import { toInt, toStr } from '../util/TypeUtil';
+import { resolveUrl } from '../util/UrlUtil';
 
 export interface SiteConfig {
   key: string; name: string; type: number; api: string;
@@ -33,6 +34,22 @@ export function siteEngine(site: SiteConfig): SiteEngine {
 export function isSiteSupported(site: SiteConfig): boolean {
   const e = siteEngine(site);
   return e === 'cms' || e === 'js';
+}
+
+// 站点 api/ext 的相对路径（./ ../ 开头）对订阅 URL 绝对化，就地修改。
+// drpy 系订阅常用相对路径引用运行时/插件（如 ./drpy_libs/drpy2.min.js），
+// 不解析则被 siteEngine 误判为 JAR 类名。仅处理明确无歧义的相对标记；
+// csp_* 类名与绝对 URL 不动，object 形态 ext（已序列化为 '{' 开头的 JSON）天然不命中。
+function isRelativeRef(v: string): boolean {
+  return v.startsWith('./') || v.startsWith('../');
+}
+
+export function resolveSiteUrls(config: TvboxConfig, subUrl: string): void {
+  if (subUrl.trim() === '') { return; }
+  for (const s of config.sites) {
+    if (isRelativeRef(s.api)) { s.api = resolveUrl(subUrl, s.api); }
+    if (isRelativeRef(s.ext)) { s.ext = resolveUrl(subUrl, s.ext); }
+  }
 }
 
 export function parseTvboxConfig(raw: Record<string, Object>): TvboxConfig {
