@@ -5,6 +5,7 @@ import { ConfigPage } from './ConfigPage';
 import { HomePage } from './HomePage';
 import { DetailPage } from './DetailPage';
 import { PlayerPage } from './PlayerPage';
+import { DrpyWebContainer } from '../spider/DrpyWebBridge';
 
 @Entry
 @ComponentV2
