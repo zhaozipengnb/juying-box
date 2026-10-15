@@ -13,7 +13,7 @@ export struct ConfigPage {
 
   build() {
     Column({ space: 16 }) {
-      Text('OK 影视').fontSize(28).fontWeight(FontWeight.Bold).margin({ top: 120 })
+      Text('聚源盒').fontSize(28).fontWeight(FontWeight.Bold).margin({ top: 120 })
       Text('粘贴 TVBox 订阅链接（支持 JSON/Base64/JPEG 伪装格式）')
         .fontSize(13).fontColor('#888888')
       TextInput({ placeholder: 'https://…/config.json', text: this.inputUrl })
