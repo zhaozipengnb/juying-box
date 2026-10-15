@@ -5,6 +5,8 @@ import { MovieDetail, Movie, Episode, PlayLine } from 'common';
 
 @ComponentV2
 export struct DetailPage {
+  // 持有 AppState 实例：V2 观察要求经组件成员访问 @Trace（静态链式访问不建立依赖）
+  app: AppState = AppState.instance;
   @Local detail: MovieDetail | null = null;
   @Local lineIdx: number = 0;
   @Local loading: boolean = false;
@@ -77,7 +79,7 @@ export struct DetailPage {
               .fontSize(13).height(36).margin({ left: 8, top: 8 })
               .backgroundColor('#F2F3F5').fontColor('#333333')
               .onClick(() => {
-                const param: PlayerParam = { ep: ep, siteKey: AppState.instance.currentSite?.key ?? '' };
+                const param: PlayerParam = { ep: ep, siteKey: this.app.currentSite?.key ?? '' };
                 Nav.stack.pushPathByName('Player', param);
               })
           }, (ep: Episode, i: number) => ep.url + i)
@@ -89,7 +91,7 @@ export struct DetailPage {
   }
 
   private async load(): Promise<void> {
-    const d = AppState.instance.driver;
+    const d = this.app.driver;
     const m = this.movie;
     if (d === null || m === null) { return; }
     this.loading = true; this.errMsg = ''; this.lineIdx = 0;
