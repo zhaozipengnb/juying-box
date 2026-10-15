@@ -8,6 +8,8 @@ export struct ConfigPage {
   app: AppState = AppState.instance;
   @Local inputUrl: string = '';
   @Local busy: boolean = false;
+  // 错误信息镜像：根内容里 @Trace 条件块刷新失效（SDK bug），await 后手动同步到 @Local 驱动渲染
+  @Local localErr: string = '';
 
   build() {
     Column({ space: 16 }) {
@@ -21,8 +23,8 @@ export struct ConfigPage {
         .width('86%').height(46)
         .enabled(!this.busy && this.inputUrl.trim().length > 0)
         .onClick(() => { this.doLoad(); })
-      if (this.app.errMsg !== '') {
-        Text('错误：' + this.app.errMsg)
+      if (this.localErr !== '') {
+        Text('错误：' + this.localErr)
           .fontSize(13).fontColor('#E53935').width('86%')
       }
     }
@@ -41,6 +43,7 @@ export struct ConfigPage {
     this.app.errMsg = '';
     const ok = await this.app.loadFromUrl(this.inputUrl.trim());
     this.busy = false;
+    this.localErr = this.app.errMsg;  // 手动同步（观察失效绕过）
     if (ok) {
       this.app.persistCurrent();
       // 命令式路由进首页（V2 根内容条件刷新失效的绕过，见 Index.ets 说明）
