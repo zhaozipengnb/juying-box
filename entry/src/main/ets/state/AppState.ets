@@ -1,5 +1,6 @@
 // 全局状态（V2）：配置 + 当前站点 + 引擎实例。测试可注入 testFetchText 替代真网络。
-import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, FetchText, decodeConfigContent } from 'common';
+import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, FetchText, decodeConfigContent,
+  siteEngine, isSiteSupported } from 'common';
 import { httpFetch } from '../net/HttpClient';
 import { ConfigStore, serializeConfig } from './ConfigStore';
 import { DrpyDriver } from '../spider/DrpyDriver';
@@ -37,14 +38,26 @@ export class AppState {
     };
   }
 
-  // 站点类型路由：type 3（drpy JS 插件）→ DrpyDriver（Web 容器 Spider 引擎）；其余（type 1 CMS JSON）→ CmsJsonApi
+  // 站点引擎路由：type 3 且 api 为 http(s) URL（drpy JS 插件）→ DrpyDriver（Web 容器引擎）；
+  // type 1（CMS JSON）→ CmsJsonApi；type 3 非 URL（csp_* 类名 = TVBox JAR spider，实体在 Android JAR 内，
+  // 不可当 URL 下载）及其他类型不支持，不建 driver（首站选择/switchSite 均经 isSiteSupported 过滤，此处兜底）。
   private buildDriver(site: SiteConfig): void {
-    this.currentSite = site;
-    if (site.type === 3) {
+    const engine = siteEngine(site);
+    if (engine === 'js') {
+      this.currentSite = site;
       this.driver = new DrpyDriver(site);
-    } else {
+    } else if (engine === 'cms') {
+      this.currentSite = site;
       this.driver = new CmsJsonApi(site, this.makeFetchText());
     }
+  }
+
+  // 首个受引擎支持的站点（订阅可能是纯 JAR 型，首站未必可用）
+  private firstSupportedSite(config: TvboxConfig): SiteConfig | null {
+    for (const s of config.sites) {
+      if (isSiteSupported(s)) { return s; }
+    }
+    return null;
   }
 
   async loadFromUrl(url: string): Promise<boolean> {
@@ -67,16 +80,16 @@ export class AppState {
         this.phase = 'config';
         return false;
       }
-      // 站点类型门槛：type 1（CMS JSON）与 type 3（drpy JS 插件）均已支持，其余类型拒绝
-      const usableCount = config.sites.filter((s: SiteConfig): boolean => s.type === 1 || s.type === 3).length;
+      // 站点支持门槛：CMS（type 1）与 drpy JS 插件（type 3 且 api 为 URL）可用；csp_* 等 JAR 类名源不支持
+      const usableCount = config.sites.filter((s: SiteConfig): boolean => isSiteSupported(s)).length;
       if (usableCount === 0) {
-        this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但全部为不支持的类型（当前支持 CMS JSON 与 JS 插件类型站点）';
+        this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但没有本引擎支持的源（支持 CMS JSON 与 drpy JS 插件；csp_* 等 JAR 类名源暂不支持）';
         this.phase = 'config';
         return false;
       }
       this.config = config;
       this.subUrl = url;
-      this.buildDriver(config.sites[0]);
+      this.buildDriver(this.firstSupportedSite(config) as SiteConfig);
       this.phase = 'home';
       console.info('OKV phase->home ok');
       return true;
@@ -100,7 +113,9 @@ export class AppState {
       if (config.sites.length === 0) { this.phase = 'config'; return; }
       this.config = config;
       this.subUrl = stored.url;
-      this.buildDriver(config.sites[0]);
+      const first = this.firstSupportedSite(config);
+      if (first === null) { this.phase = 'config'; return; }
+      this.buildDriver(first);
       this.phase = 'home';
     } catch (e) { this.phase = 'config'; }
   }
@@ -108,7 +123,11 @@ export class AppState {
   switchSite(key: string): boolean {
     if (this.config === null) { return false; }
     for (const s of this.config.sites) {
-      if (s.key === key) { this.buildDriver(s); return true; }
+      if (s.key === key) {
+        if (!isSiteSupported(s)) { return false; }   // JAR 等不支持源拒绝切换
+        this.buildDriver(s);
+        return true;
+      }
     }
     return false;
   }

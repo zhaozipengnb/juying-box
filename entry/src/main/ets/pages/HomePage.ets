@@ -3,7 +3,7 @@ import { AppState } from '../state/AppState';
 import { DrpyWebContainer } from '../spider/DrpyWebBridge';
 import { Nav } from '../nav/Nav';
 import { MovieGrid } from '../components/MovieGrid';
-import { Category, HomeContent, Movie, PageResult, SiteDriver } from 'common';
+import { Category, HomeContent, Movie, PageResult, SiteDriver, isSiteSupported } from 'common';
 
 // 网格数据来源：决定触底翻页方式（home/search 的 pageCount 固定 1 不翻页，category 按 tid+页码追加）与错误重试入口
 type ResultKind = 'home' | 'category' | 'search';
@@ -20,8 +20,9 @@ function errText(e: Object): string {
 export struct HomePage {
   // 持有 AppState 实例：V2 观察要求经组件成员访问 @Trace（静态链式访问不建立依赖）
   app: AppState = AppState.instance;
-  @Local sites: string[] = [];        // 站点名列表（与 siteKeys 同序，Select 展示用）
+  @Local sites: string[] = [];        // 站点名列表（与 siteKeys 同序，Select 展示用；不支持源带「（暂不支持）」后缀）
   @Local siteKeys: string[] = [];     // 站点 key 列表
+  @Local siteEnabled: boolean[] = []; // 站点可用性列表（与 siteKeys 同序；csp_* 等 JAR 源为 false，Select 灰显）
   @Local siteIdx: number = 0;
   @Local cats: string[] = [];         // 分类名列表（与 catKeys 同序）
   @Local catKeys: string[] = [];      // 分类 tid 列表
@@ -51,12 +52,16 @@ export struct HomePage {
     if (cfg === null) { return; }
     const names: string[] = [];
     const keys: string[] = [];
+    const enabled: boolean[] = [];
     for (const s of cfg.sites) {
-      names.push(s.name);
+      const ok = isSiteSupported(s);
+      names.push(ok ? s.name : s.name + '（暂不支持）');
       keys.push(s.key);
+      enabled.push(ok);
     }
     this.sites = names;
     this.siteKeys = keys;
+    this.siteEnabled = enabled;
     const curKey: string = this.app.currentSite?.key ?? '';
     this.siteIdx = Math.max(0, keys.indexOf(curKey));
   }
@@ -148,6 +153,7 @@ export struct HomePage {
     Column() {
       // 顶栏：站点切换 + 搜索入口
       Row({ space: 8 }) {
+        // 注：本 SDK SelectOption 无 disabled 字段，不支持源以「（暂不支持）」后缀标记，onSelect 内校验拒绝
         Select(this.sites.map((s: string): SelectOption => {
           const opt: SelectOption = { value: s };
           return opt;
@@ -156,6 +162,7 @@ export struct HomePage {
           .value(this.sites[this.siteIdx] ?? '站点')
           .onSelect((idx: number) => {
             if (idx === this.siteIdx || this.loading || this.searching) { return; }
+            if (!(this.siteEnabled[idx] ?? true)) { return; }   // 不支持源（JAR 类名）灰显且不可选
             this.siteIdx = idx;
             if (this.app.switchSite(this.siteKeys[idx] ?? '')) {
               this.loadHome();

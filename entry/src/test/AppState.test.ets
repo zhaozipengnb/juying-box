@@ -76,5 +76,37 @@ export default function appStateTest() {
       expect(app.currentSite?.key === 'b').assertTrue();
       expect(app.switchSite('nope')).assertFalse();
     });
+    it('jar_site_routing_skipped_and_switch_rejected', 0, async () => {
+      // 影视仓型订阅：首站是 csp_* JAR 类名源（不可当 URL 下载），后面跟一个 CMS 活站
+      const jarSub = `{"sites":[`
+        + `{"key":"j1","name":"JAR站","type":3,"api":"csp_Gz360"},`
+        + `{"key":"c1","name":"CMS站","type":1,"api":"https://c.example/api"}]}`
+        + ``;
+      const app = new AppState();
+      const responses: Map<string, string> = new Map();
+      responses.set('https://sub.example/conf', jarSub);
+      responses.set('https://c.example/api?ac=list', SITE_JSON);
+      app.testFetchText = makeFakeFetch(responses);
+      const ok = await app.loadFromUrl('https://sub.example/conf');
+      expect(ok).assertTrue();
+      expect(app.phase === 'home').assertTrue();
+      // 首个受支持站点被选中（跳过 JAR 站），driver 为 CMS 而非尝试下载 csp_Gz360
+      expect(app.currentSite?.key === 'c1').assertTrue();
+      // 切到 JAR 站被拒绝（false），当前站点不变
+      expect(app.switchSite('j1')).assertFalse();
+      expect(app.currentSite?.key === 'c1').assertTrue();
+    });
+    it('all_jar_subscription_rejected_with_clear_error', 0, async () => {
+      // 纯 JAR 型订阅：全部站点不支持 → 回 config 页并给出明确错误（而非 DNS 假错误）
+      const jarOnly = `{"sites":[{"key":"j1","name":"JAR站","type":3,"api":"csp_X"},{"key":"j2","name":"JAR2","type":3,"api":"csp_Y"}]}`;
+      const app = new AppState();
+      const responses: Map<string, string> = new Map();
+      responses.set('https://sub.example/conf', jarOnly);
+      app.testFetchText = makeFakeFetch(responses);
+      const ok = await app.loadFromUrl('https://sub.example/conf');
+      expect(ok).assertFalse();
+      expect(app.phase === 'config').assertTrue();
+      expect(app.errMsg.includes('JAR')).assertTrue();
+    });
   });
 }
