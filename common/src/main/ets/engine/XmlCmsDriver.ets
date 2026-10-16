@@ -14,6 +14,12 @@ import { HomeContent, PageResult, MovieDetail, Movie, Category, Episode, PlayLin
 import { FetchText, SiteDriver } from './SiteDriver';
 import { CmsJsonApi } from './CmsJsonApi';
 
+// list 分页属性（ArkTS 不允许对象字面量作类型，故用具名接口）
+export interface XmlPageInfo {
+  page: number;
+  pageCount: number;
+}
+
 // ---------- 极简 XML 取值（MacCMS 输出为扁平机器格式，无嵌套同名标签，按下标扫描足够） ----------
 
 // 首个 <tag …> 与 </tag> 之间的原文（不含标签）；不存在返回 ''
@@ -122,7 +128,7 @@ export class XmlCmsDriver implements SiteDriver {
   }
 
   // list 分页属性：<list page="1" pagecount="7960" …>
-  private static pageInfo(xml: string): { page: number; pageCount: number } {
+  private static pageInfo(xml: string): XmlPageInfo {
     const open = xml.indexOf('<list');
     const gt = open < 0 ? -1 : xml.indexOf('>', open);
     const head = open < 0 || gt < 0 ? '' : xml.substring(open, gt + 1);
@@ -133,9 +139,11 @@ export class XmlCmsDriver implements SiteDriver {
 
   async getHomeContent(): Promise<HomeContent> {
     // 分类取 ac=list；首页条目用 ac=videolist&pg=1（含 pic/dl 完整字段）
-    const [clsXml, listXml] = await Promise.all([
+    const pair = await Promise.all([
       this.getXml('?ac=list'), this.getXml('?ac=videolist&pg=1')
     ]);
+    const clsXml = pair[0];
+    const listXml = pair[1];
     const categories: Category[] = [];
     const classXml = firstTag(clsXml, 'class');
     for (const ty of tagBlocks(classXml, 'ty')) {
