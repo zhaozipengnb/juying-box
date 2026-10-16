@@ -6,6 +6,7 @@ import { ConfigStore, serializeConfig } from './ConfigStore';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { resourceManager } from '@kit.LocalizationKit';
 import { util } from '@kit.ArkTS';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 export type AppPhase = 'initing' | 'config' | 'home';
 
