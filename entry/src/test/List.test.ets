@@ -7,6 +7,7 @@ import configStoreTest from './ConfigStore.test';
 import appStateTest from './AppState.test';
 import drpyDriverTest from './DrpyDriver.test';
 import xmlCmsDriverTest from './XmlCmsDriver.test';
+import playUrlResolverTest from './PlayUrlResolver.test';
 import idnTest from './Idn.test';
 
 export default function testsuite() {
@@ -19,5 +20,6 @@ export default function testsuite() {
   appStateTest();
   drpyDriverTest();
   xmlCmsDriverTest();
+  playUrlResolverTest();
   idnTest();
 }
