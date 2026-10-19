@@ -289,6 +289,7 @@ function defaultExportToGlobal(code, name) {
 
 // ---------- 消息处理 ----------
 var inited = false;
+var __initError = null;
 
 self.onmessage = function (ev) {
   var m = ev.data;
@@ -314,15 +315,15 @@ self.onmessage = function (ev) {
       self.eval(boot);
       var drpy = globalThis.__DRPY;
       if (!drpy) { throw new Error('drpy 运行时注入失败（无 __DRPY）'); }
-      // 对接规范：init(源码字符串) 传插件源码（其内 eval 出 rule）；无 ext 的源退回站点配置
       drpy.init(m.extCode || m.cfgJson);
       inited = true;
+      __initError = null;
       self.postMessage({ type: 'log', msg: 'init ok' });
-      // 必须回传 __init__ 结果置位壳页面 __initDone（否则桥侧 init 轮询 20s 超时）
       self.postMessage({ type: 'result', id: m.callId, value: 'ok' });
     } catch (e) {
-      self.postMessage({ type: 'log', msg: 'init ERR: ' + String(e) });
-      self.postMessage({ type: 'result', id: m.callId, value: JSON.stringify({ __error: 'init: ' + String(e) }) });
+      __initError = 'init: ' + String(e);
+      self.postMessage({ type: 'log', msg: 'init ERR: ' + __initError });
+      self.postMessage({ type: 'result', id: m.callId, value: JSON.stringify({ __error: __initError }) });
     }
     return;
   }
@@ -413,8 +414,10 @@ self.onmessage = function (ev) {
     console.info('OKV-WARN: call result was ' + typeof v + ', stringified');
     return JSON.stringify(v);
   };
-  // 返回 '1'/'0' 而非 '1'/''：ArkWeb getString 以 JSON 形式回传字符串（'' → '""'），空串判据会假阳性
-  window.__drpyInitDone = function () { return __initDone ? '1' : '0'; };
+// 返回 '1'/'0' 而非 '1'/''：ArkWeb getString 以 JSON 形式回传字符串（'' → '""'），空串判据会假阳性
+window.__drpyInitDone = function () { return __initDone ? '1' : '0'; };
+// init 失败时返回具体错误字符串（ArkTS 轮询遇到非 '0'/'1' 的值会直接抛出）
+window.__drpyInitError = function () { return __initError || ''; };
 
   console.info('OKV shell v3 ready');
 </script>

@@ -114,15 +114,18 @@ export class DrpyWebBridge {
     });
   }
 
-  // 轮询壳页面标志函数（Worker 异步完成的等待）；标志以 '1'/'0' 表达（见壳页面 __drpyInitDone）
+  // 轮询壳页面标志函数（Worker 异步完成的等待）；标志以 '1'/'0' 表达（见壳页面 __drpyInitDone）；
+  // init 失败时会返回具体错误字符串（非 '0'/'1'），直接抛出，避免等满 20s 只泛泛报「超时」
   private async waitForFlag(flagExpr: string, what: string, timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       const v = this.unwrap(await this.runJs(flagExpr));
       if (v === '1') { return; }
+      if (v !== '' && v !== '0') { throw new Error(`${what}: ${v}`); }
       await new Promise<void>((res) => setTimeout(res, 200));
     }
-    throw new Error(`${what} 超时`);
+    const lastErr = this.unwrap(await this.runJs('__drpyInitError()'));
+    throw new Error(`${what} 超时${lastErr !== '' ? '，原因：' + lastErr : ''}`);
   }
 
   private async waitShell(): Promise<void> {
