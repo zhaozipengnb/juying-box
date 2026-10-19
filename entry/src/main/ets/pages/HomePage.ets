@@ -36,9 +36,12 @@ export struct HomePage {
   @Local showSearch: boolean = false;
   @Local searchKey: string = '';
   @Local kind: ResultKind = 'home';
+  // 设置页返回后的刷新判据：配置对象身份变化（加载/清除订阅）才重拉，避免每次回首页都刷
+  private lastConfigRef: Object | null = null;
 
   aboutToAppear(): void {
     this.refreshSites();
+    this.lastConfigRef = this.app.config;
     this.loadHome();
   }
 
@@ -169,6 +172,11 @@ export struct HomePage {
             }
           })
         Blank()
+        // 订阅维护入口：无订阅也能用内置源，订阅随时在这里补配/更换
+        Text('⚙')
+          .fontSize(20)
+          .margin({ right: 6 })
+          .onClick(() => { Nav.stack.pushPathByName('Settings', ''); })
         // sys.media.ohos_ic_public_search 在本 SDK 不存在，按预案用文本图标降级
         Text('🔍')
           .fontSize(20)
@@ -242,7 +250,13 @@ export struct HomePage {
         Column({ space: 8 }) {
           Text('加载失败：' + this.errMsg).fontSize(13).fontColor('#E53935')
           Button('重试').onClick(() => { this.retry(); })
-          Button('重新配置').onClick(() => { this.app.clearConfig(); Nav.stack.clear(); })
+          Button('清除订阅').onClick(() => {
+            // 清除订阅回内置源起步（AppState 内重建 driver），原地刷新首页视图即可
+            this.app.clearConfig();
+            this.refreshSites();
+            this.lastConfigRef = this.app.config;
+            this.loadHome();
+          })
         }
         .width('100%')
         .margin({ top: 60 })
@@ -268,5 +282,13 @@ export struct HomePage {
     .height('100%')
     }
     .hideTitleBar(true)
+    .onShown(() => {
+      // 从设置页返回：加载/清除订阅会更换 AppState.config 对象，据此重拉站点列表与首页内容
+      if (this.app.config !== this.lastConfigRef) {
+        this.refreshSites();
+        this.lastConfigRef = this.app.config;
+        this.loadHome();
+      }
+    })
   }
 }

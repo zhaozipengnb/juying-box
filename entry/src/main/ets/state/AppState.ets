@@ -67,6 +67,35 @@ export class AppState {
     return null;
   }
 
+  // 装配一份配置进 home 态：合并内置源 → 校验有受支持站点 → 选首站建 driver。
+  // 返回 false 时不动 phase（调用方展示 errMsg；订阅加载失败仍停留在发起页面）。
+  private applyConfig(config: TvboxConfig): boolean {
+    this.mergeBuiltins(config);
+    if (config.sites.length === 0) { return false; }
+    const usableCount = config.sites.filter((s: SiteConfig): boolean => isSiteSupported(s)).length;
+    if (usableCount === 0) {
+      this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但没有本引擎支持的源（支持 CMS JSON、XML 采集与 drpy JS 插件；csp_* 等 JAR 类名源暂不支持）';
+      return false;
+    }
+    this.config = config;
+    this.buildDriver(this.firstSupportedSite(config) as SiteConfig);
+    this.phase = 'home';
+    return true;
+  }
+
+  // 无订阅起步：仅内置源（首启/清除订阅后）。内置源为空才回落 config 页（理论兜底，内置源随包分发）。
+  private startBuiltinsOnly(): boolean {
+    const empty: TvboxConfig = { spider: '', wallpaper: '', sites: [], lives: [], parses: [] };
+    this.subUrl = '';
+    this.errMsg = '';
+    if (this.applyConfig(empty)) {
+      console.info('OKV startBuiltinsOnly sites=' + (this.config as TvboxConfig).sites.length);
+      return true;
+    }
+    this.phase = 'config';
+    return false;
+  }
+
   async loadFromUrl(url: string): Promise<boolean> {
     this.errMsg = '';
     console.info('OKV loadFromUrl start url=' + url);
@@ -83,30 +112,17 @@ export class AppState {
       const config = decodeConfigContent(content);
       console.info('OKV decoded sites=' + config.sites.length + ' bytes=' + content.length);
       resolveSiteUrls(config, url);
-      this.mergeBuiltins(config);
-      if (config.sites.length === 0) {
-        this.errMsg = '订阅中没有可用站点';
-        this.phase = 'config';
+      if (!this.applyConfig(config)) {
+        if (this.errMsg === '') { this.errMsg = '订阅中没有可用站点'; }
         return false;
       }
-      // 站点支持门槛：CMS（type 1）与 drpy JS 插件（type 3 且 api 为 URL）可用；csp_* 等 JAR 类名源不支持
-      const usableCount = config.sites.filter((s: SiteConfig): boolean => isSiteSupported(s)).length;
-      if (usableCount === 0) {
-        this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但没有本引擎支持的源（支持 CMS JSON、XML 采集与 drpy JS 插件；csp_* 等 JAR 类名源暂不支持）';
-        this.phase = 'config';
-        return false;
-      }
-      this.config = config;
       this.subUrl = url;
-      this.buildDriver(this.firstSupportedSite(config) as SiteConfig);
-      this.phase = 'home';
       console.info('OKV phase->home ok');
       return true;
     } catch (e) {
       const msg = errText(e as Object);
       console.info('OKV loadFromUrl ERR ' + msg);
       this.errMsg = msg;
-      this.phase = 'config';
       return false;
     }
   }
@@ -115,22 +131,21 @@ export class AppState {
     this.store = store;
     this.phase = 'initing';
     const stored = store.load();
-    if (stored === null) { this.phase = 'config'; return; }
+    // 无持久化订阅：首启直接进首页（内置源可浏览），订阅在首页设置里维护
+    if (stored === null) { this.startBuiltinsOnly(); return; }
     try {
       // 存的是 serializeConfig 序列化后的 JSON 字符串，直接走解码链文本分支
       const config = decodeConfigContent(stored.configJson);
       resolveSiteUrls(config, stored.url);   // 旧版本持久化数据里的相对路径同样归一
-      this.mergeBuiltins(config);
-      if (config.sites.length === 0) { this.phase = 'config'; return; }
-      this.config = config;
+      if (!this.applyConfig(config)) {
+        console.info('OKV initFromStore 无可用站点，回退内置源');
+        this.startBuiltinsOnly();
+        return;
+      }
       this.subUrl = stored.url;
-      const first = this.firstSupportedSite(config);
-      if (first === null) { this.phase = 'config'; return; }
-      this.buildDriver(first);
-      this.phase = 'home';
     } catch (e) {
       console.info('OKV initFromStore ERR ' + (e instanceof Error ? e.message : JSON.stringify(e)));
-      this.phase = 'config';
+      this.startBuiltinsOnly();
     }
   }
 
@@ -146,15 +161,13 @@ export class AppState {
     return false;
   }
 
-  // 清空当前配置回到订阅输入页（坏订阅自救入口）
+  // 清除订阅回到仅内置源的首页（首页设置页/错误卡片的「清除订阅」入口；不离开 home 态，无需路由操作）
   clearConfig(): void {
     if (this.store !== null) { this.store.clear(); }
     this.config = null;
     this.currentSite = null;
     this.driver = null;
-    this.subUrl = '';
-    this.errMsg = '';
-    this.phase = 'config';
+    this.startBuiltinsOnly();
   }
 
   // 订阅加载成功后持久化当前配置（fire-and-forget，调用方无需等待）

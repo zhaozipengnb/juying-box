@@ -42,14 +42,15 @@ export default function appStateTest() {
       expect(app.currentSite?.key === 'a').assertTrue();
       expect(app.driver !== null).assertTrue();
     });
-    it('loadFromUrl_bad_subscription_stays_config_with_err', 0, async () => {
+    it('loadFromUrl_bad_subscription_stays_with_err', 0, async () => {
       const app = new AppState();
       const responses: Map<string, string> = new Map();
       responses.set('https://sub.example/conf', 'garbage');
       app.testFetchText = makeFakeFetch(responses);
       const ok = await app.loadFromUrl('https://sub.example/conf');
       expect(ok).assertFalse();
-      expect(app.phase === 'config').assertTrue();
+      // 失败不再回 config 页（订阅在设置页维护，失败留在发起页），仅置错误信息且不进 home
+      expect(app.phase === 'home').assertFalse();
       expect(app.errMsg !== '').assertTrue();
     });
     it('initFromStore_with_saved_config_goes_home', 0, async () => {
@@ -97,7 +98,7 @@ export default function appStateTest() {
       expect(app.currentSite?.key === 'c1').assertTrue();
     });
     it('all_jar_subscription_rejected_with_clear_error', 0, async () => {
-      // 纯 JAR 型订阅：全部站点不支持 → 回 config 页并给出明确错误（而非 DNS 假错误）
+      // 纯 JAR 型订阅：全部站点不支持 → 加载失败并给出明确错误（而非 DNS 假错误），不进 home
       const jarOnly = `{"sites":[{"key":"j1","name":"JAR站","type":3,"api":"csp_X"},{"key":"j2","name":"JAR2","type":3,"api":"csp_Y"}]}`;
       const app = new AppState();
       const responses: Map<string, string> = new Map();
@@ -105,8 +106,48 @@ export default function appStateTest() {
       app.testFetchText = makeFakeFetch(responses);
       const ok = await app.loadFromUrl('https://sub.example/conf');
       expect(ok).assertFalse();
-      expect(app.phase === 'config').assertTrue();
+      expect(app.phase === 'home').assertFalse();
       expect(app.errMsg.includes('JAR')).assertTrue();
+    });
+    it('initFromStore_empty_store_starts_builtins_only', 0, async () => {
+      // 首启无订阅：直接用内置源进首页（订阅在设置页维护），subUrl 为空
+      const mkBuiltin = (): SiteConfig => {
+        return {
+          key: 'builtin_bx', name: '兄弟影视(内置)', type: 3, api: 'builtin://drpy2.min.js',
+          searchable: 1, quickSearch: 1, filterable: 0,
+          timeout: 15000, playerType: 0, jar: '', ext: '', header: {}
+        };
+      };
+      const app = new AppState();
+      app.setBuiltins([mkBuiltin()]);
+      await app.initFromStore(new ConfigStore(new FakeKVStore()));
+      expect(app.phase === 'home').assertTrue();
+      expect(app.subUrl === '').assertTrue();
+      expect(app.config?.sites.length === 1).assertTrue();
+      expect(app.currentSite?.key === 'builtin_bx').assertTrue();
+      expect(app.driver instanceof DrpyDriver).assertTrue();
+    });
+    it('clearConfig_returns_to_builtins_only_home', 0, async () => {
+      // 清除订阅：回到仅内置源的首页态，不离开 home、不丢 driver
+      const mkBuiltin = (): SiteConfig => {
+        return {
+          key: 'builtin_bx', name: '兄弟影视(内置)', type: 3, api: 'builtin://drpy2.min.js',
+          searchable: 1, quickSearch: 1, filterable: 0,
+          timeout: 15000, playerType: 0, jar: '', ext: '', header: {}
+        };
+      };
+      const app = new AppState();
+      app.setBuiltins([mkBuiltin()]);
+      const responses: Map<string, string> = new Map();
+      responses.set('https://sub.example/conf', SUB_JSON);
+      app.testFetchText = makeFakeFetch(responses);
+      await app.loadFromUrl('https://sub.example/conf');
+      expect(app.phase === 'home').assertTrue();
+      app.clearConfig();
+      expect(app.phase === 'home').assertTrue();       // 保持 home 态
+      expect(app.subUrl === '').assertTrue();
+      expect(app.config?.sites.length === 1).assertTrue();
+      expect(app.currentSite?.key === 'builtin_bx').assertTrue();
     });
     it('builtin_sites_merged_and_routed', 0, async () => {
       // 内置源：随订阅合并、key 不冲突、可切换且路由到 drpy 引擎（api 为 builtin://）

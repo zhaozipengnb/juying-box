@@ -152,7 +152,7 @@ export default function drpyDriverTest() {
     });
     it('app_state_unsupported_types_rejected', 0, async () => {
       const app = await loadSub(SUB_UNSUPPORTED);
-      expect(app.phase === 'config').assertTrue(); // 全部为不支持类型仍拒绝
+      expect(app.phase === 'home').assertFalse(); // 全部为不支持类型仍拒绝（失败留在发起页，不进 home）
       expect(app.errMsg !== '').assertTrue();
     });
     it('app_state_route_type0_to_xml_driver', 0, async () => {
