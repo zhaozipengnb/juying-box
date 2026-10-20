@@ -5,6 +5,7 @@ import { preferences } from '@kit.ArkData';
 import { ConfigStore } from '../state/ConfigStore';
 import { PreferencesKVStore } from '../state/PreferencesKVStore';
 import { AppState } from '../state/AppState';
+import { AppSettings } from '../state/AppSettings';
 
 const DOMAIN = 0x0000;
 
@@ -13,6 +14,12 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
     // 装配持久化：preferences 就绪后从存储恢复配置（loadContent 先行渲染 initing 态，不阻塞首帧）
     const context = this.context.getApplicationContext();
+    // 个性化设置独立持久化（okvideo_settings），装载失败不影响订阅链路
+    preferences.getPreferences(context, 'okvideo_settings').then((prefS: preferences.Preferences) => {
+      AppSettings.instance.attach(new PreferencesKVStore(prefS));
+    }).catch((eS: Object) => {
+      hilog.error(DOMAIN, 'testTag', 'settings 装配异常: %{public}s', eS instanceof Error ? eS.message : JSON.stringify(eS));
+    });
     preferences.getPreferences(context, 'okvideo_config').then(async (pref: preferences.Preferences) => {
       const store = new ConfigStore(new PreferencesKVStore(pref));
       // 内置源先行装载（rawfile/builtin，失败降级为空），随后恢复订阅并合并

@@ -10,6 +10,10 @@ import { webview } from '@kit.ArkWeb';
 import { window } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { AppState } from '../state/AppState';
+import { AppSettings } from '../state/AppSettings';
+
+// 长按加速判定的按压时长（ms）：短于该值的点按（控制栏按钮/进度条）不触发倍速切换
+const LONG_PRESS_DELAY_MS = 350;
 
 @ComponentV2
 export struct PlayerPage {
@@ -18,8 +22,11 @@ export struct PlayerPage {
   @Local resolving: boolean = true;
   @Local errMsg: string = '';
   @Local useWeb: boolean = false;  // 手动兜底：内嵌浏览器播网页播放页
+  @Local speed: number = 1.0;      // 当前倍速（起播取设置默认，长按临时切换）
+  settings: AppSettings = AppSettings.instance;
   private controller: VideoController = new VideoController();
   private webController: webview.WebviewController = new webview.WebviewController();
+  private lpTimer: number = -1;    // 长按判定定时器 id
 
   // 切窗口方向：全屏=强制横屏，退出=恢复竖屏（模拟器无重力传感器也能用按钮）
   private async setOrientation(o: window.Orientation): Promise<void> {
@@ -53,6 +60,7 @@ export struct PlayerPage {
     } catch (e) { /* 解析失败按原地址起播，仍不行则走错误卡片 */ }
     if (isDirectMedia(target)) {
       this.playUrl = target;
+      this.speed = this.settings.playSpeed;   // 起播倍速取设置默认值
     } else {
       this.errMsg = '该源给的是网页播放页，app 播放器无法直接播放';
     }
@@ -84,8 +92,21 @@ export struct PlayerPage {
           Video({ src: this.playUrl, controller: this.controller })
             .width('100%').height('100%')
             .autoPlay(true)
+            .speed(this.speed)
             .objectFit(ImageFit.Contain)
             .onError(() => { this.errMsg = '视频地址无法播放'; })
+            // 长按加速：按压超过阈值切临时倍速，松开/取消恢复默认；短点按（控制栏）不受影响
+            .onTouch((ev: TouchEvent) => {
+              if (this.settings.longPressSpeed <= 0) { return; }
+              if (ev.type === TouchType.Down) {
+                this.lpTimer = setTimeout(() => {
+                  this.speed = this.settings.longPressSpeed;
+                }, LONG_PRESS_DELAY_MS);
+              } else if (ev.type === TouchType.Up || ev.type === TouchType.Cancel) {
+                if (this.lpTimer >= 0) { clearTimeout(this.lpTimer); this.lpTimer = -1; }
+                this.speed = this.settings.playSpeed;
+              }
+            })
           // 全屏按钮：强制横屏（Video 内置按钮不旋转窗口，竖屏下视频只是一条横带）
           Text('⤢')
             .fontSize(22).fontColor('#FFFFFF')
@@ -108,6 +129,7 @@ export struct PlayerPage {
       if (this.ep !== null) { this.prepare(); }
     })
     .onWillDisappear(() => {
+      if (this.lpTimer >= 0) { clearTimeout(this.lpTimer); this.lpTimer = -1; }
       this.setImmersive(false);                                  // 还原窗口布局与白底
       this.setOrientation(window.Orientation.PORTRAIT);          // 离开播放页恢复竖屏
     })

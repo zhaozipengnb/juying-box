@@ -1,9 +1,12 @@
 // 首页：站点 Select 切换 / 分类横滑 Tabs / MovieGrid 影片网格 / 触底分页 / 搜索入口
+// 个性化设置消费点：图片尺寸（列数）、壁纸（背景）、无痕（搜索词不保留）、
+// 聚合搜索 + 显示站源 + 站源筛选（搜索链路）。
 import { AppState } from '../state/AppState';
+import { AppSettings, PicSize } from '../state/AppSettings';
 import { DrpyWebContainer } from '../spider/DrpyWebBridge';
 import { Nav } from '../nav/Nav';
 import { MovieGrid } from '../components/MovieGrid';
-import { Category, HomeContent, Movie, PageResult, SiteDriver, isSiteSupported } from 'common';
+import { Category, HomeContent, Movie, PageResult, SiteDriver, SiteConfig, isSiteSupported, siteEngine } from 'common';
 
 // 网格数据来源：决定触底翻页方式（home/search 的 pageCount 固定 1 不翻页，category 按 tid+页码追加）与错误重试入口
 type ResultKind = 'home' | 'category' | 'search';
@@ -36,6 +39,11 @@ export struct HomePage {
   @Local showSearch: boolean = false;
   @Local searchKey: string = '';
   @Local kind: ResultKind = 'home';
+  // 聚合搜索的平行归属（与 items 同序）：站 key 用于点击时切站进详情，站名用于角标与筛选
+  @Local aggSiteKeys: string[] = [];
+  @Local aggSiteNames: string[] = [];
+  @Local filterSite: string = '';   // 站源筛选当前选中（'' = 全部）
+  settings: AppSettings = AppSettings.instance;
   // 设置页返回后的刷新判据：配置对象身份变化（加载/清除订阅）才重拉，避免每次回首页都刷
   private lastConfigRef: Object | null = null;
 
@@ -43,6 +51,57 @@ export struct HomePage {
     this.refreshSites();
     this.lastConfigRef = this.app.config;
     this.loadHome();
+  }
+
+  // 图片尺寸设置 → 网格列数（small=4 / normal=3 / large=2）
+  private gridColumns(): number {
+    const p: PicSize = this.settings.picSize;
+    if (p === 'small') { return 4; }
+    if (p === 'large') { return 2; }
+    return 3;
+  }
+
+  // 壁纸设置 → 首页背景渐变色标（default 为纯白）
+  private wallpaperColors(): Array<[ResourceColor, number]> {
+    const w = this.settings.wallpaper;
+    if (w === 'dark') { return [['#FF141416', 0.0], ['#FF232326', 1.0]]; }
+    if (w === 'blue') { return [['#FF0E1E3C', 0.0], ['#FF1B3A5E', 1.0]]; }
+    if (w === 'green') { return [['#FF12291F', 0.0], ['#FF1E4030', 1.0]]; }
+    return [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  }
+
+  // 深色壁纸下文字提亮
+  private isDarkWallpaper(): boolean {
+    return this.settings.wallpaper !== 'default';
+  }
+
+  // 筛选后可见条目的原始下标（siteLabels/切站索引与原始 items 对齐的桥梁）
+  private visibleIdxs(): number[] {
+    const out: number[] = [];
+    for (let i = 0; i < this.items.length; i++) {
+      if (this.filterSite === '' || (this.aggSiteNames[i] ?? '') === this.filterSite) { out.push(i); }
+    }
+    return out;
+  }
+
+  // 搜索结果角标（显示站源开 + 聚合结果有归属时展示；下标与 visibleItems 对齐）
+  private siteLabels(): string[] {
+    if (!this.settings.showSite || this.kind !== 'search' || this.aggSiteNames.length === 0) { return []; }
+    return this.visibleIdxs().map((i: number): string => this.aggSiteNames[i] ?? '');
+  }
+
+  // 站源筛选 chips：聚合结果里出现过的站（保持稳定去重）
+  private filterSiteOptions(): string[] {
+    const seen: string[] = [];
+    for (const n of this.aggSiteNames) {
+      if (seen.indexOf(n) < 0) { seen.push(n); }
+    }
+    return seen;
+  }
+
+  // 当前筛选下的可见条目（filterSite 为空 = 全部）
+  private visibleItems(): Movie[] {
+    return this.visibleIdxs().map((i: number): Movie => this.items[i]);
   }
 
   private driver(): SiteDriver | null {
@@ -116,27 +175,75 @@ export struct HomePage {
     }
   }
 
-  // 搜索（结果不可翻页，强制 pageCount=1 关闭触底加载）
+  // 搜索：聚合关闭 = 仅当前站；聚合开启 = 并发搜全部采集站（CMS/XML；drpy 单容器互斥不参与）
+  // 合并去重（同名同人近似即可用：按 vodId 站内唯一，跨站以 name+remark 近似去重会误伤，这里仅按站内 id + 站 key）
   private async doSearch(): Promise<void> {
-    const d = this.driver();
     const kw: string = this.searchKey.trim();
-    if (d === null || kw === '') { return; }
+    if (kw === '') { return; }
+    if (this.settings.aggSearch) {
+      await this.doSearchAgg(kw);
+      return;
+    }
+    const d = this.driver();
+    if (d === null) { return; }
     this.searching = true;
     this.errMsg = '';
     try {
       const pr: PageResult = await d.searchContent(kw, false);
       if (this.app.driver !== d) { return; }
       this.items = pr.items;
+      this.aggSiteKeys = [];
+      this.aggSiteNames = [];
+      this.filterSite = '';
       this.page = 1;
       this.pageCount = 1;
       this.kind = 'search';
       this.errMsg = '';
+      if (this.settings.incognito) { this.searchKey = ''; }   // 无痕：不保留搜索词
     } catch (e) {
       this.errMsg = errText(e as Object);
       this.kind = 'search'; // 搜索失败也归位搜索态，重试时按搜索重放
     } finally {
       this.searching = false;
     }
+  }
+
+  // 聚合搜索：逐站构造引擎并发搜（每站截取前 10 条），单站失败不拖垮整体
+  private async doSearchAgg(kw: string): Promise<void> {
+    const cfg = this.app.config;
+    if (cfg === null) { return; }
+    this.searching = true;
+    this.errMsg = '';
+    this.items = [];
+    this.aggSiteKeys = [];
+    this.aggSiteNames = [];
+    this.filterSite = '';
+    this.kind = 'search';
+    const tasks: Promise<void>[] = [];
+    for (const s of cfg.sites) {
+      if (!isSiteSupported(s) || siteEngine(s) === 'js') { continue; }   // drpy 单容器互斥，聚合不参与
+      const driver: SiteDriver | null = this.app.makeDriverFor(s);
+      if (driver === null) { continue; }
+      tasks.push(driver.searchContent(kw, false).then((pr: PageResult): void => {
+        const cap = Math.min(pr.items.length, 10);
+        for (let i = 0; i < cap; i++) {
+          this.items.push(pr.items[i]);
+          this.aggSiteKeys.push(s.key);
+          this.aggSiteNames.push(s.name);
+        }
+      }).catch((_e: Object): void => { /* 单站失败跳过 */ }));
+    }
+    if (tasks.length === 0) {
+      this.errMsg = '没有可聚合搜索的采集站（当前订阅仅含 drpy/JAR 源）';
+      this.searching = false;
+      return;
+    }
+    await Promise.all(tasks);
+    if (this.items.length === 0 && this.errMsg === '') {
+      this.errMsg = '全部站点均无结果（或搜索接口不可用）';
+    }
+    if (this.settings.incognito) { this.searchKey = ''; }   // 无痕：不保留搜索词
+    this.searching = false;
   }
 
   // 错误重试：按当前数据来源重放
@@ -218,7 +325,7 @@ export struct HomePage {
             ForEach(this.cats, (c: string, i: number) => {
               Text(c)
                 .fontSize(this.catIdx === i ? 16 : 14)
-                .fontColor(this.catIdx === i ? '#007DFF' : '#666666')
+                .fontColor(this.catIdx === i ? (this.isDarkWallpaper() ? '#5AA9FF' : '#007DFF') : (this.isDarkWallpaper() ? '#BBBBBB' : '#666666'))
                 .fontWeight(this.catIdx === i ? FontWeight.Bold : FontWeight.Normal)
                 .onClick(() => {
                   if (this.loading || this.searching) { return; }
@@ -246,6 +353,34 @@ export struct HomePage {
         }.width('100%').padding({ left: 12, right: 12, top: 8 })
       }
 
+      // 站源筛选 chips：聚合结果就绪且开关开启时展示（站源搜索）
+      if (this.settings.siteFilter && this.kind === 'search' && this.filterSiteOptions().length > 0) {
+        Scroll() {
+          Row({ space: 8 }) {
+            Text('全部')
+              .fontSize(13)
+              .fontColor(this.filterSite === '' ? '#FFFFFF' : '#666666')
+              .backgroundColor(this.filterSite === '' ? '#007DFF' : '#F0F0F0')
+              .borderRadius(14)
+              .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+              .onClick(() => { this.filterSite = ''; })
+            ForEach(this.filterSiteOptions(), (n: string) => {
+              Text(n)
+                .fontSize(13)
+                .fontColor(this.filterSite === n ? '#FFFFFF' : '#666666')
+                .backgroundColor(this.filterSite === n ? '#007DFF' : '#F0F0F0')
+                .borderRadius(14)
+                .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+                .onClick(() => { this.filterSite = n; })
+            }, (n: string) => n)
+          }
+          .padding({ left: 12, right: 12 })
+        }
+        .scrollable(ScrollDirection.Horizontal)
+        .width('100%')
+        .margin({ top: 4 })
+      }
+
       if (this.errMsg !== '') {
         Column({ space: 8 }) {
           Text('加载失败：' + this.errMsg).fontSize(13).fontColor('#E53935')
@@ -262,14 +397,26 @@ export struct HomePage {
         .margin({ top: 60 })
       } else if (this.loading && this.items.length === 0) {
         LoadingProgress().width(44).height(44).margin({ top: 80 })
-      } else if (this.items.length === 0) {
-        Text('暂无内容').fontSize(14).fontColor('#999999').margin({ top: 80 })
+      } else if (this.visibleItems().length === 0) {
+        Text('暂无内容').fontSize(14).fontColor(this.isDarkWallpaper() ? '#888888' : '#999999').margin({ top: 80 })
       } else {
         MovieGrid({
-          items: this.items,
-          hasMore: this.page < this.pageCount,
+          items: this.visibleItems(),
+          siteLabels: this.siteLabels(),
+          columns: this.gridColumns(),
+          dark: this.isDarkWallpaper(),
+          hasMore: this.page < this.pageCount && this.filterSite === '',
           loading: this.loading || this.searching,
-          onPick: (m: Movie) => { Nav.stack.pushPathByName('Detail', m); },
+          onPick: (m: Movie, idx: number) => {
+            // 聚合结果：先切到来源站再进详情（详情页用 app.driver 查询）；idx 是筛选后视图的下标
+            const oi: number = this.visibleIdxs()[idx] ?? idx;
+            const sk: string = this.aggSiteKeys[oi] ?? '';
+            if (sk !== '' && sk !== (this.app.currentSite?.key ?? '')) {
+              if (!this.app.switchSite(sk)) { return; }
+              this.refreshSites();
+            }
+            Nav.stack.pushPathByName('Detail', m);
+          },
           onLoadMore: () => {
             // 触底：仅分类模式有下一页（home/search 的 pageCount 固定 1，hasMore=false 不会进入）
             const tid: string = this.catKeys[this.catIdx] ?? '';
@@ -280,6 +427,7 @@ export struct HomePage {
     }
     .width('100%')
     .height('100%')
+    .linearGradient({ angle: 160, colors: this.wallpaperColors() })
     }
     .hideTitleBar(true)
     .onShown(() => {
