@@ -39,6 +39,15 @@ export struct DetailPage {
     return this.settings.wallpaperUri;
   }
 
+  // 当前线路的剧集列表；AI去广告开启时剔除集名含「广告/推广」的条目（资源站常混入宣传集）
+  private visibleEps(): Episode[] {
+    const d = this.detail;
+    if (d === null || d.lines.length === 0) { return []; }
+    const eps: Episode[] = d.lines[this.lineIdx]?.episodes ?? [];
+    if (!this.settings.aiAdFilter) { return eps; }
+    return eps.filter((e: Episode): boolean => e.name.indexOf('广告') < 0 && e.name.indexOf('推广') < 0);
+  }
+
   build() {
     NavDestination() {
       Column() {
@@ -99,7 +108,7 @@ export struct DetailPage {
         }.scrollable(ScrollDirection.Horizontal).width('100%')
 
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.Start }) {
-          ForEach(this.detail!.lines[this.lineIdx].episodes, (ep: Episode, i: number) => {
+          ForEach(this.visibleEps(), (ep: Episode, i: number) => {
             Row() {
               Button(ep.name)
                 .fontSize(13).height(36)

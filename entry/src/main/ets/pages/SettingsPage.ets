@@ -200,7 +200,7 @@ export struct SettingsPage {
                 this.settings.save();
               })
           }
-          SettingRow({ label: 'AI去广告', sub: '预留：将作用于播放地址解析阶段，本版本暂未生效' }) {
+          SettingRow({ label: 'AI去广告', sub: '过滤 HLS 播放列表里的插播广告分块与「广告/推广」集（对 m3u8 源生效）' }) {
             Toggle({ type: ToggleType.Switch, isOn: this.settings.aiAdFilter })
               .onChange((v: boolean) => { this.settings.aiAdFilter = v; this.settings.save(); })
           }

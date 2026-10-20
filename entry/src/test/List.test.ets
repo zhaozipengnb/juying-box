@@ -6,6 +6,7 @@ import cmsJsonApiTest from './CmsJsonApi.test';
 import configStoreTest from './ConfigStore.test';
 import appStateTest from './AppState.test';
 import appSettingsTest from './AppSettings.test';
+import hlsAdFilterTest from './HlsAdFilter.test';
 import drpyDriverTest from './DrpyDriver.test';
 import xmlCmsDriverTest from './XmlCmsDriver.test';
 import playUrlResolverTest from './PlayUrlResolver.test';
@@ -20,6 +21,7 @@ export default function testsuite() {
   configStoreTest();
   appStateTest();
   appSettingsTest();
+  hlsAdFilterTest();
   drpyDriverTest();
   xmlCmsDriverTest();
   playUrlResolverTest();

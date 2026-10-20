@@ -12,6 +12,7 @@ import { common } from '@kit.AbilityKit';
 import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
 import { DownloadManager } from '../state/DownloadManager';
+import { HlsAdFilterServer } from '../net/HlsAdFilterServer';
 
 // 长按加速判定的按压时长（ms）：短于该值的点按（控制栏按钮/进度条）不触发倍速切换
 const LONG_PRESS_DELAY_MS = 350;
@@ -51,7 +52,9 @@ export struct PlayerPage {
     } catch (e) { /* 沉浸式失败不阻塞播放（仅留白，功能可用） */ }
   }
 
-  // 起播前解析：直链直接用；网页播放页挖出其中的媒体地址；挖不到则提示（不自动跳网页播放器）
+  // 起播前解析：直链直接用；网页播放页挖出其中的媒体地址；挖不到则提示（不自动跳网页播放器）。
+  // AI去广告开启且目标是 HLS：把列表地址换成本地代理（127.0.0.1），由代理过滤插播广告分块；
+  // 代理启动失败或非 m3u8 时回退直连（mp4 等无广告插播问题，无需代理）。
   private async prepare(): Promise<void> {
     const ep = this.ep;
     if (ep === null) { return; }
@@ -62,6 +65,12 @@ export struct PlayerPage {
       target = await resolvePlayUrl(ep.url, AppState.instance.makeFetchText());
     } catch (e) { /* 解析失败按原地址起播，仍不行则走错误卡片 */ }
     if (isDirectMedia(target)) {
+      if (this.settings.aiAdFilter && /\.m3u8($|\?)/i.test(target)) {
+        try {
+          const base: string = await HlsAdFilterServer.ensureStarted();
+          if (base !== '') { target = HlsAdFilterServer.wrapUrl(target); }
+        } catch (e) { /* 代理不可用回退直连 */ }
+      }
       this.playUrl = target;
       this.speed = this.settings.playSpeed;   // 起播倍速取设置默认值
     } else {
