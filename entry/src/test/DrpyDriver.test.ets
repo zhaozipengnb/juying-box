@@ -62,17 +62,21 @@ async function loadSub(subJson: string): Promise<AppState> {
 export default function drpyDriverTest() {
   describe('DrpyDriverTest', () => {
     it('home_content', 0, async () => {
-      const bridge = new FakeBridge({ 'home': HOME_JSON });
+      // drpy2 拆分：home 回分类，homeVod 回推荐列表
+      const bridge = new FakeBridge({
+        'home': HOME_JSON,
+        'homeVod': '{"list":[{"vod_id":"22","vod_name":"片B","vod_pic":"http://p/b.jpg","vod_remarks":"蓝光"}]}'
+      });
       const driver = new DrpyDriver(SITE, bridge);
       const home = await driver.getHomeContent();
       expect(home.categories.length).assertEqual(2);
       expect(home.categories[0].tid).assertEqual('1');
       expect(home.categories[1].name).assertEqual('剧集');
       expect(home.items.length).assertEqual(1);
-      expect(home.items[0].vodId).assertEqual('11');
-      expect(home.items[0].name).assertEqual('片A');
-      expect(bridge.readyCount).assertEqual(1); // 接口方法前 ensureReady 懒调用
-      expect(bridge.lastMethod).assertEqual('home');
+      expect(home.items[0].vodId).assertEqual('22');
+      expect(home.items[0].name).assertEqual('片B');
+      expect(bridge.readyCount).assertEqual(2); // home + homeVod 各一次 ensureReady（同 skey 幂等）
+      expect(bridge.lastMethod).assertEqual('homeVod');
     });
     it('category_page', 0, async () => {
       const bridge = new FakeBridge({ 'category': CATEGORY_JSON });
@@ -124,11 +128,11 @@ export default function drpyDriverTest() {
       expect(bridge.lastArgs[1]).assertEqual('0'); // quick=false → '0'
     });
     it('ensure_ready_before_every_method', 0, async () => {
-      const bridge = new FakeBridge({ 'home': HOME_JSON, 'search': SEARCH_JSON });
+      const bridge = new FakeBridge({ 'home': HOME_JSON, 'homeVod': '{"list":[]}', 'search': SEARCH_JSON });
       const driver = new DrpyDriver(SITE, bridge);
       await driver.getHomeContent();
       await driver.searchContent('x', true);
-      expect(bridge.readyCount).assertEqual(2); // 每个接口方法前各一次
+      expect(bridge.readyCount).assertEqual(3); // home+homeVod+search 各一次（同 skey 幂等累加）
       expect(bridge.lastArgs[1]).assertEqual('1'); // quick=true → '1'
     });
     it('app_state_route_type3_to_drpy_driver', 0, async () => {

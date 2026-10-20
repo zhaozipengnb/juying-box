@@ -69,14 +69,19 @@ export class DrpyDriver implements SiteDriver {
     return JSON.parse(text) as Record<string, Object>;
   }
 
-  // 首页：{class:[{type_id,type_name}], list:[vod...]} → HomeContent（与 CMS ?ac=list 同形态）
+  // 首页：{class:[{type_id,type_name}]} + homeVod 的 {list:[vod...]} → HomeContent。
+  // drpy2 把推荐列表拆在独立的 homeVod 方法里，home 本身只回分类。
   async getHomeContent(): Promise<HomeContent> {
     const obj = await this.callJson('home', []);
     const classes = (obj['class'] ?? []) as Record<string, Object>[];
     const categories: Category[] = classes.map((c: Record<string, Object>): Category => {
       return { tid: toStr(field(c, 'type_id'), ''), name: toStr(field(c, 'type_name'), '') };
     });
-    const list = (obj['list'] ?? []) as Record<string, Object>[];
+    let list: Record<string, Object>[] = [];
+    try {
+      const hv = await this.callJson('homeVod', []);
+      list = (hv['list'] ?? []) as Record<string, Object>[];
+    } catch (e) { /* homeVod 失败不阻塞分类展示 */ }
     return { categories: categories, items: list.map(pickMovie) };
   }
 
