@@ -3,6 +3,7 @@
 // 聚合搜索 + 显示站源 + 站源筛选（搜索链路）。
 import { AppState } from '../state/AppState';
 import { AppSettings, PicSize } from '../state/AppSettings';
+import { SearchHistory } from '../state/SearchHistory';
 import { DrpyWebContainer } from '../spider/DrpyWebBridge';
 import { Nav } from '../nav/Nav';
 import { MovieGrid } from '../components/MovieGrid';
@@ -43,6 +44,7 @@ export struct HomePage {
   @Local aggSiteKeys: string[] = [];
   @Local aggSiteNames: string[] = [];
   @Local filterSite: string = '';   // 站源筛选当前选中（'' = 全部）
+  @Local searchHistory: string[] = []; // 搜索历史标签（无痕模式下不展示）
   settings: AppSettings = AppSettings.instance;
   // 设置页返回后的刷新判据：配置对象身份变化（加载/清除订阅）才重拉，避免每次回首页都刷
   private lastConfigRef: Object | null = null;
@@ -51,6 +53,28 @@ export struct HomePage {
     this.refreshSites();
     this.lastConfigRef = this.app.config;
     this.loadHome();
+    this.searchHistory = SearchHistory.instance.getAll();
+  }
+
+  // @Computed 直接读取 @Trace 属性，确保 V2 依赖建立，壁纸变更立即生效
+  @Computed get wallpaperColors(): Array<[ResourceColor, number]> {
+    const w = this.settings.wallpaper;
+    if (w === 'dark') { return [['#FF141416', 0.0], ['#FF232326', 1.0]]; }
+    if (w === 'blue') { return [['#FF0E1E3C', 0.0], ['#FF1B3A5E', 1.0]]; }
+    if (w === 'green') { return [['#FF12291F', 0.0], ['#FF1E4030', 1.0]]; }
+    return [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  }
+
+  @Computed get isDarkWallpaper(): boolean {
+    return this.settings.wallpaper !== 'default' || this.settings.wallpaperUri !== '';
+  }
+
+  @Computed get wallpaperUri(): string {
+    return this.settings.wallpaperUri;
+  }
+
+  @Computed get isIncognito(): boolean {
+    return this.settings.incognito;
   }
 
   // 图片尺寸设置 → 网格列数（small=4 / normal=3 / large=2）
@@ -59,20 +83,6 @@ export struct HomePage {
     if (p === 'small') { return 4; }
     if (p === 'large') { return 2; }
     return 3;
-  }
-
-  // 壁纸设置 → 首页背景渐变色标（default 为纯白）
-  private wallpaperColors(): Array<[ResourceColor, number]> {
-    const w = this.settings.wallpaper;
-    if (w === 'dark') { return [['#FF141416', 0.0], ['#FF232326', 1.0]]; }
-    if (w === 'blue') { return [['#FF0E1E3C', 0.0], ['#FF1B3A5E', 1.0]]; }
-    if (w === 'green') { return [['#FF12291F', 0.0], ['#FF1E4030', 1.0]]; }
-    return [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
-  }
-
-  // 深色壁纸下文字提亮
-  private isDarkWallpaper(): boolean {
-    return this.settings.wallpaper !== 'default';
   }
 
   // 筛选后可见条目的原始下标（siteLabels/切站索引与原始 items 对齐的桥梁）
@@ -199,7 +209,7 @@ export struct HomePage {
       this.pageCount = 1;
       this.kind = 'search';
       this.errMsg = '';
-      if (this.settings.incognito) { this.searchKey = ''; }   // 无痕：不保留搜索词
+      if (this.settings.incognito) { this.searchKey = ''; } else { SearchHistory.instance.add(kw); this.searchHistory = SearchHistory.instance.getAll(); }
     } catch (e) {
       this.errMsg = errText(e as Object);
       this.kind = 'search'; // 搜索失败也归位搜索态，重试时按搜索重放
@@ -242,7 +252,7 @@ export struct HomePage {
     if (this.items.length === 0 && this.errMsg === '') {
       this.errMsg = '全部站点均无结果（或搜索接口不可用）';
     }
-    if (this.settings.incognito) { this.searchKey = ''; }   // 无痕：不保留搜索词
+    if (this.settings.incognito) { this.searchKey = ''; } else { SearchHistory.instance.add(kw); this.searchHistory = SearchHistory.instance.getAll(); }
     this.searching = false;
   }
 
@@ -284,6 +294,11 @@ export struct HomePage {
           .fontSize(20)
           .margin({ right: 6 })
           .onClick(() => { Nav.stack.pushPathByName('Settings', ''); })
+        // 下载管理入口
+        Text('⬇')
+          .fontSize(18)
+          .margin({ right: 6 })
+          .onClick(() => { Nav.stack.pushPathByName('Download', ''); })
         // sys.media.ohos_ic_public_search 在本 SDK 不存在，按预案用文本图标降级
         Text('🔍')
           .fontSize(20)
@@ -301,21 +316,47 @@ export struct HomePage {
           })
       }
       .width('100%')
-      .padding({ left: 12, right: 12, top: 8 })
+      .padding({ left: 12, right: 12, top: 12 })
 
       if (this.showSearch) {
         Row({ space: 8 }) {
-          TextInput({ placeholder: '搜索影片…', text: this.searchKey })
+          TextInput({ placeholder: this.isIncognito ? '无痕搜索…' : '搜索影片…', text: this.searchKey })
             .layoutWeight(1).height(40)
             .onChange((v: string) => { this.searchKey = v; })
             .onSubmit(() => { if (this.searching) { return; } this.doSearch(); })
+          if (this.isIncognito) {
+            Text('无痕').fontSize(10).fontColor('#FF9800')
+              .backgroundColor('#33FF9800').borderRadius(4)
+              .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+          }
           Button('搜索')
             .height(40)
             .enabled(!this.searching && this.searchKey.trim().length > 0)
             .onClick(() => { this.doSearch(); })
         }
         .width('100%')
-        .padding({ left: 12, right: 12, top: 4, bottom: 4 })
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+
+        // 搜索历史标签（无痕模式下不展示）
+        if (!this.isIncognito && this.searchKey.trim() === '' && this.searchHistory.length > 0) {
+          Flex({ wrap: FlexWrap.Wrap }) {
+            ForEach(this.searchHistory, (tag: string) => {
+              Text(tag)
+                .fontSize(13)
+                .fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#555555')
+                .backgroundColor(this.isDarkWallpaper ? '#33FFFFFF' : '#F5F5F5')
+                .borderRadius(12)
+                .padding({ left: 10, right: 10, top: 5, bottom: 5 })
+                .margin({ right: 6, bottom: 6 })
+                .onClick(() => {
+                  this.searchKey = tag;
+                  this.doSearch();
+                })
+            }, (tag: string): string => tag)
+          }
+          .width('100%')
+          .padding({ left: 12, right: 12, top: 6, bottom: 10 })
+        }
       }
 
       // 分类横滑 Tabs（搜索模式下隐藏）
@@ -325,7 +366,7 @@ export struct HomePage {
             ForEach(this.cats, (c: string, i: number) => {
               Text(c)
                 .fontSize(this.catIdx === i ? 16 : 14)
-                .fontColor(this.catIdx === i ? (this.isDarkWallpaper() ? '#5AA9FF' : '#007DFF') : (this.isDarkWallpaper() ? '#BBBBBB' : '#666666'))
+                .fontColor(this.catIdx === i ? (this.isDarkWallpaper ? '#5AA9FF' : '#007DFF') : (this.isDarkWallpaper ? '#BBBBBB' : '#666666'))
                 .fontWeight(this.catIdx === i ? FontWeight.Bold : FontWeight.Normal)
                 .onClick(() => {
                   if (this.loading || this.searching) { return; }
@@ -338,6 +379,7 @@ export struct HomePage {
         }
         .scrollable(ScrollDirection.Horizontal)
         .width('100%')
+        .padding({ top: 6, bottom: 6 })
       }
 
       // 搜索态标题栏：显示当前关键词与「返回浏览」入口（仅搜索结果就绪时展示）
@@ -350,7 +392,7 @@ export struct HomePage {
               this.showSearch = false;
               this.loadHome();
             })
-        }.width('100%').padding({ left: 12, right: 12, top: 8 })
+        }.width('100%').padding({ left: 12, right: 12, top: 10 })
       }
 
       // 站源筛选 chips：聚合结果就绪且开关开启时展示（站源搜索）
@@ -378,7 +420,8 @@ export struct HomePage {
         }
         .scrollable(ScrollDirection.Horizontal)
         .width('100%')
-        .margin({ top: 4 })
+        .padding({ left: 12, right: 12 })
+        .margin({ top: 8 })
       }
 
       if (this.errMsg !== '') {
@@ -398,13 +441,13 @@ export struct HomePage {
       } else if (this.loading && this.items.length === 0) {
         LoadingProgress().width(44).height(44).margin({ top: 80 })
       } else if (this.visibleItems().length === 0) {
-        Text('暂无内容').fontSize(14).fontColor(this.isDarkWallpaper() ? '#888888' : '#999999').margin({ top: 80 })
+        Text('暂无内容').fontSize(14).fontColor(this.isDarkWallpaper ? '#888888' : '#999999').margin({ top: 80 })
       } else {
         MovieGrid({
           items: this.visibleItems(),
           siteLabels: this.siteLabels(),
           columns: this.gridColumns(),
-          dark: this.isDarkWallpaper(),
+          dark: this.isDarkWallpaper,
           hasMore: this.page < this.pageCount && this.filterSite === '',
           loading: this.loading || this.searching,
           onPick: (m: Movie, idx: number) => {
@@ -427,7 +470,9 @@ export struct HomePage {
     }
     .width('100%')
     .height('100%')
-    .linearGradient({ angle: 160, colors: this.wallpaperColors() })
+    .linearGradient({ angle: 160, colors: this.wallpaperColors })
+      .backgroundImage(this.wallpaperUri)
+      .backgroundImageSize(ImageSize.Cover)
     }
     .hideTitleBar(true)
     .onShown(() => {

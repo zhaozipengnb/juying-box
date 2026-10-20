@@ -11,6 +11,7 @@ import { window } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
+import { DownloadManager } from '../state/DownloadManager';
 
 // 长按加速判定的按压时长（ms）：短于该值的点按（控制栏按钮/进度条）不触发倍速切换
 const LONG_PRESS_DELAY_MS = 350;
@@ -24,6 +25,8 @@ export struct PlayerPage {
   @Local useWeb: boolean = false;  // 手动兜底：内嵌浏览器播网页播放页
   @Local speed: number = 1.0;      // 当前倍速（起播取设置默认，长按临时切换）
   settings: AppSettings = AppSettings.instance;
+  dl: DownloadManager = DownloadManager.instance;
+  @Local movieName: string = '';
   private controller: VideoController = new VideoController();
   private webController: webview.WebviewController = new webview.WebviewController();
   private lpTimer: number = -1;    // 长按判定定时器 id
@@ -92,7 +95,6 @@ export struct PlayerPage {
           Video({ src: this.playUrl, controller: this.controller })
             .width('100%').height('100%')
             .autoPlay(true)
-            .speed(this.speed)
             .objectFit(ImageFit.Contain)
             .onError(() => { this.errMsg = '视频地址无法播放'; })
             // 长按加速：按压超过阈值切临时倍速，松开/取消恢复默认；短点按（控制栏）不受影响
@@ -107,22 +109,40 @@ export struct PlayerPage {
                 this.speed = this.settings.playSpeed;
               }
             })
-          // 全屏按钮：强制横屏（Video 内置按钮不旋转窗口，竖屏下视频只是一条横带）
-          Text('⤢')
-            .fontSize(22).fontColor('#FFFFFF')
-            .textAlign(TextAlign.Center)
-            .width(48).height(48)
-            .backgroundColor('#66000000')
-            .borderRadius(8)
-            .margin({ right: 12, bottom: 12 })
-            .onClick(() => { this.setOrientation(window.Orientation.LANDSCAPE); })
+          // 底部右下：下载 + 全屏
+          Row() {
+            if (this.settings.builtinDownload && this.playUrl !== '' && this.ep !== null) {
+              Text('⬇')
+                .fontSize(20).fontColor('#FFFFFF')
+                .textAlign(TextAlign.Center)
+                .width(44).height(44)
+                .backgroundColor('#66000000')
+                .borderRadius(8)
+                .margin({ right: 8 })
+                .onClick(() => {
+                  this.dl.startDownload(
+                    this.movieName !== '' ? this.movieName : '影片',
+                    this.ep!.name, this.playUrl, ''
+                  );
+                })
+            }
+            // 全屏按钮：强制横屏（Video 内置按钮不旋转窗口，竖屏下视频只是一条横带）
+            Text('⤢')
+              .fontSize(22).fontColor('#FFFFFF')
+              .textAlign(TextAlign.Center)
+              .width(48).height(48)
+              .backgroundColor('#66000000')
+              .borderRadius(8)
+              .onClick(() => { this.setOrientation(window.Orientation.LANDSCAPE); })
+          }
+          .margin({ right: 12, bottom: 12 })
         }
       }.width('100%').height('100%').backgroundColor(Color.Black)
     }
     .hideTitleBar(true)
     .onReady((ctx: NavDestinationContext) => {
       const p = ctx.pathInfo.param as PlayerParam;
-      if (p !== null && p !== undefined) { this.ep = p.ep; }
+      if (p !== null && p !== undefined) { this.ep = p.ep; this.movieName = p.movieName ?? ''; }
       else { this.errMsg = '播放参数缺失'; this.resolving = false; }  // 兜底：无参数进错误终态，避免永久 Loading
       this.setImmersive(true);                                          // 铺满安全区 + 黑底（消白边）
       this.setOrientation(window.Orientation.AUTO_ROTATION_RESTRICTED);  // 播放中跟随传感器旋转

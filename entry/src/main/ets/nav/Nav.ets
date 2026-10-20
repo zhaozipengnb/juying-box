@@ -6,4 +6,4 @@ export class Nav {
 }
 
 // 播放页跳转参数：DetailPage 组装，Task 8 PlayerPage 消费
-export interface PlayerParam { ep: Episode; siteKey: string }
+export interface PlayerParam { ep: Episode; siteKey: string; movieName?: string }

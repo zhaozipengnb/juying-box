@@ -8,6 +8,7 @@ import { HomePage } from './HomePage';
 import { SettingsPage } from './SettingsPage';
 import { DetailPage } from './DetailPage';
 import { PlayerPage } from './PlayerPage';
+import { DownloadPage } from './DownloadPage';
 
 @Entry
 @ComponentV2
@@ -37,5 +38,6 @@ struct Index {
     else if (name === 'Settings') { SettingsPage() }
     else if (name === 'Detail') { DetailPage() }
     else if (name === 'Player') { PlayerPage() }
+    else if (name === 'Download') { DownloadPage() }
   }
 }

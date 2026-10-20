@@ -149,6 +149,16 @@ export class AppState {
     }
   }
 
+  // 按站点构造引擎实例（不动 currentSite/driver 状态）：
+  // 聚合搜索等需要并发访问多站的场景使用；js 引擎为单 Web 容器（跨 skey 互斥），聚合场景勿用。
+  makeDriverFor(site: SiteConfig): SiteDriver | null {
+    const engine = siteEngine(site);
+    if (engine === 'cms') { return new CmsJsonApi(site, this.makeFetchText()); }
+    if (engine === 'xml') { return new XmlCmsDriver(site, this.makeFetchText()); }
+    if (engine === 'js') { return new DrpyDriver(site); }
+    return null;
+  }
+
   switchSite(key: string): boolean {
     if (this.config === null) { return false; }
     for (const s of this.config.sites) {

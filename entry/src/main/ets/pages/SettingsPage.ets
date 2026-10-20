@@ -2,9 +2,12 @@
 // 个性化设置即改即存（AppSettings.save），返回首页后由各消费点读取生效。
 import { AppState } from '../state/AppState';
 import { AppSettings, PicSize, WallpaperKind, SPEED_OPTIONS, LONG_PRESS_OPTIONS } from '../state/AppSettings';
+import { SearchHistory } from '../state/SearchHistory';
+import { SettingRow } from '../components/SettingRow';
 import { Nav } from '../nav/Nav';
 import { common } from '@kit.AbilityKit';
 import fs from '@ohos.file.fs';
+import { photoAccessHelper } from '@kit.MediaLibraryKit';
 
 // 海报密度选项（与 PicSize 一一对应）
 const PIC_SIZES: PicSize[] = ['small', 'normal', 'large'];
@@ -22,10 +25,56 @@ export struct SettingsPage {
   @Local localErr: string = '';
   @Local localOk: string = '';
   @Local cacheBytes: number = -1;   // -1 = 未统计
+  @Local searchHistoryCount: number = 0;
+  @Local editingSub: boolean = false;
 
   aboutToAppear(): void {
     this.inputUrl = this.app.subUrl;
     this.refreshCacheSize();
+    this.searchHistoryCount = SearchHistory.instance.getAll().length;
+  }
+
+  // @Computed 直接读取 @Trace 属性，确保 V2 依赖建立，壁纸变更立即生效
+  @Computed get wallpaperColors(): Array<[ResourceColor, number]> {
+    const w = this.settings.wallpaper;
+    if (w === 'dark') { return [['#FF141416', 0.0], ['#FF232326', 1.0]]; }
+    if (w === 'blue') { return [['#FF0E1E3C', 0.0], ['#FF1B3A5E', 1.0]]; }
+    if (w === 'green') { return [['#FF12291F', 0.0], ['#FF1E4030', 1.0]]; }
+    return [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  }
+
+  @Computed get isDarkWallpaper(): boolean {
+    return this.settings.wallpaper !== 'default' || this.settings.wallpaperUri !== '';
+  }
+
+  @Computed get wallpaperUri(): string {
+    return this.settings.wallpaperUri;
+  }
+
+  private async pickWallpaper(): Promise<void> {
+    try {
+      const opt = new photoAccessHelper.PhotoSelectOptions();
+      opt.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE;
+      opt.maxSelectNumber = 1;
+      const pv = new photoAccessHelper.PhotoViewPicker();
+      const res = await pv.select(opt);
+      if (res.photoUris.length > 0) {
+        const srcUri = res.photoUris[0];
+        const destPath = (getContext(this) as common.UIAbilityContext).filesDir + '/wallpaper.jpg';
+        const srcFile = fs.openSync(srcUri, fs.OpenMode.READ_ONLY);
+        const destFile = fs.openSync(destPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+        fs.copyFileSync(srcFile.fd, destFile.fd);
+        fs.closeSync(srcFile);
+        fs.closeSync(destFile);
+        this.settings.wallpaperUri = destPath;
+        this.settings.save();
+      }
+    } catch (e) { /* 用户取消或权限不足 */ }
+  }
+
+  private clearWallpaper(): void {
+    this.settings.wallpaperUri = '';
+    this.settings.save();
   }
 
   // ---------- 缓存 ----------
@@ -71,73 +120,61 @@ export struct SettingsPage {
     return (b / 1024 / 1024).toFixed(1) + ' MB';
   }
 
-  // ---------- 通用行组件参数 ----------
   @Builder
   sectionTitle(t: string) {
-    Text(t).fontSize(15).fontWeight(FontWeight.Bold).fontColor('#333333')
-      .width('86%').margin({ top: 10 })
-  }
-
-  @Builder
-  settingRow(label: string, sub: string, content: () => void) {
-    Column() {
-      Row() {
-        Column() {
-          Text(label).fontSize(15).fontColor('#222222')
-          if (sub !== '') {
-            Text(sub).fontSize(11).fontColor('#999999').margin({ top: 2 })
-          }
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-        content()
-      }
-      .width('100%')
-    }
-    .width('86%')
-    .padding({ top: 10, bottom: 10 })
+    Text(t).fontSize(16).fontWeight(FontWeight.Bold).fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+      .width('100%').padding({ left: 16 }).margin({ top: 28 })
   }
 
   build() {
     NavDestination() {
       Scroll() {
         Column() {
-          Text('订阅设置').fontSize(17).fontWeight(FontWeight.Bold).margin({ top: 16 })
-          Text(this.app.subUrl === '' ? '当前订阅：未设置（使用内置源）' : '当前订阅：' + this.app.subUrl)
-            .fontSize(12).fontColor('#666666')
-            .width('86%').maxLines(2)
-            .margin({ top: 6 })
-
-          TextInput({ placeholder: 'https://…/config.json（支持 JSON / Base64 / JPEG 伪装格式）', text: this.inputUrl })
-            .type(InputType.URL).width('86%').height(46)
-            .onChange((v: string) => { this.inputUrl = v; })
-
-          Button(this.busy ? '解析中…' : (this.app.subUrl === '' ? '加载订阅' : '更新订阅'))
-            .width('86%').height(44)
-            .enabled(!this.busy && this.inputUrl.trim().length > 0)
-            .onClick(() => { this.doLoad(); })
-
-          Button('清除订阅')
-            .width('86%').height(40)
-            .backgroundColor('#F5F5F5').fontColor('#C62828')
-            .enabled(!this.busy)
-            .onClick(() => {
-              this.app.clearConfig();
-              Nav.stack.pop();   // 回首页；HomePage onShown 检测到配置对象更换后自动刷新
-            })
-
-          if (this.localErr !== '') {
-            Text('错误：' + this.localErr).fontSize(13).fontColor('#E53935').width('86%')
-          }
-          if (this.localOk !== '') {
-            Text(this.localOk).fontSize(13).fontColor('#2E7D32').width('86%')
+          this.sectionTitle('订阅')
+          SettingRow({ label: '订阅地址', sub: this.app.subUrl === '' ? '未设置（使用内置源）' : this.app.subUrl }) {
+            Button(this.editingSub ? '取消' : '编辑')
+              .height(36)
+              .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
+              .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+              .onClick(() => {
+                this.editingSub = !this.editingSub;
+                if (this.editingSub) { this.inputUrl = this.app.subUrl; }
+                this.localErr = '';
+                this.localOk = '';
+              })
           }
 
-          Divider().margin({ top: 14 })
+          if (this.editingSub) {
+            TextInput({ placeholder: 'https://…/config.json（支持 JSON / Base64 / JPEG 伪装格式）' })
+              .type(InputType.URL).width('86%').height(46)
+              .onChange((v: string) => { this.inputUrl = v; })
+
+            Button(this.busy ? '解析中…' : (this.app.subUrl === '' ? '加载订阅' : '更新订阅'))
+              .width('86%').height(44)
+              .enabled(!this.busy && this.inputUrl.trim().length > 0)
+              .onClick(() => { this.doLoad(); })
+
+            Button('清除订阅')
+              .width('86%').height(40)
+              .backgroundColor('#F5F5F5').fontColor('#C62828')
+              .enabled(!this.busy)
+              .onClick(() => {
+                this.app.clearConfig();
+                this.editingSub = false;
+                Nav.stack.pop();
+              })
+
+            if (this.localErr !== '') {
+              Text('错误：' + this.localErr).fontSize(13).fontColor('#E53935').width('100%').padding({ left: 16, right: 16 })
+            }
+            if (this.localOk !== '') {
+              Text(this.localOk).fontSize(13).fontColor('#2E7D32').width('100%').padding({ left: 16, right: 16 })
+            }
+          }
 
           // ---------- 播放 ----------
           this.sectionTitle('播放')
-          this.settingRow('播放倍速', '进入播放页时的默认倍速', () => {
+          SettingRow({ label: '播放倍速', sub: '进入播放页时的默认倍速' }) {
             Select(SPEED_OPTIONS.map((s: number): SelectOption => {
               const opt: SelectOption = { value: s + 'x' };
               return opt;
@@ -149,8 +186,8 @@ export struct SettingsPage {
                 this.settings.playSpeed = SPEED_OPTIONS[idx];
                 this.settings.save();
               })
-          })
-          this.settingRow('长按倍速', '播放中长按屏幕临时加速，松开恢复', () => {
+          }
+          SettingRow({ label: '长按倍速', sub: '播放中长按屏幕临时加速，松开恢复' }) {
             Select(LONG_PRESS_OPTIONS.map((s: number): SelectOption => {
               const opt: SelectOption = { value: s === 0 ? '关闭' : s + 'x' };
               return opt;
@@ -162,21 +199,19 @@ export struct SettingsPage {
                 this.settings.longPressSpeed = LONG_PRESS_OPTIONS[idx];
                 this.settings.save();
               })
-          })
-          this.settingRow('AI去广告', '预留：将作用于播放地址解析阶段，本版本暂未生效', () => {
+          }
+          SettingRow({ label: 'AI去广告', sub: '预留：将作用于播放地址解析阶段，本版本暂未生效' }) {
             Toggle({ type: ToggleType.Switch, isOn: this.settings.aiAdFilter })
               .onChange((v: boolean) => { this.settings.aiAdFilter = v; this.settings.save(); })
-          })
-          this.settingRow('内置下载', '预留：影片离线缓存，本版本暂未生效', () => {
+          }
+          SettingRow({ label: '内置下载', sub: '在详情页和播放页显示下载按钮，可离线缓存影片' }) {
             Toggle({ type: ToggleType.Switch, isOn: this.settings.builtinDownload })
               .onChange((v: boolean) => { this.settings.builtinDownload = v; this.settings.save(); })
-          })
-
-          Divider().margin({ top: 8 })
+          }
 
           // ---------- 显示 ----------
           this.sectionTitle('显示')
-          this.settingRow('图片尺寸', '首页海报密度（列数）', () => {
+          SettingRow({ label: '图片尺寸', sub: '首页海报密度（列数）' }) {
             Select(PIC_LABELS.map((s: string): SelectOption => {
               const opt: SelectOption = { value: s };
               return opt;
@@ -188,8 +223,8 @@ export struct SettingsPage {
                 this.settings.picSize = PIC_SIZES[idx];
                 this.settings.save();
               })
-          })
-          this.settingRow('壁纸', '首页背景', () => {
+          }
+          SettingRow({ label: '颜色主题', sub: '全局背景渐变色' }) {
             Select(WALLPAPER_LABELS.map((s: string): SelectOption => {
               const opt: SelectOption = { value: s };
               return opt;
@@ -201,54 +236,78 @@ export struct SettingsPage {
                 this.settings.wallpaper = WALLPAPERS[idx];
                 this.settings.save();
               })
-          })
-          this.settingRow('显示站源', '搜索结果卡片角标展示来源站名', () => {
+          }
+          SettingRow({ label: '壁纸图片', sub: this.wallpaperUri !== '' ? '已设置自定义背景图片' : '选择本地图片作为全局背景' }) {
+            Row() {
+              Button(this.wallpaperUri !== '' ? '更换' : '选择')
+                .height(36)
+                .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
+                .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+                .onClick(() => { this.pickWallpaper(); })
+              if (this.wallpaperUri !== '') {
+                Button('清除')
+                  .height(36).margin({ left: 8 })
+                  .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
+                  .fontColor('#C62828')
+                  .onClick(() => { this.clearWallpaper(); })
+              }
+            }
+          }
+          SettingRow({ label: '显示站源', sub: '搜索结果卡片角标展示来源站名' }) {
             Toggle({ type: ToggleType.Switch, isOn: this.settings.showSite })
               .onChange((v: boolean) => { this.settings.showSite = v; this.settings.save(); })
-          })
-
-          Divider().margin({ top: 8 })
+          }
 
           // ---------- 搜索 ----------
           this.sectionTitle('搜索')
-          this.settingRow('聚合搜索', '一次并发搜索全部采集站（CMS/XML）并合并结果', () => {
+          SettingRow({ label: '聚合搜索', sub: '一次并发搜索全部采集站（CMS/XML）并合并结果' }) {
             Toggle({ type: ToggleType.Switch, isOn: this.settings.aggSearch })
               .onChange((v: boolean) => { this.settings.aggSearch = v; this.settings.save(); })
-          })
-          this.settingRow('站源搜索', '搜索结果顶部按站点筛选（聚合结果就绪后展示）', () => {
+          }
+          SettingRow({ label: '站源搜索', sub: '搜索结果顶部按站点筛选（聚合结果就绪后展示）' }) {
             Toggle({ type: ToggleType.Switch, isOn: this.settings.siteFilter })
               .onChange((v: boolean) => { this.settings.siteFilter = v; this.settings.save(); })
-          })
-
-          Divider().margin({ top: 8 })
+          }
 
           // ---------- 隐私 ----------
           this.sectionTitle('隐私')
-          this.settingRow('无痕模式', '不保留搜索词（播放/浏览历史功能上线后一并生效）', () => {
+          SettingRow({ label: '无痕模式', sub: '不保留搜索记录，搜索栏不展示历史标签' }) {
             Toggle({ type: ToggleType.Switch, isOn: this.settings.incognito })
               .onChange((v: boolean) => { this.settings.incognito = v; this.settings.save(); })
-          })
-
-          Divider().margin({ top: 8 })
+          }
+          SettingRow({ label: '搜索历史', sub: this.searchHistoryCount > 0 ? `${this.searchHistoryCount} 条记录` : '暂无记录' }) {
+            Button('清除')
+              .height(36)
+              .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
+              .fontColor('#C62828')
+              .enabled(this.searchHistoryCount > 0)
+              .onClick(() => {
+                SearchHistory.instance.clear();
+                this.searchHistoryCount = 0;
+              })
+          }
 
           // ---------- 缓存 ----------
           this.sectionTitle('缓存')
-          this.settingRow('缓存占用', this.fmtSize(this.cacheBytes) + '（图片等运行缓存）', () => {
+          SettingRow({ label: '缓存占用', sub: this.fmtSize(this.cacheBytes) + '（图片等运行缓存）' }) {
             Button('清理')
               .height(36)
               .backgroundColor('#F5F5F5').fontColor('#C62828')
               .onClick(() => { this.clearCache(); })
-          })
+          }
 
           Text('清除订阅不影响个性化设置；个性化设置与订阅分开存储。')
-            .fontSize(12).fontColor('#999999')
-            .width('86%').margin({ top: 16, bottom: 30 })
+            .fontSize(12).fontColor(this.isDarkWallpaper ? '#888888' : '#999999')
+            .width('100%').padding({ left: 16, right: 16 }).margin({ top: 16, bottom: 30 })
         }
         .width('100%')
         .alignItems(HorizontalAlign.Center)
       }
       .width('100%').height('100%')
       .scrollBar(BarState.Auto)
+      .linearGradient({ angle: 160, colors: this.wallpaperColors })
+      .backgroundImage(this.wallpaperUri)
+      .backgroundImageSize(ImageSize.Cover)
     }
     .hideTitleBar(false)
     .title('设置')

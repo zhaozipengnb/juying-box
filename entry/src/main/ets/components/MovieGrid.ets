@@ -6,7 +6,7 @@
 // siteLabels 与 items 平行（聚合搜索时传入），非空时卡片显示来源站角标。
 import { Movie } from 'common';
 
-const COL_GAP = 10;
+const COL_GAP = 12;
 const H_PAD = 12;   // 容器左右内边距
 
 @ComponentV2
@@ -34,7 +34,7 @@ export struct MovieGrid {
     WaterFlow({ scroller: this.gridScroller }) {
       ForEach(this.items, (m: Movie, idx: number) => {
         FlowItem() {
-          Column({ space: 6 }) {
+          Column({ space: 8 }) {
             Stack({ alignContent: Alignment.TopEnd }) {
               Image(m.pic === '' ? $r('app.media.startIcon') : m.pic)
                 .width(this.colW).aspectRatio(0.67)
@@ -68,14 +68,14 @@ export struct MovieGrid {
     }
     .columnsTemplate(this.columnsTemplate())
     .columnsGap(COL_GAP)
-    .rowsGap(12)
+    .rowsGap(14)
     .width('100%')
     .layoutWeight(1)
-    .padding({ left: H_PAD, right: H_PAD, top: 8 })
+    .padding({ left: H_PAD, right: H_PAD, top: 10 })
     .onAreaChange((_o: Area, n: Area) => {
       // Area.width 含容器 padding：净宽 = 宽 - 2*padding，均分列再扣列间距
       const n2 = this.columns >= 2 ? this.columns : 3;
-      this.colW = (n.width - H_PAD * 2 - COL_GAP * (n2 - 1)) / n2;
+      this.colW = ((n.width as number) - H_PAD * 2 - COL_GAP * (n2 - 1)) / n2;
     })
     .onReachEnd(() => {
       // 触底：有更多且不在加载中时回调分页（页码推进在调用方）
