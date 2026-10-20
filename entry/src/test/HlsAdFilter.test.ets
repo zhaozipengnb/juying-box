@@ -49,10 +49,27 @@ export default function hlsAdFilterTest() {
     });
 
     it('media_all_short_untouched', 0, () => {
-      // 无长内容块锚点 → 不过滤（避免把正片切成短块的列表全删）
+      // 少量短块（< MERGE_MIN_GROUPS）→ 原样放行，仅绝对化
       const out: string = filterMediaPlaylist(MEDIA_ALL_SHORT, BASE);
       expect(out.indexOf('s1.ts') >= 0).assertTrue();
       expect(out.indexOf('s2.ts') >= 0).assertTrue();
+      const discontCount: number = out.split('#EXT-X-DISCONTINUITY').length - 1;
+      expect(discontCount).assertEqual(2);   // 两个边界都保留（少量短块不合并）
+    });
+
+    it('media_many_short_blocks_merged', 0, () => {
+      // 牛牛型防采集结构：9 个短块、无内容锚点 → 去掉全部 DISCONTINUITY 合并单流
+      let many: string = '#EXTM3U\n#EXT-X-PLAYLIST-TYPE:VOD\n';
+      for (let b = 0; b < 9; b++) {
+        many += '#EXT-X-DISCONTINUITY\n#EXTINF:2.0,\nblk' + b + '/s1.ts\n';
+      }
+      many += '#EXT-X-ENDLIST';
+      const out: string = filterMediaPlaylist(many, BASE);
+      expect(out.indexOf('#EXT-X-DISCONTINUITY') < 0).assertTrue();  // 标记全部移除
+      expect(out.indexOf('blk0/s1.ts') >= 0).assertTrue();           // 片段全保留
+      expect(out.indexOf('blk8/s1.ts') >= 0).assertTrue();
+      expect(out.indexOf('https://cdn.example.com/vod/2026/a1/blk0/s1.ts') >= 0).assertTrue();  // 绝对化
+      expect(out.indexOf('#EXT-X-ENDLIST') >= 0).assertTrue();       // 尾部标签不丢
     });
 
     it('media_key_uri_absolutized', 0, () => {
