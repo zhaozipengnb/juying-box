@@ -67,6 +67,20 @@ export class AppState {
     return null;
   }
 
+  // 装配配置后选定起始站点：优先上次记住的 siteKey（存在且受支持），否则首个受支持站
+  private pickInitialSite(config: TvboxConfig): void {
+    const remembered: string = this.store?.loadCurrentSite() ?? '';
+    if (remembered !== '') {
+      for (const s of config.sites) {
+        if (s.key === remembered && isSiteSupported(s)) {
+          this.buildDriver(s);
+          return;
+        }
+      }
+    }
+    this.buildDriver(this.firstSupportedSite(config) as SiteConfig);
+  }
+
   // 装配一份配置进 home 态：合并内置源 → 校验有受支持站点 → 选首站建 driver。
   // 返回 false 时不动 phase（调用方展示 errMsg；订阅加载失败仍停留在发起页面）。
   private applyConfig(config: TvboxConfig): boolean {
@@ -78,7 +92,7 @@ export class AppState {
       return false;
     }
     this.config = config;
-    this.buildDriver(this.firstSupportedSite(config) as SiteConfig);
+    this.pickInitialSite(config);
     this.phase = 'home';
     return true;
   }
@@ -165,6 +179,7 @@ export class AppState {
       if (s.key === key) {
         if (!isSiteSupported(s)) { return false; }   // JAR 等不支持源拒绝切换
         this.buildDriver(s);
+        if (this.store !== null) { this.store.saveCurrentSite(key); }   // 跨重启记忆选中源
         return true;
       }
     }

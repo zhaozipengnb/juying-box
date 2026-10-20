@@ -7,6 +7,7 @@ import { SearchHistory } from '../state/SearchHistory';
 import { DrpyWebContainer } from '../spider/DrpyWebBridge';
 import { Nav } from '../nav/Nav';
 import { MovieGrid } from '../components/MovieGrid';
+import { common } from '@kit.AbilityKit';
 import { Category, HomeContent, Movie, PageResult, SiteDriver, SiteConfig, isSiteSupported, siteEngine } from 'common';
 
 // 网格数据来源：决定触底翻页方式（home/search 的 pageCount 固定 1 不翻页，category 按 tid+页码追加）与错误重试入口
@@ -475,6 +476,16 @@ export struct HomePage {
       .backgroundImageSize(ImageSize.Cover)
     }
     .hideTitleBar(true)
+    .onBackPressed(() => {
+      // Home 是栈底目的地：Back 退到后台（不弹栈），弹出会露出根占位且再次 Back 才能退出
+      if (Nav.stack.size() <= 1) {
+        try {
+          (getContext(this) as common.UIAbilityContext).moveAbilityToBackground();
+          return true;
+        } catch (e) { return false; }
+      }
+      return false;
+    })
     .onShown(() => {
       // 从设置页返回：加载/清除订阅会更换 AppState.config 对象，据此重拉站点列表与首页内容
       if (this.app.config !== this.lastConfigRef) {

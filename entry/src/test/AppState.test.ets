@@ -69,6 +69,8 @@ export default function appStateTest() {
       const responses: Map<string, string> = new Map();
       responses.set('https://sub.example/conf', SUB_JSON);
       app.testFetchText = makeFakeFetch(responses);
+      const store = new ConfigStore(new FakeKVStore());
+      app.store = store;
       await app.loadFromUrl('https://sub.example/conf');
       const before = app.driver;
       expect(app.switchSite('b')).assertTrue();
@@ -77,6 +79,39 @@ export default function appStateTest() {
       expect(changed).assertTrue();
       expect(app.currentSite?.key === 'b').assertTrue();
       expect(app.switchSite('nope')).assertFalse();
+    });
+    it('current_site_remembered_across_restart', 0, async () => {
+      // switchSite 持久化选中源；新 AppState（模拟冷启动）恢复时优先用记住的站点
+      const store = new ConfigStore(new FakeKVStore());
+      const responses: Map<string, string> = new Map();
+      responses.set('https://sub.example/conf', SUB_JSON);
+      responses.set('https://a.example/api?ac=list', SITE_JSON);
+      responses.set('https://b.example/api?ac=list', SITE_JSON);
+      const app1 = new AppState();
+      app1.testFetchText = makeFakeFetch(responses);
+      app1.store = store;
+      await app1.loadFromUrl('https://sub.example/conf');
+      app1.persistCurrent();                                // UI 层职责：加载成功后落盘
+      expect(app1.currentSite?.key === 'a').assertTrue();   // 默认首站
+      expect(app1.switchSite('b')).assertTrue();
+      expect(store.loadCurrentSite() === 'b').assertTrue();
+      const app2 = new AppState();
+      app2.testFetchText = makeFakeFetch(responses);
+      await app2.initFromStore(store);
+      expect(app2.currentSite?.key === 'b').assertTrue();   // 恢复上次选中
+    });
+    it('remembered_site_missing_falls_back_to_first', 0, async () => {
+      // 记住的 key 在新订阅里不存在（换订阅场景）→ 回落首站
+      const store = new ConfigStore(new FakeKVStore());
+      store.saveCurrentSite('zz');
+      store.save('https://sub.example/conf', serializeConfig('https://sub.example/conf', decodeConfigContent(SUB_JSON)));
+      const app = new AppState();
+      const responses: Map<string, string> = new Map();
+      responses.set('https://a.example/api?ac=list', SITE_JSON);
+      responses.set('https://b.example/api?ac=list', SITE_JSON);
+      app.testFetchText = makeFakeFetch(responses);
+      await app.initFromStore(store);
+      expect(app.currentSite?.key === 'a').assertTrue();
     });
     it('jar_site_routing_skipped_and_switch_rejected', 0, async () => {      // 影视仓型订阅：首站是 csp_* JAR 类名源（不可当 URL 下载），后面跟一个 CMS 活站
       const jarSub = `{"sites":[`

@@ -18,7 +18,8 @@ struct Index {
     Navigation(Nav.stack) {
 
       if (this.app.phase === 'config') { ConfigPage() }
-      else if (this.app.phase === 'home') { Text('HOME分支已命中').fontSize(30) }
+      // 正常首页在 NavDestination 'Home'；此根分支仅在栈被弹空前短暂可见（Home 上 Back 已改为退后台）
+      else if (this.app.phase === 'home') { Column() { LoadingProgress().width(44).height(44) }.width('100%').height('100%').justifyContent(FlexAlign.Center) }
       else { Column() { Text('正在加载…') }.width('100%').height('100%').justifyContent(FlexAlign.Center) }
     }
     .mode(NavigationMode.Stack)
