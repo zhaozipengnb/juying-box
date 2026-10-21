@@ -360,15 +360,18 @@ export struct HomePage {
         }
       }
 
-      // 分类横滑 Tabs（搜索模式下隐藏）
+      // 分类横滑胶囊（FongMi 风格：圆角药丸，选中实色；搜索模式下隐藏）
       if (!this.showSearch && this.cats.length > 0) {
         Scroll() {
           Row({ space: 10 }) {
             ForEach(this.cats, (c: string, i: number) => {
               Text(c)
-                .fontSize(this.catIdx === i ? 16 : 14)
-                .fontColor(this.catIdx === i ? (this.isDarkWallpaper ? '#5AA9FF' : '#007DFF') : (this.isDarkWallpaper ? '#BBBBBB' : '#666666'))
+                .fontSize(15)
+                .fontColor(this.catIdx === i ? '#FFFFFF' : (this.isDarkWallpaper ? '#DDDDDD' : '#444444'))
                 .fontWeight(this.catIdx === i ? FontWeight.Bold : FontWeight.Normal)
+                .backgroundColor(this.catIdx === i ? '#007DFF' : (this.isDarkWallpaper ? '#33FFFFFF' : '#14000000'))
+                .borderRadius(20)
+                .padding({ left: 16, right: 16, top: 8, bottom: 8 })
                 .onClick(() => {
                   if (this.loading || this.searching) { return; }
                   this.catIdx = i;
@@ -376,11 +379,11 @@ export struct HomePage {
                 })
             }, (c: string, i: number) => c + '_' + i)
           }
-          .padding({ left: 12, right: 12 })
+          .padding({ left: 16, right: 16 })
         }
         .scrollable(ScrollDirection.Horizontal)
         .width('100%')
-        .padding({ top: 6, bottom: 6 })
+        .padding({ top: 8, bottom: 8 })
       }
 
       // 搜索态标题栏：显示当前关键词与「返回浏览」入口（仅搜索结果就绪时展示）
@@ -448,7 +451,6 @@ export struct HomePage {
           items: this.visibleItems(),
           siteLabels: this.siteLabels(),
           columns: this.gridColumns(),
-          dark: this.isDarkWallpaper,
           hasMore: this.page < this.pageCount && this.filterSite === '',
           loading: this.loading || this.searching,
           onPick: (m: Movie, idx: number) => {
