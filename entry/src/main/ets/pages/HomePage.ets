@@ -186,7 +186,7 @@ export struct HomePage {
     }
   }
 
-  // 搜索：聚合关闭 = 仅当前站；聚合开启 = 并发搜全部采集站（CMS/XML；drpy 单容器互斥不参与）
+  // 搜索：聚合关闭 = 仅当前站；聚合开启 = 全部采集站（CMS/XML 并发，drpy 串行）
   // 合并去重（同名同人近似即可用：按 vodId 站内唯一，跨站以 name+remark 近似去重会误伤，这里仅按站内 id + 站 key）
   private async doSearch(): Promise<void> {
     const kw: string = this.searchKey.trim();
@@ -219,7 +219,7 @@ export struct HomePage {
     }
   }
 
-  // 聚合搜索：逐站构造引擎并发搜（每站截取前 10 条），单站失败不拖垮整体
+  // 聚合搜索：cms/xml 站并发搜，drpy(js) 站串行搜（单 Web 容器互斥），每站截取前 10 条，单站失败不拖垮整体
   private async doSearchAgg(kw: string): Promise<void> {
     const cfg = this.app.config;
     if (cfg === null) { return; }
@@ -230,9 +230,12 @@ export struct HomePage {
     this.aggSiteNames = [];
     this.filterSite = '';
     this.kind = 'search';
+    // cms/xml 站可并发；drpy(js) 站共享单 Web 容器，须串行逐站搜
     const tasks: Promise<void>[] = [];
+    const drpySites: SiteConfig[] = [];
     for (const s of cfg.sites) {
-      if (!isSiteSupported(s) || siteEngine(s) === 'js') { continue; }   // drpy 单容器互斥，聚合不参与
+      if (!isSiteSupported(s)) { continue; }
+      if (siteEngine(s) === 'js') { drpySites.push(s); continue; }
       const driver: SiteDriver | null = this.app.makeDriverFor(s);
       if (driver === null) { continue; }
       tasks.push(driver.searchContent(kw, false).then((pr: PageResult): void => {
@@ -244,12 +247,27 @@ export struct HomePage {
         }
       }).catch((_e: Object): void => { /* 单站失败跳过 */ }));
     }
-    if (tasks.length === 0) {
-      this.errMsg = '没有可聚合搜索的采集站（当前订阅仅含 drpy/JAR 源）';
+    if (tasks.length === 0 && drpySites.length === 0) {
+      this.errMsg = '没有可聚合搜索的采集站（当前订阅仅含 JAR 源）';
       this.searching = false;
       return;
     }
+    // 先并发搜 cms/xml 站
     await Promise.all(tasks);
+    // 再串行搜 drpy 站（单 Web 容器互斥，逐站 ensureReady + search）
+    for (const s of drpySites) {
+      const driver: SiteDriver | null = this.app.makeDriverFor(s);
+      if (driver === null) { continue; }
+      try {
+        const pr: PageResult = await driver.searchContent(kw, false);
+        const cap = Math.min(pr.items.length, 10);
+        for (let i = 0; i < cap; i++) {
+          this.items.push(pr.items[i]);
+          this.aggSiteKeys.push(s.key);
+          this.aggSiteNames.push(s.name);
+        }
+      } catch (_e) { /* 单站失败跳过 */ }
+    }
     if (this.items.length === 0 && this.errMsg === '') {
       this.errMsg = '全部站点均无结果（或搜索接口不可用）';
     }
@@ -453,14 +471,8 @@ export struct HomePage {
           columns: this.gridColumns(),
           hasMore: this.page < this.pageCount && this.filterSite === '',
           loading: this.loading || this.searching,
-          onPick: (m: Movie, idx: number) => {
-            // 聚合结果：先切到来源站再进详情（详情页用 app.driver 查询）；idx 是筛选后视图的下标
-            const oi: number = this.visibleIdxs()[idx] ?? idx;
-            const sk: string = this.aggSiteKeys[oi] ?? '';
-            if (sk !== '' && sk !== (this.app.currentSite?.key ?? '')) {
-              if (!this.app.switchSite(sk)) { return; }
-              this.refreshSites();
-            }
+          onPick: (m: Movie, _idx: number) => {
+            // 统一跳转 DetailPage：以片名跨源搜索，左侧源列表 + 右侧剧集
             Nav.stack.pushPathByName('Detail', m);
           },
           onLoadMore: () => {

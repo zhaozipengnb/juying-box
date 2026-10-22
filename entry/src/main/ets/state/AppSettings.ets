@@ -22,7 +22,7 @@ export class AppSettings {
   @Trace playSpeed: number = 1.0;            // 起播默认倍速
   @Trace longPressSpeed: number = 3.0;       // 播放中长按临时倍速（0=关闭）
   @Trace incognito: boolean = false;         // 无痕模式：不保留搜索词（历史功能上线后一并生效）
-  @Trace aggSearch: boolean = false;         // 聚合搜索：一次并发搜全部采集站（cms/xml）合并结果
+  @Trace aggSearch: boolean = false;         // 聚合搜索：cms/xml 并发 + drpy 串行，合并全部采集站结果
   @Trace showSite: boolean = true;           // 显示站源：搜索结果卡片角标展示来源站名
   @Trace siteFilter: boolean = false;        // 站源搜索：搜索结果顶部按站点筛选（聚合结果就绪后展示）
   @Trace aiAdFilter: boolean = false;        // AI去广告（预留：将作用于播放地址解析阶段）

@@ -4,8 +4,10 @@
 // 解析不出的地址不静默降级，而是给出错误卡片（重试 / 网页播放 / 返回），由用户决定。
 // 全屏：Video 内置全屏按钮只在原方向内拉伸（竖屏下视频仍是一条横带）——
 // 本页进入时窗口方向改为跟随传感器，另提供「全屏」按钮强制横屏，退出恢复竖屏。
+// 线路轮循：当前线路播放失败时自动切到下一线路同集继续尝试，全部线路失败才报错。
+// 底部面板：FongMi 风格，点击视频区可切换显示线路+剧集列表。
 import { Nav, PlayerParam } from '../nav/Nav';
-import { Episode, isDirectMedia, resolvePlayUrl } from 'common';
+import { Episode, PlayLine, isDirectMedia, resolvePlayUrl } from 'common';
 import { webview } from '@kit.ArkWeb';
 import { window } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
@@ -28,6 +30,10 @@ export struct PlayerPage {
   settings: AppSettings = AppSettings.instance;
   dl: DownloadManager = DownloadManager.instance;
   @Local movieName: string = '';
+  @Local lines: PlayLine[] = [];   // 全部播放线路
+  @Local lineIdx: number = 0;      // 当前线路索引
+  @Local epIdx: number = 0;        // 当前剧集索引
+  @Local showPanel: boolean = false; // 底部剧集面板开关
   private controller: VideoController = new VideoController();
   private webController: webview.WebviewController = new webview.WebviewController();
   private lpTimer: number = -1;    // 长按判定定时器 id
@@ -55,6 +61,7 @@ export struct PlayerPage {
   // 起播前解析：直链直接用；网页播放页挖出其中的媒体地址；挖不到则提示（不自动跳网页播放器）。
   // AI去广告开启且目标是 HLS：把列表地址换成本地代理（127.0.0.1），由代理过滤插播广告分块；
   // 代理启动失败或非 m3u8 时回退直连（mp4 等无广告插播问题，无需代理）。
+  // 解析失败或播放出错时自动轮循下一线路。
   private async prepare(): Promise<void> {
     const ep = this.ep;
     if (ep === null) { return; }
@@ -74,9 +81,45 @@ export struct PlayerPage {
       this.playUrl = target;
       this.speed = this.settings.playSpeed;   // 起播倍速取设置默认值
     } else {
-      this.errMsg = '该源给的是网页播放页，app 播放器无法直接播放';
+      // 当前线路解析不出直链，尝试下一线路
+      this.tryNextLine();
     }
     this.resolving = false;
+  }
+
+  // 轮循下一线路：切到下一线路的同集继续尝试，全部线路失败才报错
+  private tryNextLine(): void {
+    if (this.lines.length === 0) {
+      this.errMsg = '该源给的是网页播放页，app 播放器无法直接播放';
+      return;
+    }
+    const next = this.lineIdx + 1;
+    if (next < this.lines.length) {
+      this.lineIdx = next;
+      const eps = this.lines[next].episodes;
+      const ei = Math.min(this.epIdx, eps.length - 1);
+      this.epIdx = ei >= 0 ? ei : 0;
+      this.ep = eps[this.epIdx] ?? null;
+      this.playUrl = '';
+      if (this.ep !== null) { this.prepare(); }
+    } else {
+      this.errMsg = '全部线路均无法播放';
+    }
+  }
+
+  // 切换到指定线路的指定剧集
+  private switchTo(li: number, ei: number): void {
+    if (li < 0 || li >= this.lines.length) { return; }
+    const eps = this.lines[li].episodes;
+    if (ei < 0 || ei >= eps.length) { return; }
+    this.lineIdx = li;
+    this.epIdx = ei;
+    this.ep = eps[ei];
+    this.playUrl = '';
+    this.errMsg = '';
+    this.useWeb = false;
+    this.showPanel = false;
+    this.prepare();
   }
 
   build() {
@@ -105,7 +148,11 @@ export struct PlayerPage {
             .width('100%').height('100%')
             .autoPlay(true)
             .objectFit(ImageFit.Contain)
-            .onError(() => { this.errMsg = '视频地址无法播放'; })
+            .onError(() => {
+              // 播放出错：自动轮循下一线路
+              this.playUrl = '';
+              this.tryNextLine();
+            })
             // 长按加速：按压超过阈值切临时倍速，松开/取消恢复默认；短点按（控制栏）不受影响
             .onTouch((ev: TouchEvent) => {
               if (this.settings.longPressSpeed <= 0) { return; }
@@ -118,40 +165,45 @@ export struct PlayerPage {
                 this.speed = this.settings.playSpeed;
               }
             })
-          // 底部右下：下载 + 全屏
-          Row() {
-            if (this.settings.builtinDownload && this.playUrl !== '' && this.ep !== null) {
-              Text('⬇')
-                .fontSize(20).fontColor('#FFFFFF')
-                .textAlign(TextAlign.Center)
-                .width(44).height(44)
-                .backgroundColor('#66000000')
-                .borderRadius(8)
-                .margin({ right: 8 })
-                .onClick(() => {
-                  this.dl.startDownload(
-                    this.movieName !== '' ? this.movieName : '影片',
-                    this.ep!.name, this.playUrl, ''
-                  );
-                })
-            }
-            // 全屏按钮：强制横屏（Video 内置按钮不旋转窗口，竖屏下视频只是一条横带）
-            Text('⤢')
-              .fontSize(22).fontColor('#FFFFFF')
-              .textAlign(TextAlign.Center)
-              .width(48).height(48)
-              .backgroundColor('#66000000')
-              .borderRadius(8)
-              .onClick(() => { this.setOrientation(window.Orientation.LANDSCAPE); })
-          }
-          .margin({ right: 12, bottom: 12 })
         }
-      }.width('100%').height('100%').backgroundColor(Color.Black)
+
+        // 右上角：全屏按钮 + 面板开关 + 返回
+        Column({ space: 10 }) {
+          Text('←').fontSize(22).fontColor('#FFFFFF')
+            .width(40).height(40).textAlign(TextAlign.Center)
+            .backgroundColor('#66000000').borderRadius(20)
+            .onClick(() => { Nav.stack.pop(); })
+          Text('☰').fontSize(20).fontColor('#FFFFFF')
+            .width(40).height(40).textAlign(TextAlign.Center)
+            .backgroundColor('#66000000').borderRadius(20)
+            .onClick(() => { this.showPanel = !this.showPanel; })
+          Text('⤢').fontSize(20).fontColor('#FFFFFF')
+            .width(40).height(40).textAlign(TextAlign.Center)
+            .backgroundColor('#66000000').borderRadius(20)
+            .onClick(() => { this.setOrientation(window.Orientation.LANDSCAPE); })
+        }
+        .position({ x: 12, y: 12 })
+        .alignItems(HorizontalAlign.Center)
+
+        // 底部剧集面板（FongMi 风格）：线路标签 + 剧集网格
+        if (this.showPanel && this.lines.length > 0) {
+          this.episodePanel()
+        }
+      }
+      .width('100%').height('100%')
+      .backgroundColor('#FF000000')
+      .onClick(() => { if (this.showPanel) { this.showPanel = false; } })
     }
     .hideTitleBar(true)
     .onReady((ctx: NavDestinationContext) => {
       const p = ctx.pathInfo.param as PlayerParam;
-      if (p !== null && p !== undefined) { this.ep = p.ep; this.movieName = p.movieName ?? ''; }
+      if (p !== null && p !== undefined) {
+        this.ep = p.ep;
+        this.movieName = p.movieName ?? '';
+        if (p.lines !== undefined && p.lines !== null) { this.lines = p.lines; }
+        if (p.lineIdx !== undefined && p.lineIdx !== null) { this.lineIdx = p.lineIdx; }
+        if (p.epIdx !== undefined && p.epIdx !== null) { this.epIdx = p.epIdx; }
+      }
       else { this.errMsg = '播放参数缺失'; this.resolving = false; }  // 兜底：无参数进错误终态，避免永久 Loading
       this.setImmersive(true);                                          // 铺满安全区 + 黑底（消白边）
       this.setOrientation(window.Orientation.AUTO_ROTATION_RESTRICTED);  // 播放中跟随传感器旋转
@@ -163,5 +215,55 @@ export struct PlayerPage {
       this.setOrientation(window.Orientation.PORTRAIT);          // 离开播放页恢复竖屏
     })
     .onBackPressed(() => { return false; })
+  }
+
+  // 底部剧集面板：顶部线路标签横排，下方剧集网格可滚动
+  @Builder
+  episodePanel() {
+    Column() {
+      // 线路标签
+      Scroll() {
+        Row({ space: 8 }) {
+          ForEach(this.lines, (l: PlayLine, i: number) => {
+            Text(l.from === '' ? '线路' + (i + 1) : l.from)
+              .fontSize(14)
+              .fontColor(this.lineIdx === i ? '#FFFFFF' : '#AAAAAA')
+              .backgroundColor(this.lineIdx === i ? '#E53935' : '#333333')
+              .borderRadius(14)
+              .padding({ left: 14, right: 14, top: 6, bottom: 6 })
+              .onClick(() => {
+                if (i !== this.lineIdx) { this.switchTo(i, 0); }
+              })
+          }, (l: PlayLine, i: number) => i + '_' + l.from)
+        }.padding({ left: 12, right: 12 })
+      }
+      .scrollable(ScrollDirection.Horizontal)
+      .scrollBar(BarState.Off)
+      .height(44)
+
+      // 剧集网格
+      Scroll() {
+        Flex({ wrap: FlexWrap.Wrap }) {
+          ForEach(this.lines[this.lineIdx]?.episodes ?? [], (e: Episode, ei: number) => {
+            Text(e.name)
+              .fontSize(13)
+              .fontColor(this.epIdx === ei ? '#FFFFFF' : '#CCCCCC')
+              .backgroundColor(this.epIdx === ei ? '#E53935' : '#444444')
+              .borderRadius(6)
+              .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+              .margin(4)
+              .onClick(() => { this.switchTo(this.lineIdx, ei); })
+          }, (e: Episode, ei: number) => ei + '_' + e.name)
+        }
+        .padding({ left: 8, right: 8, top: 4, bottom: 8 })
+      }
+      .scrollable(ScrollDirection.Vertical)
+      .scrollBar(BarState.Off)
+      .layoutWeight(1)
+    }
+    .width('100%')
+    .height('50%')
+    .backgroundColor('#DD000000')
+    .border({ width: { top: 1 }, color: { top: '#333333' } })
   }
 }
