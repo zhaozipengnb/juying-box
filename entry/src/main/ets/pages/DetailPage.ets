@@ -77,20 +77,7 @@ export struct DetailPage {
   build() {
     NavDestination() {
       Column() {
-        if (this.loading) {
-          Column({ space: 12 }) {
-            LoadingProgress().width(44).height(44)
-            Text('正在跨源搜索「' + (this.movie?.name ?? '') + '」…')
-              .fontSize(14).fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#666666')
-          }.margin({ top: 120 })
-        }
-        else if (this.errMsg !== '') {
-          Column({ space: 8 }) {
-            Text('加载失败：' + this.errMsg).fontColor('#E53935')
-            Button('重试').onClick(() => { this.search(); })
-          }.margin({ top: 120 })
-        }
-        else if (this.sources.length > 0) { this.detailBody() }
+        this.detailBody()
       }.width('100%').height('100%')
         .linearGradient({ angle: 160, colors: this.wallpaperColors })
         .backgroundImage(this.wallpaperUri)
@@ -158,18 +145,18 @@ export struct DetailPage {
         Row() {
           // 左侧来源站列表（竖排胶囊）
           Scroll() {
-            Column({ space: 10 }) {
+            Column({ space: 6 }) {
               ForEach(this.sources, (s: SourceResult, i: number) => {
                 Text(s.siteName)
-                  .fontSize(15)
+                  .fontSize(13)
                   .fontColor(this.srcIdx === i ? '#F9A825' : (this.isDarkWallpaper ? '#DDDDDD' : '#333333'))
                   .fontWeight(this.srcIdx === i ? FontWeight.Bold : FontWeight.Normal)
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   .backgroundColor(this.srcIdx === i
                     ? (this.isDarkWallpaper ? '#33F9A825' : '#1AF9A825')
                     : (this.isDarkWallpaper ? '#26FFFFFF' : '#12000000'))
-                  .borderRadius(12)
-                  .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+                  .borderRadius(8)
+                  .padding({ left: 10, right: 10, top: 7, bottom: 7 })
                   .onClick(() => { this.srcIdx = i; })
               }, (s: SourceResult, i: number) => s.siteKey + i)
             }
@@ -179,8 +166,9 @@ export struct DetailPage {
           .scrollable(ScrollDirection.Vertical)
           .scrollBar(BarState.Off)
           .align(Alignment.Top)
-          .width(168)
+          .width(116)
           .height('100%')
+          .padding({ left: 12 })
 
           // 右侧剧集海报卡网格
           WaterFlow() {
@@ -266,6 +254,13 @@ export struct DetailPage {
         }
         .width('100%')
         .layoutWeight(1)
+      } else if (this.loading) {
+        Text('搜索片源中…').fontSize(13).fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#999999').margin({ top: 40 })
+      } else if (this.errMsg !== '') {
+        Column({ space: 8 }) {
+          Text(this.errMsg).fontSize(13).fontColor('#E53935')
+          Button('重试').fontSize(13).onClick(() => { this.search(); })
+        }.margin({ top: 40 })
       } else {
         Text('无可用播放线路').fontSize(14).fontColor(this.isDarkWallpaper ? '#888888' : '#999999').margin({ top: 40 })
       }
@@ -273,6 +268,7 @@ export struct DetailPage {
   }
 
   // 跨源搜索 + 逐站加载详情：CMS/XML 并发，drpy 串行（单 Web 容器互斥）
+  // 渐进式：每站搜到+详情就绪后立即推入 sources，页面实时显示，不等全部搜完
   private async search(): Promise<void> {
     const cfg = this.app.config;
     const m = this.movie;
@@ -281,72 +277,42 @@ export struct DetailPage {
     this.errMsg = '';
     this.sources = [];
     this.srcIdx = 0;
-
-    // 1. 搜索全部站（每站取第一条匹配）
-    const results: SourceResult[] = [];
-    const tasks: Promise<void>[] = [];
-    const drpySites: SiteConfig[] = [];
-    for (const s of cfg.sites) {
-      if (!isSiteSupported(s)) { continue; }
-      if (siteEngine(s) === 'js') { drpySites.push(s); continue; }
-      const driver: SiteDriver | null = this.app.makeDriverFor(s);
-      if (driver === null) { continue; }
-      tasks.push(driver.searchContent(m.name, false).then((pr: PageResult): void => {
-        if (pr.items.length > 0) {
-          results.push({ siteKey: s.key, siteName: s.name, movie: pr.items[0], detail: null });
-        }
-      }).catch((_e: Object): void => { /* 单站失败跳过 */ }));
-    }
-    await Promise.all(tasks);
-    // drpy 串行搜
-    for (const s of drpySites) {
-      const driver: SiteDriver | null = this.app.makeDriverFor(s);
-      if (driver === null) { continue; }
-      try {
+    try {
+      // 单站处理：搜 → 取首条 → 加载详情 → 有线路则推入 sources（渐进显示）
+      const handleSite = async (s: SiteConfig): Promise<void> => {
+        const driver: SiteDriver | null = this.app.makeDriverFor(s);
+        if (driver === null) { return; }
         const pr: PageResult = await driver.searchContent(m.name, false);
-        if (pr.items.length > 0) {
-          results.push({ siteKey: s.key, siteName: s.name, movie: pr.items[0], detail: null });
+        if (pr.items.length === 0) { return; }
+        const detail: MovieDetail = await driver.detailContent([pr.items[0].vodId]);
+        if (detail !== null && detail.lines.length > 0) {
+          this.sources = [...this.sources, { siteKey: s.key, siteName: s.name, movie: pr.items[0], detail }];
         }
-      } catch (_e) { /* 单站失败跳过 */ }
-    }
+      };
 
-    if (results.length === 0) {
-      this.errMsg = '全部站点均无结果';
+      // 1. CMS/XML 并发
+      const tasks: Promise<void>[] = [];
+      const drpySites: SiteConfig[] = [];
+      for (const s of cfg.sites) {
+        if (!isSiteSupported(s)) { continue; }
+        if (siteEngine(s) === 'js') { drpySites.push(s); continue; }
+        tasks.push(handleSite(s).catch((_e: Object): void => { /* 单站失败跳过 */ }));
+      }
+      await Promise.all(tasks);
+
+      // 2. drpy 串行（单 Web 容器互斥）
+      for (const s of drpySites) {
+        try { await handleSite(s); } catch (_e) { /* 单站失败跳过 */ }
+      }
+
+      // 3. 全部搜完仍无结果
+      if (this.sources.length === 0) {
+        this.errMsg = '全部站点均无结果';
+      }
+    } catch (e) {
+      this.errMsg = (e as Error)?.message ?? '搜索异常';
+    } finally {
       this.loading = false;
-      return;
     }
-
-    // 2. 逐站加载详情：CMS/XML 并发，drpy 串行
-    const detailTasks: Promise<void>[] = [];
-    const drpyResults: SourceResult[] = [];
-    for (const r of results) {
-      const site = cfg.sites.find((s: SiteConfig): boolean => s.key === r.siteKey);
-      if (site === undefined) { continue; }
-      if (siteEngine(site) === 'js') { drpyResults.push(r); continue; }
-      const driver: SiteDriver | null = this.app.makeDriverFor(site);
-      if (driver === null) { continue; }
-      detailTasks.push(driver.detailContent([r.movie.vodId]).then((d: MovieDetail): void => {
-        r.detail = d;
-      }).catch((_e: Object): void => { /* 单站详情失败跳过 */ }));
-    }
-    await Promise.all(detailTasks);
-    // drpy 串行加载详情
-    for (const r of drpyResults) {
-      const site = cfg.sites.find((s: SiteConfig): boolean => s.key === r.siteKey);
-      if (site === undefined) { continue; }
-      const driver: SiteDriver | null = this.app.makeDriverFor(site);
-      if (driver === null) { continue; }
-      try {
-        r.detail = await driver.detailContent([r.movie.vodId]);
-      } catch (_e) { /* 单站详情失败跳过 */ }
-    }
-
-    // 3. 过滤无详情/无线路的结果
-    this.sources = results.filter((r: SourceResult): boolean => r.detail !== null && r.detail.lines.length > 0);
-    if (this.sources.length === 0) {
-      this.errMsg = '搜索到结果但无法获取剧集详情';
-    }
-    this.srcIdx = 0;
-    this.loading = false;
   }
 }

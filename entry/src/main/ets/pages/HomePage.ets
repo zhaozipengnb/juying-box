@@ -186,93 +186,14 @@ export struct HomePage {
     }
   }
 
-  // 搜索：聚合关闭 = 仅当前站；聚合开启 = 全部采集站（CMS/XML 并发，drpy 串行）
-  // 合并去重（同名同人近似即可用：按 vodId 站内唯一，跨站以 name+remark 近似去重会误伤，这里仅按站内 id + 站 key）
-  private async doSearch(): Promise<void> {
+  // 搜索：直接跳转 DetailPage，由 DetailPage 做跨源搜索（渐进式展示各源结果）
+  private doSearch(): void {
     const kw: string = this.searchKey.trim();
     if (kw === '') { return; }
-    if (this.settings.aggSearch) {
-      await this.doSearchAgg(kw);
-      return;
-    }
-    const d = this.driver();
-    if (d === null) { return; }
-    this.searching = true;
-    this.errMsg = '';
-    try {
-      const pr: PageResult = await d.searchContent(kw, false);
-      if (this.app.driver !== d) { return; }
-      this.items = pr.items;
-      this.aggSiteKeys = [];
-      this.aggSiteNames = [];
-      this.filterSite = '';
-      this.page = 1;
-      this.pageCount = 1;
-      this.kind = 'search';
-      this.errMsg = '';
-      if (this.settings.incognito) { this.searchKey = ''; } else { SearchHistory.instance.add(kw); this.searchHistory = SearchHistory.instance.getAll(); }
-    } catch (e) {
-      this.errMsg = errText(e as Object);
-      this.kind = 'search'; // 搜索失败也归位搜索态，重试时按搜索重放
-    } finally {
-      this.searching = false;
-    }
-  }
-
-  // 聚合搜索：cms/xml 站并发搜，drpy(js) 站串行搜（单 Web 容器互斥），每站截取前 10 条，单站失败不拖垮整体
-  private async doSearchAgg(kw: string): Promise<void> {
-    const cfg = this.app.config;
-    if (cfg === null) { return; }
-    this.searching = true;
-    this.errMsg = '';
-    this.items = [];
-    this.aggSiteKeys = [];
-    this.aggSiteNames = [];
-    this.filterSite = '';
-    this.kind = 'search';
-    // cms/xml 站可并发；drpy(js) 站共享单 Web 容器，须串行逐站搜
-    const tasks: Promise<void>[] = [];
-    const drpySites: SiteConfig[] = [];
-    for (const s of cfg.sites) {
-      if (!isSiteSupported(s)) { continue; }
-      if (siteEngine(s) === 'js') { drpySites.push(s); continue; }
-      const driver: SiteDriver | null = this.app.makeDriverFor(s);
-      if (driver === null) { continue; }
-      tasks.push(driver.searchContent(kw, false).then((pr: PageResult): void => {
-        const cap = Math.min(pr.items.length, 10);
-        for (let i = 0; i < cap; i++) {
-          this.items.push(pr.items[i]);
-          this.aggSiteKeys.push(s.key);
-          this.aggSiteNames.push(s.name);
-        }
-      }).catch((_e: Object): void => { /* 单站失败跳过 */ }));
-    }
-    if (tasks.length === 0 && drpySites.length === 0) {
-      this.errMsg = '没有可聚合搜索的采集站（当前订阅仅含 JAR 源）';
-      this.searching = false;
-      return;
-    }
-    // 先并发搜 cms/xml 站
-    await Promise.all(tasks);
-    // 再串行搜 drpy 站（单 Web 容器互斥，逐站 ensureReady + search）
-    for (const s of drpySites) {
-      const driver: SiteDriver | null = this.app.makeDriverFor(s);
-      if (driver === null) { continue; }
-      try {
-        const pr: PageResult = await driver.searchContent(kw, false);
-        const cap = Math.min(pr.items.length, 10);
-        for (let i = 0; i < cap; i++) {
-          this.items.push(pr.items[i]);
-          this.aggSiteKeys.push(s.key);
-          this.aggSiteNames.push(s.name);
-        }
-      } catch (_e) { /* 单站失败跳过 */ }
-    }
-    if (this.items.length === 0 && this.errMsg === '') {
-      this.errMsg = '全部站点均无结果（或搜索接口不可用）';
-    }
+    // 保存搜索历史
     if (this.settings.incognito) { this.searchKey = ''; } else { SearchHistory.instance.add(kw); this.searchHistory = SearchHistory.instance.getAll(); }
-    this.searching = false;
+    // 直接跳 DetailPage，用只含 name 的 Movie 触发跨源搜索
+    Nav.stack.pushPathByName('Detail', { vodId: '', name: kw, pic: '', remark: '', typeName: '' } as Movie);
   }
 
   // 错误重试：按当前数据来源重放
