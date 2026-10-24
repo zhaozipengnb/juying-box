@@ -46,6 +46,15 @@ export struct PlayerPage {
   private controller: VideoController = new VideoController();
   private webController: webview.WebviewController = new webview.WebviewController();
 
+  // 播放页顶部为黑色视频区，状态栏图标用白色；离开时还原
+  private async setStatusBarContent(color: string): Promise<void> {
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      const win = await window.getLastWindow(ctx);
+      await win.setWindowSystemBarProperties({ statusBarContentColor: color });
+    } catch (e) { }
+  }
+
   private async setOrientation(o: window.Orientation): Promise<void> {
     try {
       const ctx = getContext(this) as common.UIAbilityContext;
@@ -210,10 +219,12 @@ export struct PlayerPage {
       const m = this.detail?.movie;
       if (m !== null && m !== undefined) { this.isFav = this.favs.isFav(this.siteKey, m.vodId); }
       if (this.ep !== null) { this.prepare(); }
+      this.setStatusBarContent('#FFFFFF');
     })
     .onWillDisappear(() => {
       this.saveProgress(true);
       this.setImmersive(false);
+      this.setStatusBarContent('#000000');
       this.setOrientation(window.Orientation.UNSPECIFIED);
     })
   }
@@ -224,6 +235,7 @@ export struct PlayerPage {
       .width('100%')
       .aspectRatio(1.78)
       .backgroundColor('#000000')
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
   }
 
   @Builder
