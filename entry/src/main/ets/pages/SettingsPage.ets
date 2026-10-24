@@ -6,6 +6,7 @@ import { SearchHistory } from '../state/SearchHistory';
 import { UrlHistory } from '../state/UrlHistory';
 import { SettingRow } from '../components/SettingRow';
 import { Nav } from '../nav/Nav';
+import { httpFetch } from '../net/HttpClient';
 import { common } from '@kit.AbilityKit';
 import fs from '@ohos.file.fs';
 import { picker } from '@kit.CoreFileKit';
@@ -101,6 +102,32 @@ export struct SettingsPage {
   private clearWallpaper(): void {
     this.settings.wallpaperUri = '';
     this.settings.save();
+  }
+
+  // 刷新壁纸：URL 壁纸重新拉取到沙箱并落盘（覆盖旧缓存，强制重渲染）；本地壁纸重新加载
+  private async refreshWallpaper(): Promise<void> {
+    const uri = this.settings.wallpaperUri.trim();
+    if (uri === '') { this.localErr = '未设置壁纸图片'; return; }
+    this.localErr = '';
+    this.localOk = '';
+    try {
+      if (/^https?:\/\//i.test(uri)) {
+        const destPath = (getContext(this) as common.UIAbilityContext).filesDir + '/wallpaper.jpg';
+        const r = await httpFetch(uri, {});
+        if (r.status !== 200) { throw new Error('HTTP ' + r.status); }
+        const destFile = fs.openSync(destPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+        fs.writeSync(destFile.fd, r.body);
+        fs.closeSync(destFile);
+        this.settings.wallpaperUri = destPath;
+        this.settings.save();
+        this.localOk = '壁纸已刷新';
+      } else {
+        this.settings.save();
+        this.localOk = '壁纸已重新加载';
+      }
+    } catch (e) {
+      this.localErr = '刷新失败：' + (e instanceof Error ? e.message : String(e));
+    }
   }
 
   // ---------- 缓存 ----------
@@ -339,12 +366,12 @@ export struct SettingsPage {
               .fontSize(13).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               .fontColor(this.isDarkWallpaper ? '#999999' : '#888888')
               .layoutWeight(1).margin({ left: 12 })
-            Image($r('app.media.ic_history'))
-              .width(20).height(20)
-              .fillColor(this.isDarkWallpaper ? '#AAAAAA' : '#888888')
+            Text('↻')
+              .fontSize(22)
+              .fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#888888')
               .margin({ left: 8 })
               .hitTestBehavior(HitTestMode.Block)
-              .onClick(() => { this.dialogTarget = 'wallpaper'; this.showHistory = true; })
+              .onClick(() => { this.refreshWallpaper(); })
           }
           .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
           .onClick(() => {
