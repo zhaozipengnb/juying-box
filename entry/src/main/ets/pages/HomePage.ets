@@ -120,18 +120,25 @@ export struct HomePage {
 
   // 自动跳过失败源时已尝试的 siteKey 列表
   private _autoSkipTried: string[] = [];
+  // 会话内已确认「无影片」的源（接口正常但内容为空）：下拉不显示、寻源跳过；
+  // 网络类错误不记（可能瞬时故障，保留在列表可重试）。换订阅/重启恢复。
+  private _deadSites: string[] = [];
+  // 跳源链路中是否遇到过加载失败（区分「全部无影片」与「有源加载失败」的提示措辞）
+  private _skipHitErr: boolean = false;
 
-  // 查找下一个可用源（跳过已尝试的），优先非代理源
+  // 查找下一个可用源（跳过已尝试与已确认无影片的），优先非代理源
   private findNextUsableSite(): string {
     const cfg = this.app.config;
     if (cfg === null) { return ''; }
     for (const s of cfg.sites) {
-      if (isSiteSupported(s) && this.app.canDrive(s) && siteEngine(s) !== 'proxy' && !this._autoSkipTried.includes(s.key)) {
+      if (isSiteSupported(s) && this.app.canDrive(s) && siteEngine(s) !== 'proxy'
+        && !this._autoSkipTried.includes(s.key) && !this._deadSites.includes(s.key)) {
         return s.key;
       }
     }
     for (const s of cfg.sites) {
-      if (isSiteSupported(s) && this.app.canDrive(s) && !this._autoSkipTried.includes(s.key)) {
+      if (isSiteSupported(s) && this.app.canDrive(s)
+        && !this._autoSkipTried.includes(s.key) && !this._deadSites.includes(s.key)) {
         return s.key;
       }
     }
@@ -147,6 +154,7 @@ export struct HomePage {
     const enabled: boolean[] = [];
     for (const s of cfg.sites) {
       if (!isSiteSupported(s) || !this.app.canDrive(s)) { continue; }   // 不支持或未配置代理的源不显示
+      if (this._deadSites.includes(s.key)) { continue; }                // 已确认无影片的源本次会话不显示
       names.push(s.name);
       keys.push(s.key);
       enabled.push(true);
@@ -166,11 +174,15 @@ export struct HomePage {
     if (d === null) { return; }
     this.loading = true;
     this.errMsg = '';
+    let emptyHit = false;   // 区分「无影片」与网络/解析类错误：前者记死源，后者可重试
     try {
       const hc: HomeContent = await d.getHomeContent();
       if (this.app.driver !== d) { return; }   // 站点已切换，丢弃过期响应
-      // 自动跳过时：无影片即跳过；手动选源时：仅分类和列表都为空才报错
-      const emptyFail = autoSkip ? hc.items.length === 0 : (hc.categories.length === 0 && hc.items.length === 0);
+      // 无影片判定（记死源用）：分类与推荐均为空；分类可用即视为有影片
+      const bothEmpty = hc.categories.length === 0 && hc.items.length === 0;
+      if (bothEmpty) { emptyHit = true; }
+      // 自动跳过时：无推荐即跳过；手动选源时：分类和列表都为空才报错
+      const emptyFail = autoSkip ? hc.items.length === 0 : bothEmpty;
       if (emptyFail) {
         throw new Error('源返回空内容');
       }
@@ -183,15 +195,22 @@ export struct HomePage {
       this.kind = 'home';
       this.errMsg = '';
       this._autoSkipTried = [];
+      this._skipHitErr = false;
     } catch (e) {
       const msg = errText(e as Object);
       const curKey = this.app.currentSite?.key ?? '?';
       console.info('OKV loadHome ERR site=' + curKey + ' engine=' + (this.app.currentSite?.api ?? '?') + ' msg=' + msg);
-      // 自动跳过失败源，最多尝试 15 个
-      if (autoSkip && this._autoSkipTried.length < 50) {
-        this._autoSkipTried.push(curKey);
+      // 已确认无影片：记入死源并从下拉隐藏（网络类错误不记，保留在列表可重试）
+      if (emptyHit && curKey !== '?' && curKey !== '' && !this._deadSites.includes(curKey)) {
+        this._deadSites.push(curKey);
+        this.refreshSites();
+      }
+      if (!emptyHit) { this._skipHitErr = true; }
+      // 自动跳过失败源；手动选中的源无影片时同样跳到下一可用源
+      if ((autoSkip || emptyHit) && this._autoSkipTried.length < 50) {
+        if (!this._autoSkipTried.includes(curKey)) { this._autoSkipTried.push(curKey); }
         const nextKey = this.findNextUsableSite();
-        console.info('OKV autoSkip check autoSkip=true tried=' + this._autoSkipTried.length + ' nextKey=' + nextKey);
+        console.info('OKV autoSkip check autoSkip=' + autoSkip + ' tried=' + this._autoSkipTried.length + ' nextKey=' + nextKey);
         if (nextKey !== '' && nextKey !== curKey) {
           console.info('OKV autoSkip ' + curKey + ' -> ' + nextKey + ' (' + this._autoSkipTried.length + ' tried)');
           if (this.app.switchSite(nextKey)) {
@@ -200,9 +219,12 @@ export struct HomePage {
             return;
           }
         }
-        // 全部源都试过了，给出汇总提示
-        this.errMsg = '已尝试 ' + this._autoSkipTried.length + ' 个源均无法加载，请检查订阅或网络';
+        // 全部源都试过了，给出汇总提示（全是无影片 vs 存在加载失败，措辞区分）
+        this.errMsg = this._skipHitErr
+          ? '已尝试 ' + this._autoSkipTried.length + ' 个源均无法加载，请检查订阅或网络'
+          : '所有源均无影片';
         this._autoSkipTried = [];
+        this._skipHitErr = false;
       } else {
         console.info('OKV autoSkip skip reason autoSkip=' + autoSkip + ' tried=' + this._autoSkipTried.length);
         this.errMsg = msg;
@@ -433,6 +455,7 @@ export struct HomePage {
     .onShown(() => {
       // 从设置页返回：加载/清除订阅会更换 AppState.config 对象，据此重拉站点列表与首页内容
       if (this.app.config !== this.lastConfigRef) {
+        this._deadSites = [];   // 新订阅重新评估各源，恢复被隐藏的源
         this.refreshSites();
         this.lastConfigRef = this.app.config;
         this.loadHome(true);
