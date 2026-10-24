@@ -79,8 +79,12 @@ public class ProxyServer {
             if (query == null) return map;
             for (String pair : query.split("&")) {
                 String[] kv = pair.split("=", 2);
-                map.put(URLDecoder.decode(kv[0], "UTF-8"),
-                        kv.length > 1 ? URLDecoder.decode(kv[1], "UTF-8") : "");
+                try {
+                    map.put(URLDecoder.decode(kv[0], "UTF-8"),
+                            kv.length > 1 ? URLDecoder.decode(kv[1], "UTF-8") : "");
+                } catch (java.io.UnsupportedEncodingException e) {
+                    map.put(kv[0], kv.length > 1 ? kv[1] : "");
+                }
             }
             return map;
         }

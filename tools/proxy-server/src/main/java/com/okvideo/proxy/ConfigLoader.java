@@ -13,7 +13,9 @@ public class ConfigLoader {
     static String spiderUrl = "";
     static List<JSONObject> sites = new ArrayList<>();
 
+    static String configUrl;
     static void load(String configUrl) throws Exception {
+        ConfigLoader.configUrl = configUrl;
         String json = httpGet(configUrl);
         // 宽松处理 JSON5 尾逗号
         json = json.replaceAll(",(\\s*[}\\]])", "$1");

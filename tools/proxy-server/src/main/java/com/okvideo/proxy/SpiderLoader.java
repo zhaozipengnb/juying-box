@@ -122,6 +122,26 @@ public class SpiderLoader {
             spider = cls.getDeclaredConstructor().newInstance();
             spiderInstances.put(siteKey, spider);
             System.out.println("[Spider] 实例化: " + className);
+            // init(ext)：按爬虫实际签名调用（String / JSONObject / Context,String）
+            String extRaw = site.optString("ext", "");
+            try {
+                java.lang.reflect.Method im = null;
+                try { im = cls.getMethod("init", String.class); }
+                catch (NoSuchMethodException ignore) {
+                    try { im = cls.getMethod("init", org.json.JSONObject.class); }
+                    catch (NoSuchMethodException ignore2) {
+                        try { im = cls.getMethod("init", android.content.Context.class, String.class); }
+                        catch (NoSuchMethodException ignore3) { im = null; }
+                    }
+                }
+                if (im != null) {
+                    if (im.getParameterTypes().length == 2) { im.invoke(spider, null, extRaw); }
+                    else if (im.getParameterTypes()[0] == org.json.JSONObject.class) {
+                        im.invoke(spider, extRaw.startsWith("{") ? new org.json.JSONObject(extRaw) : new org.json.JSONObject());
+                    } else { im.invoke(spider, extRaw); }
+                    System.out.println("[Spider] init ok");
+                }
+            } catch (Exception ex) { System.err.println("[Spider] init 失败: " + ex); }
         }
 
         // 读取 ext 配置
@@ -139,16 +159,27 @@ public class SpiderLoader {
 
         switch (action) {
             case "home": {
-                java.lang.reflect.Method m = spiderClass.getMethod("homeContent", boolean.class, JSONObject.class);
-                result = m.invoke(spider, false, ext != null ? ext : new JSONObject());
+                java.lang.reflect.Method m = findOverride(spiderClass, "homeContent",
+                        new Class<?>[]{ boolean.class, JSONObject.class },
+                        new Class<?>[]{ boolean.class });
+                result = m.getParameterTypes().length == 2
+                        ? m.invoke(spider, false, ext != null ? ext : new JSONObject())
+                        : m.invoke(spider, false);
                 break;
             }
             case "category": {
                 String tid = params.getOrDefault("tid", "1");
                 int page = Integer.parseInt(params.getOrDefault("page", "1"));
-                java.lang.reflect.Method m = spiderClass.getMethod("categoryContent",
-                        String.class, int.class, boolean.class, JSONObject.class);
-                result = m.invoke(spider, tid, page, false, ext != null ? ext : new JSONObject());
+                java.lang.reflect.Method m = findOverride(spiderClass, "categoryContent",
+                        new Class<?>[]{ String.class, int.class, boolean.class, JSONObject.class },
+                        new Class<?>[]{ String.class, String.class, boolean.class, java.util.HashMap.class });
+                Object[] args;
+                if (m.getParameterTypes()[1] == int.class) {
+                    args = new Object[]{ tid, page, false, ext != null ? ext : new JSONObject() };
+                } else {
+                    args = new Object[]{ tid, String.valueOf(page), false, new java.util.HashMap<String, String>() };
+                }
+                result = m.invoke(spider, args);
                 break;
             }
             case "search": {
@@ -159,14 +190,36 @@ public class SpiderLoader {
             }
             case "detail": {
                 String ids = params.getOrDefault("ids", "");
-                JSONObject idsObj = new JSONObject();
-                JSONArray idArr = new JSONArray();
-                for (String id : ids.split(",")) idArr.put(id.trim());
-                idsObj.put("ids", idArr);
-                java.lang.reflect.Method m = spiderClass.getMethod("detailContent", JSONObject.class);
-                result = m.invoke(spider, idsObj);
+                java.lang.reflect.Method m = findOverride(spiderClass, "detailContent",
+                        new Class<?>[]{ JSONObject.class },
+                        new Class<?>[]{ java.util.List.class });
+                Object arg;
+                if (m.getParameterTypes()[0] == JSONObject.class) {
+                    JSONObject idsObj = new JSONObject();
+                    JSONArray idArr = new JSONArray();
+                    for (String id : ids.split(",")) idArr.put(id.trim());
+                    arg = idsObj;
+                } else {
+                    java.util.List<String> idList = new java.util.ArrayList<>();
+                    for (String id : ids.split(",")) idList.add(id.trim());
+                    arg = idList;
+                }
+                result = m.invoke(spider, arg);
                 break;
             }
+            /* 旧 detail 实现占位开始
+                java.lang.reflect.Method m;
+                Object arg;
+                try {
+                    m = spiderClass.getMethod("detailContent", JSONObject.class);
+                    JSONObject idsObj = new JSONObject();
+                    JSONArray idArr = new JSONArray();
+                    for (String id : ids.split(",")) idArr.put(id.trim());
+                    idsObj.put("ids", idArr);
+                    arg = idsObj;
+                } catch (NoSuchMethodException ignore) {
+                }
+                旧 detail 实现占位结束 */
             default:
                 throw new RuntimeException("未知action: " + action);
         }
@@ -175,8 +228,37 @@ public class SpiderLoader {
         return result.toString();
     }
 
+
+    /** 按签名组查找方法：优先子类自身 override（跳过 Spider 基类桩默认实现），都无则回退基类 */
+    static java.lang.reflect.Method findOverride(Class<?> cls, String name, Class<?>[]... sigs) throws NoSuchMethodException {
+        for (Class<?>[] sig : sigs) {
+            try {
+                java.lang.reflect.Method m = cls.getMethod(name, sig);
+                if (m.getDeclaringClass() != com.github.catvod.crawler.Spider.class) return m;
+            } catch (NoSuchMethodException ignore) { }
+        }
+        for (Class<?>[] sig : sigs) {
+            try { return cls.getMethod(name, sig); } catch (NoSuchMethodException ignore) { }
+        }
+        throw new NoSuchMethodException(name);
+    }
+
     static byte[] httpGetBytes(String url) throws Exception {
-        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        // TVBox 生态 jar 引用常带 ;md5;xxx 校验后缀与 ./ 相对路径：剥后缀、对配置 URL 绝对化
+        String u = url;
+        int semi = u.indexOf(';');
+        if (semi > 0) { u = u.substring(0, semi); }
+        if (!u.startsWith("http")) {
+            String base = ConfigLoader.configUrl;
+            if (base != null) {
+                try {
+                    java.net.URL bu = new java.net.URL(base);
+                    u = new java.net.URL(bu, u).toString();
+                } catch (Exception ignore) { }
+            }
+        }
+        System.out.println("[Spider] GET " + u);
+        HttpURLConnection conn = (HttpURLConnection) new URL(u).openConnection();
         conn.setRequestProperty("User-Agent", "okhttp/4.9.3");
         conn.setConnectTimeout(15000);
         conn.setReadTimeout(60000);
