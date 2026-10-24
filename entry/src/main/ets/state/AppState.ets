@@ -26,6 +26,7 @@ export class AppState {
   @Trace currentSite: SiteConfig | null = null;
   @Trace driver: SiteDriver | null = null;
   @Trace subUrl: string = '';
+  @Trace isPackSource: boolean = false;   // 当前源为本地源包（点播弹窗 📁 导入）而非互联网订阅
   @Trace errMsg: string = '';
   // 测试钩子：非 undefined 时替代真实 httpFetch（生产代码不设置）
   testFetchText?: FetchText = undefined;
@@ -104,7 +105,7 @@ export class AppState {
   // 装配一份配置进 home 态：合并聚合源包 → 校验有受支持站点 → 选首站建 driver。
   // 返回 false 时不动 phase（调用方展示 errMsg；订阅加载失败仍停留在发起页面）。
   private applyConfig(config: TvboxConfig): boolean {
-    this.mergeSourcePacks(config);
+    this.stripLegacyBuiltinRefs(config);
     if (config.sites.length === 0) { return false; }
     const usableCount = config.sites.filter((s: SiteConfig): boolean => isSiteSupported(s)).length;
     if (usableCount === 0) {
@@ -115,19 +116,6 @@ export class AppState {
     this.pickInitialSite(config);
     this.phase = 'home';
     return true;
-  }
-
-  // 无订阅起步：仅聚合源包（首启/清除订阅后）。未导入任何源包时回落 config 页（引导导入或填订阅）。
-  private startPacksOnly(): boolean {
-    const empty: TvboxConfig = { spider: '', wallpaper: '', sites: [], lives: [], parses: [] };
-    this.subUrl = '';
-    this.errMsg = '';
-    if (this.applyConfig(empty)) {
-      console.info('OKV startPacksOnly sites=' + (this.config as TvboxConfig).sites.length);
-      return true;
-    }
-    this.phase = 'config';
-    return false;
   }
 
   async loadFromUrl(url: string): Promise<boolean> {
@@ -151,6 +139,7 @@ export class AppState {
         return false;
       }
       this.subUrl = url;
+      this.isPackSource = false;
       console.info('OKV phase->home ok');
       return true;
     } catch (e) {
@@ -164,23 +153,23 @@ export class AppState {
   async initFromStore(store: ConfigStore): Promise<void> {
     this.store = store;
     this.phase = 'initing';
-    this.initSourcePacks();
     const stored = store.load();
-    // 无持久化订阅：有源包直接进首页，订阅在首页设置里维护
-    if (stored === null) { this.startPacksOnly(); return; }
+    // 无持久化源：进入配置页（点播弹窗填订阅链接或 📁 导入本地源包）
+    if (stored === null) { this.phase = 'config'; return; }
     try {
       // 存的是 serializeConfig 序列化后的 JSON 字符串，直接走解码链文本分支
       const config = decodeConfigContent(stored.configJson);
       resolveSiteUrls(config, stored.url);   // 旧版本持久化数据里的相对路径同样归一
       if (!this.applyConfig(config)) {
-        console.info('OKV initFromStore 无可用站点，回退源包');
-        this.startPacksOnly();
+        console.info('OKV initFromStore 无可用站点，回退配置页');
+        this.phase = 'config';
         return;
       }
       this.subUrl = stored.url;
+      this.isPackSource = stored.url === '';
     } catch (e) {
       console.info('OKV initFromStore ERR ' + (e instanceof Error ? e.message : JSON.stringify(e)));
-      this.startPacksOnly();
+      this.phase = 'config';
     }
   }
 
@@ -219,7 +208,8 @@ export class AppState {
     this.config = null;
     this.currentSite = null;
     this.driver = null;
-    this.startPacksOnly();
+    this.isPackSource = false;
+    this.phase = 'config';
   }
 
   // 订阅加载成功后持久化当前配置（fire-and-forget，调用方无需等待）
@@ -229,122 +219,41 @@ export class AppState {
     }
   }
 
-  // ---------- 聚合源包（app 不内置站点；用户经设置页导入源包文件，随订阅合并，跨重启可用） ----------
-  private packSites: SiteConfig[] = [];
-  private packsLoaded: boolean = false;
+  // ---------- 本地源包（点播弹窗 📁 导入，替换当前互联网订阅源；与订阅二选一） ----------
 
-  // 注入源包站点（纯逻辑，测试可直调；生产从 ConfigStore 恢复）
-  setSourcePacks(sites: SiteConfig[]): void {
-    this.packSites = sites;
-    this.packsLoaded = true;
-  }
-
-  // 从 ConfigStore 恢复已导入的源包；失败降级为空（不影响订阅本身）
-  initSourcePacks(): void {
-    if (this.packsLoaded || this.store === null) { return; }
+  // 导入聚合源包文本（TVBox 配置格式 {sites:[...]} 或完整配置；规则可内嵌 data: URL）。
+  // 语义：整体替换当前源（覆盖此前导入的源包或互联网订阅），subUrl 置空以本地源包形态持久化。
+  // 返回是否成功；失败置 errMsg 由调用方提示。
+  loadFromPackText(text: string): boolean {
+    this.errMsg = '';
     try {
-      const json = this.store.loadSourcePacks();
-      if (json === '') { this.packsLoaded = true; return; }
-      const arr = JSON.parse(json) as SiteConfig[];
-      if (Array.isArray(arr)) { this.packSites = arr; }
-      this.packsLoaded = true;
-      hilog.info(0x0000, 'OKV', 'source packs loaded %{public}d', this.packSites.length);
-    } catch (e) {
-      this.packsLoaded = true;
-      hilog.error(0x0000, 'OKV', 'source packs load ERR %{public}s', e instanceof Error ? e.message : JSON.stringify(e));
-    }
-  }
-
-  // 导入聚合源包文件（TVBox 配置格式：{sites:[...]} 或完整配置；规则可内嵌为 data: URL）。
-  // 同 key 覆盖旧条目，其余追加；持久化并就地并入当前配置（换新 config 对象驱动 UI 刷新）。
-  // 返回导入后的源包站点总数；解析失败抛错由调用方提示。
-  importSourcePack(text: string): number {
-    const incoming = decodeConfigContent(text).sites;
-    if (incoming.length === 0) { throw new Error('源包中没有站点'); }
-    const byKey: Map<string, SiteConfig> = new Map();
-    for (const s of this.packSites) { byKey.set(s.key, s); }
-    for (const s of incoming) { byKey.set(s.key, s); }
-    this.packSites = Array.from(byKey.values());
-    if (this.store !== null) { this.store.saveSourcePacks(JSON.stringify(this.packSites)); }
-    this.packsLoaded = true;
-    // 就地重并：已有配置时剥掉旧源包条目再合并（换对象身份触发观察刷新）
-    if (this.config !== null) {
-      const packKeys: Set<string> = new Set(this.packSites.map((s: SiteConfig): string => s.key));
-      const kept = this.config.sites.filter((s: SiteConfig): boolean => !packKeys.has(s.key));
-      const next: TvboxConfig = {
-        spider: this.config.spider, wallpaper: this.config.wallpaper,
-        sites: kept, lives: this.config.lives, parses: this.config.parses
-      };
-      this.mergeSourcePacks(next);
-      this.config = next;
-    }
-    console.info('OKV importSourcePack total=' + this.packSites.length);
-    return this.packSites.length;
-  }
-
-  // 清除全部已导入源包：持久化清空 + 当前配置移除源包站点（当前站被移除时自动重选）
-  clearSourcePacks(): void {
-    this.packSites = [];
-    if (this.store !== null) { this.store.clearSourcePacks(); }
-    if (this.config !== null) {
-      const next: TvboxConfig = {
-        spider: this.config.spider, wallpaper: this.config.wallpaper,
-        sites: this.config.sites.filter((s: SiteConfig): boolean => !this.packKeys().has(s.key)),
-        lives: this.config.lives, parses: this.config.parses
-      };
-      this.mergeSourcePacks(next);
-      this.config = next;
-      const curKey = this.currentSite?.key ?? '';
-      if (curKey !== '' && !next.sites.some((s: SiteConfig): boolean => s.key === curKey)) {
-        this.currentSite = null;
-        this.driver = null;
-        this.pickInitialSite(next);
+      const config = decodeConfigContent(text);
+      if (config.sites.length === 0) {
+        this.errMsg = '源包中没有站点';
+        return false;
       }
+      if (!this.applyConfig(config)) {
+        if (this.errMsg === '') { this.errMsg = '源包中没有可用站点'; }
+        return false;
+      }
+      this.subUrl = '';
+      this.isPackSource = true;
+      if (this.store !== null) { this.store.save('', serializeConfig('', config)); }
+      console.info('OKV loadFromPackText sites=' + config.sites.length);
+      return true;
+    } catch (e) {
+      this.errMsg = e instanceof Error ? e.message : JSON.stringify(e);
+      return false;
     }
   }
 
-  // 从 URL 拉取并导入聚合源包（源包为自包含 JSON，规则内嵌 data: URL，一次拉取即完成）
-  async importSourcePackFromUrl(url: string): Promise<number> {
-    let text: string;
-    if (this.testFetchText !== undefined) {
-      text = await this.testFetchText(url);
-    } else {
-      const r = await httpFetch(url, {});
-      if (r.status !== 200) { throw new Error('HTTP ' + r.status); }
-      text = r.text();
-    }
-    return this.importSourcePack(text);
-  }
-
-  private packKeys(): Set<string> {
-    return new Set<string>(this.packSites.map((s: SiteConfig): string => s.key));
-  }
-
-  // 已导入源包站点数（设置页展示用）
-  packSiteCount(): number {
-    return this.packSites.length;
-  }
-
-  // 把源包站点并入配置（key 已存在则跳过——订阅站点优先，幂等）。
-  // 迁移：旧版本随包内置的站点（ext 指向已删除的 rawfile 规则）从持久化配置中剥除，
-  // 由导入的源包（data: 内嵌规则）重新补齐。
-  private mergeSourcePacks(config: TvboxConfig): void {
+  // 迁移：旧版本随包内置的站点（ext 指向已删除的 rawfile 规则）在配置装载时剥除
+  private stripLegacyBuiltinRefs(config: TvboxConfig): void {
     const before = config.sites.length;
     config.sites = config.sites.filter((s: SiteConfig): boolean =>
       !(s.ext.startsWith('builtin://') && s.ext !== 'builtin://drpy2.min.js'));
-    const migrated = before - config.sites.length;
-    if (this.packSites.length === 0) {
-      if (migrated > 0) { console.info('OKV mergeSourcePacks migrated=' + migrated); }
-      return;
+    if (before - config.sites.length > 0) {
+      console.info('OKV stripLegacyBuiltinRefs removed=' + (before - config.sites.length));
     }
-    const keys: Set<string> = new Set(config.sites.map((s: SiteConfig): string => s.key));
-    let added = 0;
-    for (const s of this.packSites) {
-      if (keys.has(s.key)) { continue; }
-      config.sites.push(s);
-      keys.add(s.key);
-      added++;
-    }
-    if (added > 0 || migrated > 0) { console.info('OKV mergeSourcePacks added=' + added + ' migrated=' + migrated); }
   }
 }

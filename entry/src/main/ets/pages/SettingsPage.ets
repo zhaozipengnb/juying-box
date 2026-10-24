@@ -48,7 +48,6 @@ export struct SettingsPage {
   @Local cacheBytes: number = -1;   // -1 = 未统计
   @Local searchHistoryCount: number = 0;
   @Local editingSub: boolean = false;
-  @Local packCount: number = 0;     // 已导入聚合源包站点数
 
   aboutToAppear(): void {
     this.inputUrl = this.app.subUrl;
@@ -56,7 +55,6 @@ export struct SettingsPage {
     this.inputProxyUrl = this.settings.proxyUrl;
     this.refreshCacheSize();
     this.searchHistoryCount = SearchHistory.instance.getAll().length;
-    this.packCount = this.app.packSiteCount();
   }
 
   // @Computed 直接读取 @Trace 属性，确保 V2 依赖建立，壁纸变更立即生效
@@ -211,34 +209,13 @@ export struct SettingsPage {
     }
   }
 
-  // 导入聚合源包：系统文件选择器选聚合源/TVBox 配置 JSON → 解析 → 持久化并随订阅合并
-  private importSourcePack(): void {
-    this.localErr = '';
-    this.localOk = '';
-    try {
-      const opt = new picker.DocumentSelectOptions();
-      opt.maxSelectNumber = 1;
-      opt.fileSuffixFilters = ['json'];
-      const dp = new picker.DocumentViewPicker();
-      dp.select(opt).then((uris: string[]) => {
-        if (uris.length === 0) { return; }
-        try {
-          const f = fs.openSync(uris[0], fs.OpenMode.READ_ONLY);
-          const stat = fs.statSync(f.fd);
-          const buf = new ArrayBuffer(Math.max(stat.size, 1));
-          const n = fs.readSync(f.fd, buf);
-          fs.closeSync(f);
-          const text = new util.TextDecoder('utf-8').decodeToString(new Uint8Array(buf.slice(0, n)));
-          const total = this.app.importSourcePack(text);
-          this.packCount = total;
-          this.localOk = `已导入聚合源（共 ${total} 个源）`;
-        } catch (e) {
-          this.localErr = '源包导入失败：' + (e instanceof Error ? e.message : String(e));
-        }
-      }).catch((_e: Object) => { /* 未选择文件 */ });
-    } catch (e) {
-      this.localErr = '打开文件选择器失败';
+  // 点播行文本：本地源包形态 / 订阅 URL / 未设置
+  private vodRowText(): string {
+    if (this.app.isPackSource) {
+      const n = this.app.config?.sites.length ?? 0;
+      return `本地源包（${n} 个源）`;
     }
+    return this.app.subUrl === '' ? '未设置' : this.app.subUrl;
   }
 
   private fmtSize(b: number): string {
@@ -263,24 +240,26 @@ export struct SettingsPage {
           Row() {
             Text('点播').fontSize(16).fontWeight(FontWeight.Bold)
               .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
-            Text(this.app.subUrl === '' ? '未设置' : this.app.subUrl)
+            Text(this.vodRowText())
               .fontSize(13).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               .fontColor(this.isDarkWallpaper ? '#999999' : '#888888')
               .layoutWeight(1).margin({ left: 12 })
-            Text('更新')
-              .fontSize(13).fontColor(this.app.subUrl === '' ? (this.isDarkWallpaper ? '#555555' : '#CCCCCC') : '#007AFF')
-              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-              .borderRadius(6)
-              .backgroundColor(this.isDarkWallpaper ? '#26FFFFFF' : '#F5F5F5')
-              .margin({ left: 8 })
-              .hitTestBehavior(HitTestMode.Block)
-              .onClick(() => { this.refreshSub(); })
-            Image($r('app.media.ic_history'))
-              .width(20).height(20)
-              .fillColor(this.isDarkWallpaper ? '#AAAAAA' : '#888888')
-              .margin({ left: 8 })
-              .hitTestBehavior(HitTestMode.Block)
-              .onClick(() => { this.dialogTarget = 'vod'; this.showHistory = true; })
+            if (!this.app.isPackSource) {
+              Text('更新')
+                .fontSize(13).fontColor(this.app.subUrl === '' ? (this.isDarkWallpaper ? '#555555' : '#CCCCCC') : '#007AFF')
+                .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+                .borderRadius(6)
+                .backgroundColor(this.isDarkWallpaper ? '#26FFFFFF' : '#F5F5F5')
+                .margin({ left: 8 })
+                .hitTestBehavior(HitTestMode.Block)
+                .onClick(() => { this.refreshSub(); })
+              Image($r('app.media.ic_history'))
+                .width(20).height(20)
+                .fillColor(this.isDarkWallpaper ? '#AAAAAA' : '#888888')
+                .margin({ left: 8 })
+                .hitTestBehavior(HitTestMode.Block)
+                .onClick(() => { this.dialogTarget = 'vod'; this.showHistory = true; })
+            }
           }
           .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
           .onClick(() => {
@@ -316,39 +295,6 @@ export struct SettingsPage {
             this.dialogUrl = this.inputLiveUrl;
             this.showUrlDialog = true;
           })
-
-          // ---------- 聚合源（app 不内置站点；导入源包文件/链接随订阅合并） ----------
-          this.sectionTitle('聚合源')
-          SettingRow({
-            label: '已导入源包',
-            sub: this.packCount > 0 ? `${this.packCount} 个源，随订阅自动合并` : '未导入（选择聚合源 JSON 文件或粘贴源包链接；规则内嵌于源包，离线可用）'
-          }) {
-            Row({ space: 8 }) {
-              Button('链接')
-                .height(36)
-                .backgroundColor('#007AFF')
-                .fontColor('#FFFFFF')
-                .onClick(() => {
-                  this.dialogTarget = 'pack';
-                  this.dialogUrl = '';
-                  this.showUrlDialog = true;
-                })
-              Button('文件')
-                .height(36)
-                .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
-                .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
-                .onClick(() => { this.importSourcePack(); })
-              Button('清除')
-                .height(36)
-                .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
-                .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#E53935')
-                .onClick(() => {
-                  this.app.clearSourcePacks();
-                  this.packCount = 0;
-                  this.localOk = '已清除聚合源';
-                })
-            }
-          }
 
           // ---------- Proxy（csp_* JAR 爬虫的远程代理；鸿蒙端无 JVM，JAR 须在外部设备执行）----------
           this.sectionTitle('Proxy')
@@ -582,14 +528,27 @@ export struct SettingsPage {
         .onClick(() => { this.showUrlDialog = false; })
 
         Column() {
-          Text(this.dialogTarget === 'vod' ? '订阅地址' : this.dialogTarget === 'live' ? '直播源' : this.dialogTarget === 'proxy' ? 'Proxy 地址' : this.dialogTarget === 'pack' ? '聚合源链接' : '壁纸图片')
+          Text(this.dialogTarget === 'vod' ? '订阅地址' : this.dialogTarget === 'live' ? '直播源' : this.dialogTarget === 'proxy' ? 'Proxy 地址' : '壁纸图片')
             .fontSize(16).fontWeight(FontWeight.Medium).fontColor('#222222')
-            .margin({ bottom: 16 })
-          TextInput({ text: this.dialogUrl, placeholder: 'https://…' })
-            .width('100%').height(48)
-            .fontSize(14)
-            .onChange((v: string) => { this.dialogUrl = v; })
-            .onSubmit(() => { this.applyDialogUrl(); })
+            .margin({ bottom: 6 })
+          if (this.dialogTarget === 'vod') {
+            Text('输入订阅链接；或点右侧 📁 导入本地源包（替换当前源）')
+              .fontSize(12).fontColor('#999999').margin({ bottom: 10 })
+          }
+          Stack({ alignContent: Alignment.End }) {
+            TextInput({ text: this.dialogUrl, placeholder: 'https://…' })
+              .width('100%').height(48)
+              .fontSize(14)
+              .onChange((v: string) => { this.dialogUrl = v; })
+              .onSubmit(() => { this.applyDialogUrl(); })
+            if (this.dialogTarget === 'vod') {
+              Text('📁')
+                .fontSize(20)
+                .padding({ left: 10, right: 12, top: 10, bottom: 10 })
+                .onClick(() => { this.importPackFile(); })
+            }
+          }
+          .width('100%')
           Row({ space: 12 }) {
             Button('取消')
               .height(40).layoutWeight(1)
@@ -667,11 +626,7 @@ export struct SettingsPage {
 
   private applyDialogUrl(): void {
     const url = this.dialogUrl.trim();
-    if (this.dialogTarget === 'pack') {
-      this.showUrlDialog = false;
-      if (url.length === 0) { return; }
-      this.importPackFromUrl(url);
-    } else if (this.dialogTarget === 'vod') {
+    if (this.dialogTarget === 'vod') {
       this.inputUrl = url;
       this.showUrlDialog = false;
       if (url.length > 0) {
@@ -703,19 +658,37 @@ export struct SettingsPage {
     }
   }
 
-  // 链接导入源包：拉取自包含 JSON（规则内嵌 data: URL）→ 解析合并持久化
-  private async importPackFromUrl(url: string): Promise<void> {
-    this.busy = true;
+  // 点播弹窗 📁：选择聚合源 JSON 文件 → 解析装载 → 替换当前源（subUrl 清空为本地源包形态）
+  private importPackFile(): void {
     this.localErr = '';
     this.localOk = '';
     try {
-      const total = await this.app.importSourcePackFromUrl(url);
-      this.packCount = total;
-      this.localOk = `已导入聚合源（共 ${total} 个源），返回首页即可使用`;
+      const opt = new picker.DocumentSelectOptions();
+      opt.maxSelectNumber = 1;
+      opt.fileSuffixFilters = ['json'];
+      const dp = new picker.DocumentViewPicker();
+      dp.select(opt).then((uris: string[]) => {
+        if (uris.length === 0) { return; }
+        try {
+          const f = fs.openSync(uris[0], fs.OpenMode.READ_ONLY);
+          const stat = fs.statSync(f.fd);
+          const buf = new ArrayBuffer(Math.max(stat.size, 1));
+          const n = fs.readSync(f.fd, buf);
+          fs.closeSync(f);
+          const text = new util.TextDecoder('utf-8').decodeToString(new Uint8Array(buf.slice(0, n)));
+          if (this.app.loadFromPackText(text)) {
+            this.showUrlDialog = false;
+            this.localOk = `已导入本地源包（${this.app.config?.sites.length ?? 0} 个源），已替换当前源`;
+            Nav.stack.pop();   // 回首页；HomePage onShown 检测到配置更换后自动刷新
+          } else {
+            this.localErr = '源包导入失败：' + this.app.errMsg;
+          }
+        } catch (e) {
+          this.localErr = '源包导入失败：' + (e instanceof Error ? e.message : String(e));
+        }
+      }).catch((_e: Object) => { /* 未选择文件 */ });
     } catch (e) {
-      this.localErr = '源包导入失败：' + (e instanceof Error ? e.message : String(e));
-    } finally {
-      this.busy = false;
+      this.localErr = '打开文件选择器失败';
     }
   }
 
