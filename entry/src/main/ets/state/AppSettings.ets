@@ -124,4 +124,9 @@ export class AppSettings {
   isDarkWallpaper(): boolean {
     return this.wallpaper !== 'default' || this.wallpaperUri !== '';
   }
+
+  // 各页面背景图：未设置自定义壁纸时使用内置默认渐变图（青橙），否则用用户设置的路径/链接
+  bgImage(): string | Resource {
+    return this.wallpaperUri === '' ? $r('app.media.bg_default_gradient') : this.wallpaperUri;
+  }
 }

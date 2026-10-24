@@ -136,7 +136,7 @@ export struct DownloadPage {
       .width('100%').height('100%')
       .scrollBar(BarState.Auto)
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
-      .backgroundImage(this.settings.wallpaperUri)
+      .backgroundImage(this.settings.bgImage())
       .backgroundImageSize(ImageSize.Cover)
     }
     .hideTitleBar(false)

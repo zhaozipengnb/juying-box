@@ -153,7 +153,7 @@ export struct SearchPage {
       }
       .width('100%').height('100%')
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
-      .backgroundImage(this.wallpaperUri)
+      .backgroundImage(this.settings.bgImage())
       .backgroundImageSize(ImageSize.Cover)
     }
     .hideTitleBar(true)

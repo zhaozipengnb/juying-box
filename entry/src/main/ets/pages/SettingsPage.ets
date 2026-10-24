@@ -17,7 +17,7 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit';
 const PIC_SIZES: PicSize[] = ['small', 'normal', 'large'];
 const PIC_LABELS: string[] = ['小（4列）', '标准（3列）', '大（2列）'];
 const WALLPAPERS: WallpaperKind[] = ['default', 'dark', 'blue', 'green'];
-const WALLPAPER_LABELS: string[] = ['默认（白）', '暗黑', '深蓝渐变', '墨绿渐变'];
+const WALLPAPER_LABELS: string[] = ['默认（青橙渐变）', '暗黑', '深蓝渐变', '墨绿渐变'];
 
 interface BuiltinBg { name: string; res: Resource; }
 const BUILTIN_BGS: BuiltinBg[] = [
@@ -545,7 +545,7 @@ export struct SettingsPage {
       .width('100%').height('100%')
       .scrollBar(BarState.Auto)
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
-      .backgroundImage(this.wallpaperUri)
+      .backgroundImage(this.settings.bgImage())
       .backgroundImageSize(ImageSize.Cover)
 
       // ---------- URL 编辑弹窗 ----------
