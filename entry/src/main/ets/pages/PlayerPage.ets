@@ -201,6 +201,7 @@ export struct PlayerPage {
         }
       }
       .width('100%').height('100%')
+      .backgroundColor('#000000')
     }
     .hideTitleBar(true)
     .onReady((ctx: NavDestinationContext) => {
@@ -348,21 +349,21 @@ export struct PlayerPage {
       Column({ space: 0 }) {
         // 1. 剧名
         Text(this.movieName)
-          .fontSize(18).fontWeight(FontWeight.Bold).fontColor('#333333')
+          .fontSize(18).fontWeight(FontWeight.Bold).fontColor('#EEEEEE')
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 6 })
 
         // 2. 更新至第几集
         if (this.lines.length > 0 && this.lines[this.lineIdx] !== undefined) {
           Text('更新至 ' + (this.lines[this.lineIdx].episodes[this.lines[this.lineIdx].episodes.length - 1]?.name ?? ''))
-            .fontSize(13).fontColor('#999999')
+            .fontSize(13).fontColor('#AAAAAA')
             .width('100%').padding({ left: 16, right: 16, bottom: 6 })
         }
 
         // 3. 站源
         if (this.siteName !== '') {
           Row({ space: 6 }) {
-            Text('站源:').fontSize(12).fontColor('#999999')
+            Text('站源:').fontSize(12).fontColor('#AAAAAA')
             Text(this.siteName).fontSize(13).fontColor('#F9A825')
           }.width('100%').padding({ left: 16, right: 16, bottom: 6 })
         }
@@ -371,16 +372,16 @@ export struct PlayerPage {
         if (this.detail !== null) {
           Row({ space: 8 }) {
             if (this.detail.year !== '') {
-              Text('年份:').fontSize(12).fontColor('#999999')
-              Text(this.detail.year).fontSize(12).fontColor('#666666')
+              Text('年份:').fontSize(12).fontColor('#AAAAAA')
+              Text(this.detail.year).fontSize(12).fontColor('#DDDDDD')
             }
             if (this.detail.movie.typeName !== '') {
-              Text('地区:').fontSize(12).fontColor('#999999')
-              Text(this.detail.movie.typeName).fontSize(12).fontColor('#666666')
+              Text('地区:').fontSize(12).fontColor('#AAAAAA')
+              Text(this.detail.movie.typeName).fontSize(12).fontColor('#DDDDDD')
             }
             if (this.detail.movie.remark !== '') {
-              Text('类型:').fontSize(12).fontColor('#999999')
-              Text(this.detail.movie.remark).fontSize(12).fontColor('#666666')
+              Text('类型:').fontSize(12).fontColor('#AAAAAA')
+              Text(this.detail.movie.remark).fontSize(12).fontColor('#DDDDDD')
             }
           }.width('100%').padding({ left: 16, right: 16, bottom: 6 })
         }
@@ -388,8 +389,8 @@ export struct PlayerPage {
         // 5. 导演
         if (this.detail !== null && this.detail.director !== '') {
           Row() {
-            Text('导演：').fontSize(12).fontColor('#999999')
-            Text(this.detail.director).fontSize(12).fontColor('#666666')
+            Text('导演：').fontSize(12).fontColor('#AAAAAA')
+            Text(this.detail.director).fontSize(12).fontColor('#DDDDDD')
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
           }.width('100%').padding({ left: 16, right: 16, bottom: 6 })
         }
@@ -397,8 +398,8 @@ export struct PlayerPage {
         // 6. 演员
         if (this.detail !== null && this.detail.actor !== '') {
           Row() {
-            Text('演员：').fontSize(12).fontColor('#999999')
-            Text(this.detail.actor).fontSize(12).fontColor('#666666')
+            Text('演员：').fontSize(12).fontColor('#AAAAAA')
+            Text(this.detail.actor).fontSize(12).fontColor('#DDDDDD')
               .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
           }.width('100%').padding({ left: 16, right: 16, bottom: 10 })
         }
@@ -406,14 +407,14 @@ export struct PlayerPage {
         // 7. 线路 + 下载
         if (this.lines.length > 0) {
           Row({ space: 8 }) {
-            Text('线路').fontSize(13).fontColor('#999999')
+            Text('线路').fontSize(13).fontColor('#AAAAAA')
             Scroll() {
               Row({ space: 8 }) {
                 ForEach(this.lines, (line: PlayLine, li: number) => {
                   Text(line.from || ('线路' + (li + 1)))
                     .fontSize(12)
-                    .fontColor(this.lineIdx === li ? '#FFFFFF' : '#666666')
-                    .backgroundColor(this.lineIdx === li ? '#F9A825' : '#F0F0F0')
+                    .fontColor(this.lineIdx === li ? '#FFFFFF' : '#DDDDDD')
+                    .backgroundColor(this.lineIdx === li ? '#F9A825' : '#2A2A2A')
                     .borderRadius(4)
                     .padding({ left: 8, right: 8, top: 4, bottom: 4 })
                     .onClick(() => { this.switchTo(li, 0); })
@@ -424,7 +425,7 @@ export struct PlayerPage {
             if (this.ep !== null && this.settings.builtinDownload) {
               Text('下载')
                 .fontSize(12).fontColor('#666666')
-                .backgroundColor('#F0F0F0').borderRadius(4)
+                .backgroundColor('#2A2A2A').borderRadius(4)
                 .padding({ left: 8, right: 8, top: 4, bottom: 4 })
                 .onClick(() => {
                   if (this.ep !== null && !this.dl.isDownloading(this.ep.url)) {
@@ -438,14 +439,14 @@ export struct PlayerPage {
         // 8. 选集
         if (this.lines.length > 0 && this.lines[this.lineIdx] !== undefined) {
           Column({ space: 8 }) {
-            Text('选集').fontSize(13).fontColor('#999999')
+            Text('选集').fontSize(13).fontColor('#AAAAAA')
             Grid() {
               ForEach(this.lines[this.lineIdx].episodes, (e: Episode, ei: number) => {
                 GridItem() {
                   Text(e.name)
                     .fontSize(12)
-                    .fontColor(this.epIdx === ei ? '#FFFFFF' : '#666666')
-                    .backgroundColor(this.epIdx === ei ? '#F9A825' : '#F5F5F5')
+                    .fontColor(this.epIdx === ei ? '#FFFFFF' : '#DDDDDD')
+                    .backgroundColor(this.epIdx === ei ? '#F9A825' : '#2A2A2A')
                     .borderRadius(4)
                     .width('100%').height(32)
                     .textAlign(TextAlign.Center)
@@ -464,9 +465,9 @@ export struct PlayerPage {
         // 9. 简介
         if (this.detail !== null && this.detail.desc !== '') {
           Column({ space: 4 }) {
-            Text('简介').fontSize(13).fontColor('#999999').padding({left:0})
+            Text('简介').fontSize(13).fontColor('#AAAAAA').padding({left:0})
             Text(this.detail.desc)
-              .fontSize(12).fontColor('#666666').lineHeight(20)
+              .fontSize(12).fontColor('#DDDDDD').lineHeight(20)
           }.width('100%').padding({ left: 16, right: 16, bottom: 6 })
         }
       }
@@ -476,6 +477,6 @@ export struct PlayerPage {
     .scrollable(ScrollDirection.Vertical)
     .scrollBar(BarState.Off)
     .layoutWeight(1)
-    .backgroundColor('#FFFFFF')
+    .backgroundColor('#141414')
   }
 }

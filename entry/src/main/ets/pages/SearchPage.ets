@@ -21,7 +21,7 @@ export struct SearchPage {
   @Local hotWords: string[] = HOT_FALLBACK;
 
   @Computed get isDarkWallpaper(): boolean {
-    return this.settings.wallpaper !== 'default' || this.settings.wallpaperUri !== '';
+    return true;   // 默认背景为青橙渐变图，文字统一白色
   }
 
   @Computed get wallpaperUri(): string {

@@ -28,7 +28,7 @@ export struct HistoryPage {
   }
 
   @Computed get isDarkWallpaper(): boolean {
-    return this.settings.wallpaper !== 'default' || this.settings.wallpaperUri !== '';
+    return true;   // 默认背景为青橙渐变图，文字统一白色
   }
 
   // 历史续播：切到来源站 → 拉详情 → 跳播放页（线路/集索引沿用记录）
