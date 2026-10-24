@@ -6,8 +6,8 @@ import { AppSettings } from '../state/AppSettings';
 import { SearchHistory } from '../state/SearchHistory';
 import { Movie } from 'common';
 
-// 热搜默认词（无后端接口，静态内置）
-const HOT_WORDS: string[] = [
+// 热搜兜底词（豆瓣接口失败时显示）
+const HOT_FALLBACK: string[] = [
   '庆余年', '繁花', '狂飙', '三体', '流浪地球',
   '满江红', '长安三万里', '封神', '消失的她', '长津湖'
 ];
@@ -18,6 +18,7 @@ export struct SearchPage {
   settings: AppSettings = AppSettings.instance;
   @Local searchKey: string = '';
   @Local searchHistory: string[] = [];
+  @Local hotWords: string[] = HOT_FALLBACK;
 
   @Computed get isDarkWallpaper(): boolean {
     return this.settings.wallpaper !== 'default' || this.settings.wallpaperUri !== '';
@@ -37,6 +38,34 @@ export struct SearchPage {
 
   aboutToAppear(): void {
     this.searchHistory = SearchHistory.instance.getAll();
+    this.loadHotWords();
+  }
+
+  // 豆瓣实时热门（公开 web 接口，需 Referer）；电影+剧集各取 5，失败保留兜底词
+  private async loadHotWords(): Promise<void> {
+    const fetchTag = async (tag: string): Promise<string[]> => {
+      const url = 'https://movie.douban.com/j/search_subjects?type=' + (tag === '电影' ? 'movie' : 'tv')
+        + '&tag=' + encodeURIComponent(tag) + '&page_limit=5';
+      const text = await this.app.makeFetchText()(url, { 'Referer': 'https://movie.douban.com/explore' });
+      const obj = JSON.parse(text) as Record<string, Object>;
+      const subs = (obj['subjects'] ?? []) as Record<string, Object>[];
+      const titles: string[] = [];
+      for (const it of subs) {
+        const t = it['title'];
+        if (typeof t === 'string' && t !== '') { titles.push(t); }
+      }
+      return titles;
+    };
+    try {
+      const movies = await fetchTag('电影');
+      const tvs = await fetchTag('剧集');
+      const all: string[] = [];
+      for (let i = 0; i < Math.max(movies.length, tvs.length); i++) {
+        if (i < movies.length) { all.push(movies[i]); }
+        if (i < tvs.length) { all.push(tvs[i]); }
+      }
+      if (all.length >= 4) { this.hotWords = all.slice(0, 10); }
+    } catch (e) { /* 接口失败保留兜底词 */ }
   }
 
   // 搜索：保存历史 → 跳 DetailPage
@@ -170,7 +199,7 @@ export struct SearchPage {
       }.width('100%')
 
       Flex({ wrap: FlexWrap.Wrap }) {
-        ForEach(HOT_WORDS, (word: string, idx: number) => {
+        ForEach(this.hotWords, (word: string, idx: number) => {
           Row({ space: 4 }) {
             Text(`${idx + 1}`)
               .fontSize(11)

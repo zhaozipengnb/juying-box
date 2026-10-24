@@ -8,6 +8,8 @@ import { SettingRow } from '../components/SettingRow';
 import { Nav } from '../nav/Nav';
 import { common } from '@kit.AbilityKit';
 import fs from '@ohos.file.fs';
+import { picker } from '@kit.CoreFileKit';
+import { util } from '@kit.ArkTS';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 
 // 海报密度选项（与 PicSize 一一对应）
@@ -174,10 +176,38 @@ export struct SettingsPage {
     }
   }
 
-  // 导入：从备份文件恢复（文件选择器选 json）
+  // 导入：系统文件选择器选备份 json → 读回 → AppSettings.restore
   private importBackup(): void {
     this.localErr = '';
-    this.localOk = '导入请把备份文件放入应用目录后联系开发者（文件选择器权限待申请）';
+    this.localOk = '';
+    try {
+      const opt = new picker.DocumentSelectOptions();
+      opt.maxSelectNumber = 1;
+      opt.fileSuffixFilters = ['json'];
+      const dp = new picker.DocumentViewPicker();
+      dp.select(opt).then((uris: string[]) => {
+        if (uris.length === 0) { return; }
+        const f = fs.openSync(uris[0], fs.OpenMode.READ_ONLY);
+        const buf = new ArrayBuffer(1024 * 512);
+        const n = fs.readSync(f.fd, buf);
+        fs.closeSync(f);
+        const text = new util.TextDecoder('utf-8').decodeToString(new Uint8Array(buf.slice(0, n)));
+        // 导出文件为 {settingsJson, exportedAt} 包装
+        let payload: string = text;
+        try {
+          const wrapped = JSON.parse(text) as Record<string, Object>;
+          const inner = wrapped['settingsJson'];
+          if (typeof inner === 'string') { payload = inner; }
+        } catch (e) { /* 直接就是设置 JSON */ }
+        if (this.settings.restore(payload)) {
+          this.localOk = '已恢复备份';
+        } else {
+          this.localErr = '备份文件解析失败';
+        }
+      }).catch((_e: Object) => { this.localErr = '未选择文件'; });
+    } catch (e) {
+      this.localErr = '打开文件选择器失败';
+    }
   }
 
   private fmtSize(b: number): string {

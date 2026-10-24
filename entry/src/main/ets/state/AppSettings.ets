@@ -43,6 +43,19 @@ export class AppSettings {
   load(): void {
     const raw = this.store?.getSync(KEY_SETTINGS);
     if (raw === undefined || raw === '') { return; }
+    this.applyJson(raw);
+  }
+
+  // 备份导入：JSON 字符串恢复全部设置并落盘（坏数据按默认值跳过）
+  restore(json: string): boolean {
+    try {
+      this.applyJson(json);
+      this.save();
+      return true;
+    } catch (e) { return false; }
+  }
+
+  private applyJson(raw: string): void {
     try {
       const obj = JSON.parse(raw) as Record<string, Object>;
       const pic = obj['picSize'];
