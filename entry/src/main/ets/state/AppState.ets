@@ -303,6 +303,19 @@ export class AppState {
     }
   }
 
+  // 从 URL 拉取并导入聚合源包（源包为自包含 JSON，规则内嵌 data: URL，一次拉取即完成）
+  async importSourcePackFromUrl(url: string): Promise<number> {
+    let text: string;
+    if (this.testFetchText !== undefined) {
+      text = await this.testFetchText(url);
+    } else {
+      const r = await httpFetch(url, {});
+      if (r.status !== 200) { throw new Error('HTTP ' + r.status); }
+      text = r.text();
+    }
+    return this.importSourcePack(text);
+  }
+
   private packKeys(): Set<string> {
     return new Set<string>(this.packSites.map((s: SiteConfig): string => s.key));
   }

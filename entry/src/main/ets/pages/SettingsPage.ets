@@ -317,17 +317,26 @@ export struct SettingsPage {
             this.showUrlDialog = true;
           })
 
-          // ---------- 聚合源（app 不内置站点；导入源包文件随订阅合并） ----------
+          // ---------- 聚合源（app 不内置站点；导入源包文件/链接随订阅合并） ----------
           this.sectionTitle('聚合源')
           SettingRow({
             label: '已导入源包',
-            sub: this.packCount > 0 ? `${this.packCount} 个源，随订阅自动合并` : '未导入（选择聚合源 JSON 文件导入，源也可内嵌规则离线使用）'
+            sub: this.packCount > 0 ? `${this.packCount} 个源，随订阅自动合并` : '未导入（选择聚合源 JSON 文件或粘贴源包链接；规则内嵌于源包，离线可用）'
           }) {
             Row({ space: 8 }) {
-              Button('导入')
+              Button('链接')
                 .height(36)
                 .backgroundColor('#007AFF')
                 .fontColor('#FFFFFF')
+                .onClick(() => {
+                  this.dialogTarget = 'pack';
+                  this.dialogUrl = '';
+                  this.showUrlDialog = true;
+                })
+              Button('文件')
+                .height(36)
+                .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
+                .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
                 .onClick(() => { this.importSourcePack(); })
               Button('清除')
                 .height(36)
@@ -573,7 +582,7 @@ export struct SettingsPage {
         .onClick(() => { this.showUrlDialog = false; })
 
         Column() {
-          Text(this.dialogTarget === 'vod' ? '订阅地址' : this.dialogTarget === 'live' ? '直播源' : this.dialogTarget === 'proxy' ? 'Proxy 地址' : '壁纸图片')
+          Text(this.dialogTarget === 'vod' ? '订阅地址' : this.dialogTarget === 'live' ? '直播源' : this.dialogTarget === 'proxy' ? 'Proxy 地址' : this.dialogTarget === 'pack' ? '聚合源链接' : '壁纸图片')
             .fontSize(16).fontWeight(FontWeight.Medium).fontColor('#222222')
             .margin({ bottom: 16 })
           TextInput({ text: this.dialogUrl, placeholder: 'https://…' })
@@ -658,7 +667,11 @@ export struct SettingsPage {
 
   private applyDialogUrl(): void {
     const url = this.dialogUrl.trim();
-    if (this.dialogTarget === 'vod') {
+    if (this.dialogTarget === 'pack') {
+      this.showUrlDialog = false;
+      if (url.length === 0) { return; }
+      this.importPackFromUrl(url);
+    } else if (this.dialogTarget === 'vod') {
       this.inputUrl = url;
       this.showUrlDialog = false;
       if (url.length > 0) {
@@ -687,6 +700,22 @@ export struct SettingsPage {
       } else {
         this.clearWallpaper();
       }
+    }
+  }
+
+  // 链接导入源包：拉取自包含 JSON（规则内嵌 data: URL）→ 解析合并持久化
+  private async importPackFromUrl(url: string): Promise<void> {
+    this.busy = true;
+    this.localErr = '';
+    this.localOk = '';
+    try {
+      const total = await this.app.importSourcePackFromUrl(url);
+      this.packCount = total;
+      this.localOk = `已导入聚合源（共 ${total} 个源），返回首页即可使用`;
+    } catch (e) {
+      this.localErr = '源包导入失败：' + (e instanceof Error ? e.message : String(e));
+    } finally {
+      this.busy = false;
     }
   }
 
