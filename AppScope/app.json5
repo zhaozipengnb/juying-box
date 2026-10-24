@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "com.okvideo.app",
+    "bundleName": "com.juying.app",
     "vendor": "example",
     "versionCode": 1000000,
     "versionName": "1.0.0",
