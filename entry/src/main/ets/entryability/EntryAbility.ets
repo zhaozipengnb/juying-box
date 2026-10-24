@@ -32,8 +32,7 @@ export default class EntryAbility extends UIAbility {
     });
     preferences.getPreferences(context, 'okvideo_config').then(async (pref: preferences.Preferences) => {
       const store = new ConfigStore(new PreferencesKVStore(pref));
-      // 内置源先行装载（rawfile/builtin，失败降级为空），随后恢复订阅并合并
-      await AppState.instance.initBuiltins(this.context.resourceManager);
+      // 恢复订阅并合并已导入的聚合源包（initFromStore 内部装载源包）
       return AppState.instance.initFromStore(store);
     }).catch((e: Object) => {
       // 装配失败兜底：preferences 打开或恢复链路异常时降级到配置页，用户可重新输入订阅

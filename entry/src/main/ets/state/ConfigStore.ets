@@ -14,6 +14,7 @@ export interface StoredConfig {
 
 const KEY_CONFIG = 'okvideo_stored_config';
 const KEY_CURRENT_SITE = 'okvideo_current_site';
+const KEY_SOURCE_PACKS = 'okvideo_source_packs';
 
 export function serializeConfig(url: string, config: TvboxConfig): string {
   const stored: StoredConfig = { url: url, configJson: JSON.stringify(config) };
@@ -49,4 +50,11 @@ export class ConfigStore {
     const v = this.store.getSync(KEY_CURRENT_SITE);
     return v === undefined ? '' : v;
   }
+  // 导入聚合源包（SiteConfig 数组 JSON）：随订阅合并，跨重启可用
+  saveSourcePacks(sitesJson: string): void { this.store.putSync(KEY_SOURCE_PACKS, sitesJson); }
+  loadSourcePacks(): string {
+    const v = this.store.getSync(KEY_SOURCE_PACKS);
+    return v === undefined ? '' : v;
+  }
+  clearSourcePacks(): void { this.store.deleteSync(KEY_SOURCE_PACKS); }
 }

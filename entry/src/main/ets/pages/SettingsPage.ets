@@ -48,6 +48,7 @@ export struct SettingsPage {
   @Local cacheBytes: number = -1;   // -1 = 未统计
   @Local searchHistoryCount: number = 0;
   @Local editingSub: boolean = false;
+  @Local packCount: number = 0;     // 已导入聚合源包站点数
 
   aboutToAppear(): void {
     this.inputUrl = this.app.subUrl;
@@ -55,6 +56,7 @@ export struct SettingsPage {
     this.inputProxyUrl = this.settings.proxyUrl;
     this.refreshCacheSize();
     this.searchHistoryCount = SearchHistory.instance.getAll().length;
+    this.packCount = this.app.packSiteCount();
   }
 
   // @Computed 直接读取 @Trace 属性，确保 V2 依赖建立，壁纸变更立即生效
@@ -177,8 +179,7 @@ export struct SettingsPage {
   }
 
   // 导入：系统文件选择器选备份 json → 读回 → AppSettings.restore
-  private importBackup(): void {
-    this.localErr = '';
+  private importBackup(): void {    this.localErr = '';
     this.localOk = '';
     try {
       const opt = new picker.DocumentSelectOptions();
@@ -205,6 +206,36 @@ export struct SettingsPage {
           this.localErr = '备份文件解析失败';
         }
       }).catch((_e: Object) => { this.localErr = '未选择文件'; });
+    } catch (e) {
+      this.localErr = '打开文件选择器失败';
+    }
+  }
+
+  // 导入聚合源包：系统文件选择器选聚合源/TVBox 配置 JSON → 解析 → 持久化并随订阅合并
+  private importSourcePack(): void {
+    this.localErr = '';
+    this.localOk = '';
+    try {
+      const opt = new picker.DocumentSelectOptions();
+      opt.maxSelectNumber = 1;
+      opt.fileSuffixFilters = ['json'];
+      const dp = new picker.DocumentViewPicker();
+      dp.select(opt).then((uris: string[]) => {
+        if (uris.length === 0) { return; }
+        try {
+          const f = fs.openSync(uris[0], fs.OpenMode.READ_ONLY);
+          const stat = fs.statSync(f.fd);
+          const buf = new ArrayBuffer(Math.max(stat.size, 1));
+          const n = fs.readSync(f.fd, buf);
+          fs.closeSync(f);
+          const text = new util.TextDecoder('utf-8').decodeToString(new Uint8Array(buf.slice(0, n)));
+          const total = this.app.importSourcePack(text);
+          this.packCount = total;
+          this.localOk = `已导入聚合源（共 ${total} 个源）`;
+        } catch (e) {
+          this.localErr = '源包导入失败：' + (e instanceof Error ? e.message : String(e));
+        }
+      }).catch((_e: Object) => { /* 未选择文件 */ });
     } catch (e) {
       this.localErr = '打开文件选择器失败';
     }
@@ -285,6 +316,30 @@ export struct SettingsPage {
             this.dialogUrl = this.inputLiveUrl;
             this.showUrlDialog = true;
           })
+
+          // ---------- 聚合源（app 不内置站点；导入源包文件随订阅合并） ----------
+          this.sectionTitle('聚合源')
+          SettingRow({
+            label: '已导入源包',
+            sub: this.packCount > 0 ? `${this.packCount} 个源，随订阅自动合并` : '未导入（选择聚合源 JSON 文件导入，源也可内嵌规则离线使用）'
+          }) {
+            Row({ space: 8 }) {
+              Button('导入')
+                .height(36)
+                .backgroundColor('#007AFF')
+                .fontColor('#FFFFFF')
+                .onClick(() => { this.importSourcePack(); })
+              Button('清除')
+                .height(36)
+                .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
+                .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#E53935')
+                .onClick(() => {
+                  this.app.clearSourcePacks();
+                  this.packCount = 0;
+                  this.localOk = '已清除聚合源';
+                })
+            }
+          }
 
           // ---------- Proxy（csp_* JAR 爬虫的远程代理；鸿蒙端无 JVM，JAR 须在外部设备执行）----------
           this.sectionTitle('Proxy')

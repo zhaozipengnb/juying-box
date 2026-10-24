@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { toInt, parseTvboxConfig, siteEngine, isSiteSupported, resolveUrl, resolveSiteUrls,
+import { toInt, parseTvboxConfig, siteEngine, isSiteSupported, resolveUrl, resolveSiteUrls, decodeDataUrl,
   SiteConfig, TvboxConfig, tryConvertCspToCms } from 'common';
 
 // 便捷构造站点（仅填分类函数关注的字段，其余给默认值）
@@ -84,7 +84,15 @@ export default function modelTest() {
       expect(resolveUrl('Not a url', './l.js')).assertEqual('./l.js');
       // 端口保留
       expect(resolveUrl('http://a.com:81/x/c.json', './l.js')).assertEqual('http://a.com:81/x/l.js');
-    });
+    })
+    it('decodeDataUrl_b64_and_plain', 0, () => {
+      // base64 载荷：'{"k":1}' → eyJrIjoxfQ==
+      expect(decodeDataUrl('data:text/javascript;base64,eyJrIjoxfQ==')).assertEqual('{"k":1}');
+      // URL 编码载荷
+      expect(decodeDataUrl('data:,var%20a%3D1;')).assertEqual('var a=1;');
+      // 非 data: 原样返回（普通 URL 语义不受影响）
+      expect(decodeDataUrl('https://a.com/x.js')).assertEqual('https://a.com/x.js');
+    });;
     it('resolveSiteUrls_inplace', 0, () => {
       const raw = JSON.parse('{'
         + '"sites":['

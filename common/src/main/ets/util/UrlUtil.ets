@@ -1,3 +1,5 @@
+import { util } from '@kit.ArkTS';
+
 // 相对 URL 解析：把订阅里 ./ ../ 开头的相对引用对订阅 URL 绝对化。
 // ArkTS 环境不依赖全局 URL 对象，手写字符串解析（与 CmsJsonApi 同一约束）。
 // 语义对齐 WHATWG URL：绝对引用（含 scheme）、协议相对（//host/..）、根相对（/..）、
@@ -37,4 +39,21 @@ export function resolveUrl(base: string, ref: string): string {
   const rawPath = (q >= 0 ? b.substring(0, q) : b).substring(schemeHost.length);
   const dir = rawPath.substring(0, rawPath.lastIndexOf('/') + 1);
   return schemeHost + normalizePath(dir + r);
+}
+
+// data: URL → 文本（聚合源包内嵌 drpy 规则用）。支持 base64 与 URL 编码两种载荷；
+// 非 data: 前缀原样返回（调用方按普通 URL 继续）；缺逗号/解码失败抛错由调用方提示。
+export function decodeDataUrl(url: string): string {
+  const u = url.trim();
+  if (!u.startsWith('data:')) { return url; }
+  const comma = u.indexOf(',');
+  if (comma < 0) { throw new Error('data: URL 缺少逗号分隔'); }
+  const meta = u.substring(5, comma);
+  const payload = u.substring(comma + 1);
+  if (meta.indexOf(';base64') >= 0) {
+    const helper = new util.Base64Helper();
+    const bytes = helper.decodeSync(payload);
+    return new util.TextDecoder('utf-8').decodeToString(bytes);
+  }
+  return decodeURIComponent(payload);
 }

@@ -153,8 +153,8 @@ export default function appStateTest() {
       expect(app.driver instanceof ProxyDriver).assertTrue();
       AppSettings.instance.proxyUrl = '';
     });
-    it('initFromStore_empty_store_starts_builtins_only', 0, async () => {
-      // 首启无订阅：直接用内置源进首页（订阅在设置页维护），subUrl 为空
+    it('initFromStore_empty_store_starts_packs_only', 0, async () => {
+      // 首启无订阅：有源包直接进首页（订阅在设置页维护），subUrl 为空
       const mkBuiltin = (): SiteConfig => {
         return {
           key: 'builtin_bx', name: '兄弟影视(内置)', type: 3, api: 'builtin://drpy2.min.js',
@@ -163,7 +163,7 @@ export default function appStateTest() {
         };
       };
       const app = new AppState();
-      app.setBuiltins([mkBuiltin()]);
+      app.setSourcePacks([mkBuiltin()]);
       await app.initFromStore(new ConfigStore(new FakeKVStore()));
       expect(app.phase === 'home').assertTrue();
       expect(app.subUrl === '').assertTrue();
@@ -171,8 +171,8 @@ export default function appStateTest() {
       expect(app.currentSite?.key === 'builtin_bx').assertTrue();
       expect(app.driver instanceof DrpyDriver).assertTrue();
     });
-    it('clearConfig_returns_to_builtins_only_home', 0, async () => {
-      // 清除订阅：回到仅内置源的首页态，不离开 home、不丢 driver
+    it('clearConfig_returns_to_packs_only_home', 0, async () => {
+      // 清除订阅：回到仅源包的首页态，不离开 home、不丢 driver
       const mkBuiltin = (): SiteConfig => {
         return {
           key: 'builtin_bx', name: '兄弟影视(内置)', type: 3, api: 'builtin://drpy2.min.js',
@@ -181,7 +181,7 @@ export default function appStateTest() {
         };
       };
       const app = new AppState();
-      app.setBuiltins([mkBuiltin()]);
+      app.setSourcePacks([mkBuiltin()]);
       const responses: Map<string, string> = new Map();
       responses.set('https://sub.example/conf', SUB_JSON);
       app.testFetchText = makeFakeFetch(responses);
@@ -193,8 +193,8 @@ export default function appStateTest() {
       expect(app.config?.sites.length === 1).assertTrue();
       expect(app.currentSite?.key === 'builtin_bx').assertTrue();
     });
-    it('builtin_sites_merged_and_routed', 0, async () => {
-      // 内置源：随订阅合并、key 不冲突、可切换且路由到 drpy 引擎（api 为 builtin://）
+    it('pack_sites_merged_and_routed', 0, async () => {
+      // 源包：随订阅合并、key 不冲突、可切换且路由到 drpy 引擎（api 为 builtin://）
       const mkBuiltin = (): SiteConfig => {
         return {
           key: 'builtin_bx', name: '兄弟影视(内置)', type: 3, api: 'builtin://drpy2.min.js',
@@ -203,7 +203,7 @@ export default function appStateTest() {
         };
       };
       const app = new AppState();
-      app.setBuiltins([mkBuiltin()]);
+      app.setSourcePacks([mkBuiltin()]);
       const responses: Map<string, string> = new Map();
       responses.set('https://sub.example/conf', '{"sites":[{"key":"a","name":"站点A","type":1,"api":"https://a.example/api"}]}');
       responses.set('https://a.example/api?ac=list', SITE_JSON);
@@ -217,8 +217,8 @@ export default function appStateTest() {
       expect(app.switchSite('a')).assertTrue();
       expect(app.driver instanceof CmsJsonApi).assertTrue();
     });
-    it('builtin_merge_idempotent', 0, async () => {
-      // 同一实例重复加载订阅（内置已在持久化合并结果里）不产生重复站点
+    it('pack_merge_idempotent', 0, async () => {
+      // 同一实例重复加载订阅（源包已在持久化合并结果里）不产生重复站点
       const mkBuiltin = (): SiteConfig => {
         return {
           key: 'builtin_bx', name: '兄弟影视(内置)', type: 3, api: 'builtin://drpy2.min.js',
@@ -227,7 +227,7 @@ export default function appStateTest() {
         };
       };
       const app = new AppState();
-      app.setBuiltins([mkBuiltin()]);
+      app.setSourcePacks([mkBuiltin()]);
       const responses: Map<string, string> = new Map();
       responses.set('https://sub.example/conf', '{"sites":[{"key":"a","name":"站点A","type":1,"api":"https://a.example/api"}]}');
       responses.set('https://a.example/api?ac=list', SITE_JSON);
@@ -236,6 +236,44 @@ export default function appStateTest() {
       await app.loadFromUrl('https://sub.example/conf');
       await app.loadFromUrl('https://sub.example/conf');
       expect(app.config?.sites.length === 2).assertTrue();
+    });
+    it('importSourcePack_merges_and_replaces_by_key', 0, async () => {
+      // 导入源包：随订阅合并；同 key 二次导入覆盖旧条目（ext 更新为 data: 形态）
+      const app = new AppState();
+      const responses: Map<string, string> = new Map();
+      responses.set('https://sub.example/conf', '{"sites":[{"key":"a","name":"站点A","type":1,"api":"https://a.example/api"}]}');
+      responses.set('https://a.example/api?ac=list', SITE_JSON);
+      responses.set('https://a.example/api?ac=videolist&pg=1', '{"list":[]}');
+      app.testFetchText = makeFakeFetch(responses);
+      await app.loadFromUrl('https://sub.example/conf');
+      const packV1 = '{"sites":[{"key":"p1","name":"源包站","type":3,"api":"builtin://drpy2.min.js","ext":"data:text/javascript;base64,eyJ9","header":{}}]}';
+      expect(app.importSourcePack(packV1) === 1).assertTrue();
+      expect(app.config?.sites.length === 2).assertTrue();
+      const packV2 = '{"sites":[{"key":"p1","name":"源包站V2","type":3,"api":"builtin://drpy2.min.js","ext":"data:text/javascript;base64,eyJ2IjoyfQ==","header":{}}]}';
+      expect(app.importSourcePack(packV2) === 1).assertTrue();
+      expect(app.config?.sites.length === 2).assertTrue();          // 覆盖不叠加
+      const merged = (app.config as TvboxConfig).sites.find((s: SiteConfig): boolean => s.key === 'p1');
+      expect(merged?.name === '源包站V2').assertTrue();
+      expect(merged?.ext === 'data:text/javascript;base64,eyJ2IjoyfQ==').assertTrue();
+      expect(app.packSiteCount() === 1).assertTrue();
+    });
+    it('merge_strips_legacy_builtin_rule_refs', 0, async () => {
+      // 迁移：持久化配置里旧版内置站点（ext 指向 rawfile 规则，文件已删）被剥除；
+      // drpy 运行时 api（builtin://drpy2.min.js）与 data: ext 不受影响
+      const app = new AppState();
+      const stale = '{"sites":['
+        + '{"key":"builtin_old","name":"旧内置","type":3,"api":"builtin://drpy2.min.js","ext":"builtin://兄弟影视.js","header":{}},'
+        + '{"key":"keep_runtime","name":"运行时api","type":3,"api":"builtin://drpy2.min.js","ext":"","header":{}},'
+        + '{"key":"keep_data","name":"data规则","type":3,"api":"builtin://drpy2.min.js","ext":"data:text/javascript;base64,eyJ9","header":{}}'
+        + ']}';
+      const responses: Map<string, string> = new Map();
+      responses.set('https://sub.example/conf', stale);
+      app.testFetchText = makeFakeFetch(responses);
+      expect(await app.loadFromUrl('https://sub.example/conf')).assertTrue();
+      const keys = (app.config as TvboxConfig).sites.map((s: SiteConfig): string => s.key);
+      expect(keys.indexOf('builtin_old') < 0).assertTrue();         // 旧规则引用被剥除
+      expect(keys.indexOf('keep_runtime') >= 0).assertTrue();
+      expect(keys.indexOf('keep_data') >= 0).assertTrue();
     });
   });
 }

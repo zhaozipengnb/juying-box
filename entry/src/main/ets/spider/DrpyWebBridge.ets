@@ -7,7 +7,7 @@ import { webview } from '@kit.ArkWeb';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
-import { SiteConfig, b64encode } from 'common';
+import { SiteConfig, b64encode, decodeDataUrl } from 'common';
 import { httpFetch, HttpFetchOptions } from '../net/HttpClient';
 import { DrpyCorsProxy } from '../net/DrpyCorsProxyServer';
 
@@ -142,7 +142,11 @@ export class DrpyWebBridge {
   }
 
   private async downloadText(url: string): Promise<string> {
-    // 内置源：builtin://<文件名> 直接读 rawfile/builtin/（规则与运行时随包分发，不走网络）
+    // data: URL：规则可内嵌进聚合源包文件（base64 或 URL 编码文本），离线可导入
+    if (url.startsWith('data:')) {
+      return decodeDataUrl(url);
+    }
+    // builtin://<文件名>：包内引擎资源（drpy2 运行时等），经桥本地加载
     if (url.startsWith('builtin://')) {
       return this.readRawfile('builtin/' + url.substring('builtin://'.length));
     }
