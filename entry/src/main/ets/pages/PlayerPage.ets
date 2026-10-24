@@ -69,10 +69,11 @@ export struct PlayerPage {
     this.resolving = true;
     this.errMsg = '';
     let target: string = ep.url;
-    // drpy（js 引擎）源：集地址多为站点播放页/自编址，起播前经 ext 的 play() 换直链；
-    // 失败不吞——与通用解析同为 best effort，取不到再走错误卡片/线路轮循
+    // drpy（js 引擎）源：起播前先经 ext 的 play() 换直链（API 型源必需）；
+    // 字符串规则源无 lazy，play 原样返回播放页地址——仅当结果确为媒体直链才采纳，
+    // 否则回落通用解析（拉播放页 HTML 抽 player_aaaa/m3u8）
     const drpyUrl: string = await this.resolveViaDrpy(ep);
-    if (drpyUrl !== '') {
+    if (drpyUrl !== '' && isDirectMedia(drpyUrl)) {
       target = drpyUrl;
     } else {
       try {
