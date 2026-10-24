@@ -125,6 +125,9 @@ export struct LivePage {
       }
       .width('100%').height('100%')
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
+      .backgroundImage(this.settings.bgImage())
+      .backgroundImageSize(ImageSize.Cover)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
     .hideTitleBar(false)
     .title('直播')

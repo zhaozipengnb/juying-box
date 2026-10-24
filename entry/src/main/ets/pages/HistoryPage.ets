@@ -126,6 +126,9 @@ export struct HistoryPage {
       }
       .width('100%').height('100%')
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
+      .backgroundImage(this.settings.bgImage())
+      .backgroundImageSize(ImageSize.Cover)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
     .hideTitleBar(false)
     .title(this.tab === 0 ? '观看历史' : '我的收藏')

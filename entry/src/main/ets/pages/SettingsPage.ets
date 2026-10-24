@@ -547,6 +547,8 @@ export struct SettingsPage {
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
       .backgroundImage(this.settings.bgImage())
       .backgroundImageSize(ImageSize.Cover)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+
 
       // ---------- URL 编辑弹窗 ----------
       if (this.showUrlDialog) {

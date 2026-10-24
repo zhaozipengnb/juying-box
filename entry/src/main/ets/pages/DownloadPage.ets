@@ -138,6 +138,8 @@ export struct DownloadPage {
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
       .backgroundImage(this.settings.bgImage())
       .backgroundImageSize(ImageSize.Cover)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+
     }
     .hideTitleBar(false)
     .title('下载管理')

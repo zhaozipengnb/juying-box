@@ -440,6 +440,7 @@ export struct HomePage {
     .linearGradient({ angle: 160, colors: this.wallpaperColors })
       .backgroundImage(this.settings.bgImage())
       .backgroundImageSize(ImageSize.Cover)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
     .hideTitleBar(true)
     .onBackPressed(() => {
