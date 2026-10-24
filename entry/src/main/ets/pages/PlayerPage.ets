@@ -190,6 +190,15 @@ export struct PlayerPage {
     if (this.epIdx < eps.length - 1) { this.switchTo(this.lineIdx, this.epIdx + 1); }
   }
 
+  // 统一壁纸配色（视频区以外透出，与其它页面一致）
+  @Computed get wallpaperColors(): Array<[ResourceColor, number]> {
+    const w = this.settings.wallpaper;
+    if (w === 'dark') { return [['#FF141416', 0.0], ['#FF232326', 1.0]]; }
+    if (w === 'blue') { return [['#FF0E1E3C', 0.0], ['#FF1B3A5E', 1.0]]; }
+    if (w === 'green') { return [['#FF12291F', 0.0], ['#FF1E4030', 1.0]]; }
+    return [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  }
+
   build() {
     NavDestination() {
       Column() {
@@ -201,7 +210,10 @@ export struct PlayerPage {
         }
       }
       .width('100%').height('100%')
-      .backgroundColor('#000000')
+      .linearGradient({ angle: 160, colors: this.wallpaperColors })
+      .backgroundImage(this.settings.bgImage())
+      .backgroundImageSize(ImageSize.Cover)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
     .hideTitleBar(true)
     .onReady((ctx: NavDestinationContext) => {
@@ -477,6 +489,5 @@ export struct PlayerPage {
     .scrollable(ScrollDirection.Vertical)
     .scrollBar(BarState.Off)
     .layoutWeight(1)
-    .backgroundColor('#141414')
   }
 }
