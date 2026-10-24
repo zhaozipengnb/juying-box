@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "/Users/zhaozipeng/.ohos/config/default_okvideo-hap_iu5i-VsQI7BAbvaxGu5Wc2r4IePL3dOcG1mOUGjMNOI=.cer",
+          "certpath": "/Users/zhaozipeng/.ohos/config/default_juying-app_wNzmynWSr-Ema8S58hvt9_rDX5d1VKMuxz9QMTDfzrI=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B1A461A6CD1CD4975DB8CCC826954C482D059A2478A097AE2442065B5BCE25D73C250661BEB76E7",
-          "profile": "/Users/zhaozipeng/.ohos/config/default_okvideo-hap_iu5i-VsQI7BAbvaxGu5Wc2r4IePL3dOcG1mOUGjMNOI=.p7b",
+          "keyPassword": "0000001BD7D2404C08CD78A4D02C16A5B7496880327C350C3935EE8C40E3EFF7867930B35D7E32F78F1500",
+          "profile": "/Users/zhaozipeng/.ohos/config/default_juying-app_wNzmynWSr-Ema8S58hvt9_rDX5d1VKMuxz9QMTDfzrI=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "/Users/zhaozipeng/.ohos/config/default_okvideo-hap_iu5i-VsQI7BAbvaxGu5Wc2r4IePL3dOcG1mOUGjMNOI=.p12",
-          "storePassword": "0000001B9B4E9A5AE929299A8B2049FFCC73CF716ED594123F6FE01B070FB119F2DE531F3E8B8FC70E9EC4"
+          "storeFile": "/Users/zhaozipeng/.ohos/config/default_juying-app_wNzmynWSr-Ema8S58hvt9_rDX5d1VKMuxz9QMTDfzrI=.p12",
+          "storePassword": "0000001BE54CBA8023D928880970E78209AE14A64A074A32D958273C23DA58A9355949AE066F677BD86D64"
         }
       }
     ],
