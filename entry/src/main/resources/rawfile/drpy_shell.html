@@ -32,10 +32,17 @@ if (typeof document === 'undefined') {
 }
 
 // ---------- 宿主同步网络层（drpy2 的 req 依赖） ----------
+// 外站 http(s) 请求透明改走应用本地 CORS 代理（origin=null 的 Worker XHR 遇自定义头
+// 触发预检，公网站点不回 ACAO 会被拦；代理由 ArkTS 侧 httpFetch 回源，见 DrpyCorsProxyServer）
+function proxied(url) {
+  var base = globalThis.__proxyBase || '';
+  if (base && /^https?:\/\//i.test(url) && url.indexOf(base) !== 0) { return base + '/cors/' + url; }
+  return url;
+}
 function syncReq(url, obj) {
   obj = obj || {};
   var x = new XMLHttpRequest();
-  x.open((obj.method || 'GET'), url, false);  // 同步 XHR：Worker 内合法
+  x.open((obj.method || 'GET'), proxied(url), false);  // 同步 XHR：Worker 内合法
   var hs = obj.headers || {};
   var ks = Object.keys(hs);
   for (var i = 0; i < ks.length; i++) {
@@ -294,6 +301,7 @@ var __initError = null;
 self.onmessage = function (ev) {
   var m = ev.data;
   if (m.type === 'init') {
+    globalThis.__proxyBase = m.proxyBase || '';
     try {
       // 依赖装载 + 运行时注入。库各自包 IIFE 隔离顶层标识符（压缩短名会与 drpy2 撞车，如 rc），
       // 仅以约定全局导出（cheerio/模板/gbkTool/CryptoJS）；drpy2 本体最后 eval（export default → __DRPY）
@@ -396,7 +404,7 @@ self.onmessage = function (ev) {
     worker = __makeWorker();
     if (worker === null) { return; }
     __wireWorker(worker);
-    worker.postMessage({ type: 'init', drpy2Code: window.__drpy2Code || '', extCode: window.__extCode || '', libs: window.__drpyLibs || {}, cfgJson: cfgJson, callId: '__init__' });
+    worker.postMessage({ type: 'init', drpy2Code: window.__drpy2Code || '', extCode: window.__extCode || '', libs: window.__drpyLibs || {}, cfgJson: cfgJson, proxyBase: window.__drpyProxyBase || '', callId: '__init__' });
   };
   // ArkTS 调用：同步发起 call（返回 id），结果经 Worker 异步回写
   window.__workerCall = function (method, argsJson) {

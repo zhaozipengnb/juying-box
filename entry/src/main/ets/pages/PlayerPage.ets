@@ -4,7 +4,8 @@
 // 解析不出的地址不静默降级，而是给出错误卡片（重试 / 网页播放 / 返回），由用户决定。
 // 线路轮循：当前线路播放失败时自动切到下一线路同集继续尝试，全部线路失败才报错。
 import { Nav, PlayerParam } from '../nav/Nav';
-import { Episode, PlayLine, MovieDetail, isDirectMedia, resolvePlayUrl } from 'common';
+import { Episode, PlayLine, MovieDetail, SiteConfig, isDirectMedia, resolvePlayUrl, siteEngine } from 'common';
+import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
 import { window } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
@@ -68,9 +69,16 @@ export struct PlayerPage {
     this.resolving = true;
     this.errMsg = '';
     let target: string = ep.url;
-    try {
-      target = await resolvePlayUrl(ep.url, AppState.instance.makeFetchText());
-    } catch (e) { }
+    // drpy（js 引擎）源：集地址多为站点播放页/自编址，起播前经 ext 的 play() 换直链；
+    // 失败不吞——与通用解析同为 best effort，取不到再走错误卡片/线路轮循
+    const drpyUrl: string = await this.resolveViaDrpy(ep);
+    if (drpyUrl !== '') {
+      target = drpyUrl;
+    } else {
+      try {
+        target = await resolvePlayUrl(ep.url, AppState.instance.makeFetchText());
+      } catch (e) { }
+    }
     if (isDirectMedia(target)) {
       if (this.settings.aiAdFilter && /\.m3u8($|\?)/i.test(target)) {
         try {
@@ -88,6 +96,24 @@ export struct PlayerPage {
       this.tryNextLine();
     }
     this.resolving = false;
+  }
+
+  // js 引擎站点经 DrpyDriver.playContent 解析直链；非 js 站点或解析失败返回 ''（回落通用解析）
+  private async resolveViaDrpy(ep: Episode): Promise<string> {
+    const app = AppState.instance;
+    const cfg = app.config;
+    if (cfg === null) { return ''; }
+    const site: SiteConfig | undefined = cfg.sites.find((s: SiteConfig): boolean => s.key === this.siteKey);
+    if (site === undefined || siteEngine(site) !== 'js') { return ''; }
+    const drv = app.makeDriverFor(site);
+    if (!(drv instanceof DrpyDriver)) { return ''; }
+    try {
+      const flag: string = this.lines.length > 0 ? this.lines[this.lineIdx].from : '';
+      const resolved: Episode = await drv.playContent(flag, ep.url);
+      return resolved.url;
+    } catch (e) {
+      return '';
+    }
   }
 
   private tryNextLine(): void {

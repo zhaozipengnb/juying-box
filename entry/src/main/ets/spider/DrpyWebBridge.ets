@@ -9,6 +9,7 @@ import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 import { SiteConfig, b64encode } from 'common';
 import { httpFetch, HttpFetchOptions } from '../net/HttpClient';
+import { DrpyCorsProxy } from '../net/DrpyCorsProxyServer';
 
 const TAG = 'OKV-WEB';
 
@@ -82,6 +83,10 @@ export class DrpyWebBridge {
 
     // 2) Worker init：依赖库 + 代码文本注入壳页面 → 转发 Worker → 轮询完成标志
     await this.ensureLibs();
+    // Worker 外站 XHR 的 CORS 代理基址（启动失败置空 → Worker 回落直连，维持旧行为）
+    let proxyBase = '';
+    try { proxyBase = await DrpyCorsProxy.ensureStarted(); } catch (e) { /* 代理失败不阻塞 init */ }
+    await this.runJs(`window.__drpyProxyBase = ${JSON.stringify(proxyBase)}`);
     await this.runJs(`window.__drpy2Code = ${JSON.stringify(drpyCode)}`);
     await this.runJs(`window.__extCode = ${JSON.stringify(extCode)}`);
     const initCfg: DrpyInitCfg = {
