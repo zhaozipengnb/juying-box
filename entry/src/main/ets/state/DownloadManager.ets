@@ -5,6 +5,9 @@ import { common } from '@kit.AbilityKit';
 import { KVStore } from './ConfigStore';
 import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import fs from '@ohos.file.fs';
+import { httpFetch } from '../net/HttpClient';
+import { resolveUrl, isDirectMedia } from 'common';
 
 export type DownloadStatus = 'pending' | 'downloading' | 'paused' | 'completed' | 'failed';
 
@@ -72,7 +75,8 @@ export class DownloadManager {
     if (this.items.some((it: DownloadItem): boolean => it.id === id)) { return; } // 去重
 
     const dir = `${this.context.filesDir}/downloads`;
-    const fileName = `${this.safeName(movieName)}_${this.safeName(epName)}.mp4`;
+    const isHls = /\.m3u8($|\?)/i.test(url);
+    const fileName = `${this.safeName(movieName)}_${this.safeName(epName)}.${isHls ? 'ts' : 'mp4'}`;
     const localPath = `${dir}/${fileName}`;
 
     const item: DownloadItem = {
@@ -83,6 +87,11 @@ export class DownloadManager {
     this.save();
 
     try {
+      if (/\.m3u8($|\?)/i.test(url) || (!isDirectMedia(url) && url.startsWith('http'))) {
+        // HLS：拉播放列表 → 全部分段顺序拼接为 .ts（request.agent 只能下直链）
+        this.downloadHls(item);
+        return;
+      }
       const cfg: request.agent.Config = {
         action: request.agent.Action.DOWNLOAD,
         url,
@@ -115,6 +124,54 @@ export class DownloadManager {
       this.updateStatus(id, 'failed');
       this.save();
     }
+  }
+
+  // HLS 下载：master 列表取首子列表；逐段拉取追加写入 .ts。进度按已下字节数估算。
+  private async downloadHls(item: DownloadItem): Promise<void> {
+    this.updateStatus(item.id, 'downloading');
+    try {
+      let listUrl = item.url;
+      let text = (await httpFetch(listUrl, {})).text();
+      if (text.indexOf('#EXT-X-STREAM-INF') >= 0) {
+        const sub = this.firstMediaLine(text);
+        if (sub === '') { throw new Error('HLS 列表无可播地址'); }
+        listUrl = resolveUrl(listUrl, sub);
+        text = (await httpFetch(listUrl, {})).text();
+      }
+      const segs: string[] = [];
+      for (const raw of text.split(/\r?\n/)) {
+        const t = raw.trim();
+        if (t === '' || t.startsWith('#')) { continue; }
+        segs.push(resolveUrl(listUrl, t));
+      }
+      if (segs.length === 0) { throw new Error('HLS 无分段'); }
+      const f = fs.openSync(item.localPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      let done = 0;
+      for (let i = 0; i < segs.length; i++) {
+        const seg = segs[i];
+        const r = await httpFetch(seg, {});
+        const bytes = new Uint8Array(r.body);
+        fs.writeSync(f.fd, bytes.buffer);
+        done += bytes.length;
+        this.updateProgress(item.id, Math.min(99, Math.floor((i + 1) * 100 / segs.length)), done, 0);
+      }
+      fs.closeSync(f);
+      this.updateProgress(item.id, 100, done, done);
+      this.updateStatus(item.id, 'completed');
+      hilog.info(DOMAIN, 'OKV-DL', 'hls done %{public}d segs %{public}d bytes', segs.length, done);
+    } catch (e) {
+      this.updateStatus(item.id, 'failed');
+      hilog.error(DOMAIN, 'OKV-DL', 'hls fail %{public}s', e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // 播放列表第一个非注释行（master 取子列表用）
+  private firstMediaLine(text: string): string {
+    for (const raw of text.split(/\r?\n/)) {
+      const t = raw.trim();
+      if (t !== '' && !t.startsWith('#')) { return t; }
+    }
+    return '';
   }
 
   async pause(id: string): Promise<void> {

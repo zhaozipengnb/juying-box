@@ -11,6 +11,7 @@ import { PlayerPage } from './PlayerPage';
 import { DownloadPage } from './DownloadPage';
 import { SearchPage } from './SearchPage';
 import { HistoryPage } from './HistoryPage';
+import { LivePage } from './LivePage';
 
 @Entry
 @ComponentV2
@@ -44,5 +45,6 @@ struct Index {
     else if (name === 'Download') { DownloadPage() }
     else if (name === 'Search') { SearchPage() }
     else if (name === 'History') { HistoryPage() }
+    else if (name === 'Live') { LivePage() }
   }
 }

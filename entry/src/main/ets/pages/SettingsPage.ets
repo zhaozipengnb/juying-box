@@ -134,6 +134,23 @@ export struct SettingsPage {
     this.refreshCacheSize();
   }
 
+  // 订阅手动更新：重新拉取当前订阅地址并持久化（保留当前源选择）
+  private async refreshSub(): Promise<void> {
+    const url = this.app.subUrl;
+    if (url === '') { return; }
+    this.busy = true;
+    this.localErr = '';
+    this.localOk = '';
+    const ok = await this.app.loadFromUrl(url);
+    this.busy = false;
+    if (ok) {
+      this.app.persistCurrent();
+      this.localOk = '订阅已更新';
+    } else {
+      this.localErr = this.app.errMsg;
+    }
+  }
+
   // ---------- 备份 ----------
   // 导出：okvideo_settings 与 okvideo_config 偏好合并写入 filesDir/backups/okvideo_backup.json
   private exportBackup(): void {
@@ -143,7 +160,8 @@ export struct SettingsPage {
       const dir = ctx.filesDir + '/backups';
       if (!fs.accessSync(dir)) { fs.mkdirSync(dir); }
       const path = dir + '/okvideo_backup.json';
-      const payload: Record<string, string> = {
+      interface BackupPayload { settingsJson: string; exportedAt: string; }
+      const payload: BackupPayload = {
         settingsJson: this.settings.toJson(),
         exportedAt: String(Date.now())
       };
@@ -188,6 +206,14 @@ export struct SettingsPage {
               .fontSize(13).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
               .fontColor(this.isDarkWallpaper ? '#999999' : '#888888')
               .layoutWeight(1).margin({ left: 12 })
+            Text('更新')
+              .fontSize(13).fontColor(this.app.subUrl === '' ? (this.isDarkWallpaper ? '#555555' : '#CCCCCC') : '#007AFF')
+              .padding({ left: 8, right: 8, top: 4, bottom: 4 })
+              .borderRadius(6)
+              .backgroundColor(this.isDarkWallpaper ? '#26FFFFFF' : '#F5F5F5')
+              .margin({ left: 8 })
+              .hitTestBehavior(HitTestMode.Block)
+              .onClick(() => { this.refreshSub(); })
             Image($r('app.media.ic_history'))
               .width(20).height(20)
               .fillColor(this.isDarkWallpaper ? '#AAAAAA' : '#888888')

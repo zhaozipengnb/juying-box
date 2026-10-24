@@ -280,6 +280,12 @@ export struct HomePage {
           })
         Blank()
         // 订阅维护入口：无订阅也能用内置源，订阅随时在这里补配/更换
+        // 直播入口
+        Text('📺')
+          .fontSize(20)
+          .margin({ right: 6 })
+          .onClick(() => { Nav.stack.pushPathByName('Live', ''); })
+
         Image($r('app.media.ic_settings'))
           .width(20).height(20)
           .fillColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
