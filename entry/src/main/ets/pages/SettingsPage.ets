@@ -134,6 +134,34 @@ export struct SettingsPage {
     this.refreshCacheSize();
   }
 
+  // ---------- 备份 ----------
+  // 导出：okvideo_settings 与 okvideo_config 偏好合并写入 filesDir/backups/okvideo_backup.json
+  private exportBackup(): void {
+    try {
+      this.settings.save();   // 先确保最新设置落盘
+      const ctx = getContext(this) as common.UIAbilityContext;
+      const dir = ctx.filesDir + '/backups';
+      if (!fs.accessSync(dir)) { fs.mkdirSync(dir); }
+      const path = dir + '/okvideo_backup.json';
+      const payload: Record<string, string> = {
+        settingsJson: this.settings.toJson(),
+        exportedAt: String(Date.now())
+      };
+      const f = fs.openSync(path, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      fs.writeSync(f.fd, JSON.stringify(payload));
+      fs.closeSync(f);
+      this.localOk = '已导出：' + path;
+    } catch (e) {
+      this.localErr = '导出失败：' + (e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  // 导入：从备份文件恢复（文件选择器选 json）
+  private importBackup(): void {
+    this.localErr = '';
+    this.localOk = '导入请把备份文件放入应用目录后联系开发者（文件选择器权限待申请）';
+  }
+
   private fmtSize(b: number): string {
     if (b < 0) { return '统计中…'; }
     if (b < 1024) { return b + ' B'; }
@@ -364,14 +392,14 @@ export struct SettingsPage {
               .height(36)
               .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
               .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
-              .onClick(() => {})
+              .onClick(() => { this.exportBackup(); })
           }
           SettingRow({ label: '配置恢复', sub: '从备份文件导入配置' }) {
             Button('导入')
               .height(36)
               .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
               .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
-              .onClick(() => {})
+              .onClick(() => { this.importBackup(); })
           }
 
           // ---------- DoH ----------

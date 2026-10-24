@@ -74,6 +74,17 @@ export class AppSettings {
     } catch (e) { /* 坏数据按默认值起步 */ }
   }
 
+  // 当前设置的 JSON 快照（备份导出用）
+  toJson(): string {
+    const obj: Record<string, Object> = {
+      'picSize': this.picSize, 'playSpeed': this.playSpeed, 'longPressSpeed': this.longPressSpeed,
+      'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
+      'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload,
+      'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl, 'proxyUrl': this.proxyUrl
+    };
+    return JSON.stringify(obj);
+  }
+
   // 任一设置变更后由 UI 调用（fire-and-forget 语义，putSync+flush 同步落盘）
   save(): void {
     if (this.store === null) { return; }

@@ -12,6 +12,8 @@ import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
 import { DownloadManager } from '../state/DownloadManager';
 import { HlsAdFilterServer } from '../net/HlsAdFilterServer';
+import { PlayHistory } from '../state/PlayHistory';
+import { Favorites } from '../state/Favorites';
 
 @ComponentV2
 export struct PlayerPage {
@@ -32,6 +34,14 @@ export struct PlayerPage {
   @Local epIdx: number = 0;
   @Local isPlaying: boolean = true;
   @Local showDanmaku: boolean = false;
+  @Local isFav: boolean = false;
+  @Local isTheater: boolean = false;   // 影院模式：横屏全屏、隐藏下方详情
+  ph: PlayHistory = PlayHistory.instance;
+  favs: Favorites = Favorites.instance;
+  private lastPos: number = 0;         // 最近一次进度（秒），退出时落盘
+  private lastDur: number = 0;
+  private lastSaveAt: number = 0;      // 上次持久化时间戳（节流 5s）
+  private seekedResume: boolean = false;  // 断点续播只 seek 一次
   private controller: VideoController = new VideoController();
   private webController: webview.WebviewController = new webview.WebviewController();
 
@@ -112,6 +122,29 @@ export struct PlayerPage {
     this.prepare();
   }
 
+  // 进度落盘：final=退出时强制；否则节流 5s。无痕模式不记
+  private saveProgress(final: boolean): void {
+    const m = this.detail?.movie;
+    if (m === null || m === undefined || this.ep === null || this.playUrl === '') { return; }
+    if (this.settings.incognito) { return; }
+    const now = Date.now();
+    if (!final && now - this.lastSaveAt < 5000) { return; }
+    this.lastSaveAt = now;
+    this.ph.update(this.siteKey, m, this.ep, this.lineIdx, this.epIdx, this.lastPos, this.lastDur);
+  }
+
+  // 影院模式：横屏 + 播放器铺满 + 隐藏详情；再点还原
+  private toggleTheater(): void {
+    this.isTheater = !this.isTheater;
+    if (this.isTheater) {
+      this.setImmersive(true);
+      this.setOrientation(window.Orientation.LANDSCAPE);
+    } else {
+      this.setImmersive(false);
+      this.setOrientation(window.Orientation.UNSPECIFIED);
+    }
+  }
+
   private prevEp(): void {
     if (this.epIdx > 0) { this.switchTo(this.lineIdx, this.epIdx - 1); }
   }
@@ -124,8 +157,12 @@ export struct PlayerPage {
   build() {
     NavDestination() {
       Column() {
-        this.videoArea()
-        this.detailArea()
+        if (this.isTheater) {
+          this.videoAreaTheater()
+        } else {
+          this.videoArea()
+          this.detailArea()
+        }
       }
       .width('100%').height('100%')
     }
@@ -143,9 +180,12 @@ export struct PlayerPage {
         if (p.epIdx !== undefined && p.epIdx !== null) { this.epIdx = p.epIdx; }
       }
       else { this.errMsg = '播放参数缺失'; this.resolving = false; }
+      const m = this.detail?.movie;
+      if (m !== null && m !== undefined) { this.isFav = this.favs.isFav(this.siteKey, m.vodId); }
       if (this.ep !== null) { this.prepare(); }
     })
     .onWillDisappear(() => {
+      this.saveProgress(true);
       this.setImmersive(false);
       this.setOrientation(window.Orientation.UNSPECIFIED);
     })
@@ -153,6 +193,22 @@ export struct PlayerPage {
 
   @Builder
   videoArea() {
+    Column() { this.videoInner() }
+      .width('100%')
+      .aspectRatio(1.78)
+      .backgroundColor('#000000')
+  }
+
+  @Builder
+  videoAreaTheater() {
+    Column() { this.videoInner() }
+      .width('100%')
+      .height('100%')
+      .backgroundColor('#000000')
+  }
+
+  @Builder
+  videoInner() {
     Stack() {
       if (this.errMsg !== '') {
         Column({ space: 12 }) {
@@ -177,6 +233,18 @@ export struct PlayerPage {
           .autoPlay(true)
           .objectFit(ImageFit.Contain)
           .onError(() => { this.playUrl = ''; this.tryNextLine(); })
+          .onUpdate((ev) => {
+            this.lastPos = ev.time;
+            this.saveProgress(false);
+            // 断点续播：首次进度回调时 seek 一次（PlaybackInfo 无 duration，看完的由切集覆盖断点）
+            if (!this.seekedResume && this.ep !== null) {
+              this.seekedResume = true;
+              const m = this.detail?.movie;
+              const resume = (m !== null && m !== undefined)
+                ? this.ph.resumePosition(this.siteKey, m.vodId, this.ep.url) : 0;
+              if (resume > 0) { this.controller.setCurrentTime(resume); }
+            }
+          })
       }
 
       // 左上角：剧名 + 正在播放第几集 + 分辨率 + 弹幕开关
@@ -197,11 +265,17 @@ export struct PlayerPage {
       .position({ x: 12, y: 12 })
       .alignItems(HorizontalAlign.Start)
 
-      // 右上角：投屏、收藏、设置
+      // 右上角：收藏 + 影院模式（全屏横屏）
       Row({ space: 18 }) {
-        Image($r('app.media.ic_cast')).width(18).height(18).fillColor('#CCCCCC').onClick(() => {})
-        Image($r('app.media.ic_heart')).width(18).height(18).fillColor('#CCCCCC').onClick(() => {})
-        Image($r('app.media.ic_settings')).width(18).height(18).fillColor('#CCCCCC').onClick(() => {})
+        Image($r('app.media.ic_heart')).width(20).height(20)
+          .fillColor(this.isFav ? '#E53935' : '#CCCCCC')
+          .onClick(() => {
+            const m = this.detail?.movie;
+            if (m !== null && m !== undefined) { this.isFav = this.favs.toggle(this.siteKey, m); }
+          })
+        Text(this.isTheater ? '⤡' : '⤢')
+          .fontSize(20).fontColor('#CCCCCC')
+          .onClick(() => { this.toggleTheater(); })
       }
       .position({ x: '100%', y: 14 })
       .markAnchor({ x: '100%' })
@@ -224,10 +298,10 @@ export struct PlayerPage {
         .width('100%')
       }
     }
-    .width('100%')
-    .aspectRatio(1.78)
-    .backgroundColor('#000000')
+
   }
+
+
 
   @Builder
   detailArea() {

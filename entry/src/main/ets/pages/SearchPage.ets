@@ -83,6 +83,30 @@ export struct SearchPage {
         // 内容区
         Scroll() {
           Column({ space: 16 }) {
+            // 快捷入口：观看历史 / 我的收藏
+            Row({ space: 12 }) {
+              Row({ space: 8 }) {
+                Text('🕘').fontSize(18)
+                Text('观看历史').fontSize(14).fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#333333')
+              }
+              .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+              .backgroundColor(this.isDarkWallpaper ? '#26FFFFFF' : '#F5F5F5')
+              .borderRadius(10)
+              .onClick(() => { Nav.stack.pushPathByName('History', ''); })
+
+              Row({ space: 8 }) {
+                Text('❤').fontSize(18).fontColor('#E53935')
+                Text('我的收藏').fontSize(14).fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#333333')
+              }
+              .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+              .backgroundColor(this.isDarkWallpaper ? '#26FFFFFF' : '#F5F5F5')
+              .borderRadius(10)
+              .onClick(() => { Nav.stack.pushPathByName('History', 'fav'); })
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.Start)
+            .padding({ left: 16 })
+
             // 搜索历史
             if (this.searchHistory.length > 0) {
               this.historySection()

@@ -7,6 +7,8 @@ import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
 import { MovieDetail, Movie, Episode, PlayLine, SiteConfig, SiteDriver, PageResult, isSiteSupported, siteEngine } from 'common';
 import { DownloadManager } from '../state/DownloadManager';
+import { PlayHistory } from '../state/PlayHistory';
+import { Favorites } from '../state/Favorites';
 
 // 每个来源站的搜索+详情结果
 interface SourceResult {
@@ -23,6 +25,8 @@ export struct DetailPage {
   dl: DownloadManager = DownloadManager.instance;
   @Local sources: SourceResult[] = [];
   @Local srcIdx: number = -1; // -1 = 全部
+  ph: PlayHistory = PlayHistory.instance;
+  favs: Favorites = Favorites.instance;
   @Local showInfo: boolean = false;      // ☰ 展开影片信息面板
   @Local loading: boolean = false;
   @Local errMsg: string = '';
@@ -52,6 +56,18 @@ export struct DetailPage {
   @Computed get detail(): MovieDetail | null {
     const src = this.sources[this.srcIdx];
     return src === undefined ? null : src.detail;
+  }
+
+  // 选中源是否已收藏
+  @Computed get curFav(): boolean {
+    const src = this.sources[this.srcIdx];
+    return src === undefined ? false : this.favs.isFav(src.siteKey, src.movie.vodId);
+  }
+
+  // 选中源上次看到
+  @Computed get curLastWatch(): string {
+    const src = this.sources[this.srcIdx];
+    return src === undefined ? '' : this.ph.lastWatchLabel(src.siteKey, src.movie.vodId);
   }
 
   // 右侧网格展示的来源列表：全部或单个
@@ -122,6 +138,19 @@ export struct DetailPage {
                 .fontSize(12).fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#666666').maxLines(1)
               Text(this.detail.movie.remark === '' ? '备注：未知' : '备注：' + this.detail.movie.remark)
                 .fontSize(12).fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#666666').maxLines(1)
+              Row({ space: 10 }) {
+                if (this.curLastWatch !== '') {
+                  Text(this.curLastWatch)
+                    .fontSize(12).fontColor('#F9A825')
+                }
+                Text(this.curFav ? '❤ 已收藏' : '♡ 收藏')
+                  .fontSize(12)
+                  .fontColor(this.curFav ? '#E53935' : (this.isDarkWallpaper ? '#AAAAAA' : '#666666'))
+                  .onClick(() => {
+                    const src = this.sources[this.srcIdx];
+                    if (src !== undefined) { this.favs.toggle(src.siteKey, src.movie); }
+                  })
+              }
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           }.width('100%')
           Text(this.detail.desc === '' ? '暂无简介' : this.detail.desc)

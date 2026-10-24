@@ -10,6 +10,7 @@ import { DetailPage } from './DetailPage';
 import { PlayerPage } from './PlayerPage';
 import { DownloadPage } from './DownloadPage';
 import { SearchPage } from './SearchPage';
+import { HistoryPage } from './HistoryPage';
 
 @Entry
 @ComponentV2
@@ -42,5 +43,6 @@ struct Index {
     else if (name === 'Player') { PlayerPage() }
     else if (name === 'Download') { DownloadPage() }
     else if (name === 'Search') { SearchPage() }
+    else if (name === 'History') { HistoryPage() }
   }
 }
