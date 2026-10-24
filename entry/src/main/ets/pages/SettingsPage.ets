@@ -91,6 +91,9 @@ export struct SettingsPage {
         fs.closeSync(destFile);
         this.settings.wallpaperUri = destPath;
         this.settings.save();
+        this.showUrlDialog = false;
+        this.localErr = '';
+        this.localOk = '壁纸已更新为本地图片';
       }
     } catch (e) { /* 用户取消或权限不足 */ }
   }
@@ -535,17 +538,24 @@ export struct SettingsPage {
             Text('输入订阅链接；或点右侧 📁 导入本地源包（替换当前源）')
               .fontSize(12).fontColor('#999999').margin({ bottom: 10 })
           }
+          if (this.dialogTarget === 'wallpaper') {
+            Text('输入图片链接；或点右侧 📁 选择本地图片')
+              .fontSize(12).fontColor('#999999').margin({ bottom: 10 })
+          }
           Stack({ alignContent: Alignment.End }) {
             TextInput({ text: this.dialogUrl, placeholder: 'https://…' })
               .width('100%').height(48)
               .fontSize(14)
               .onChange((v: string) => { this.dialogUrl = v; })
               .onSubmit(() => { this.applyDialogUrl(); })
-            if (this.dialogTarget === 'vod') {
+            if (this.dialogTarget === 'vod' || this.dialogTarget === 'wallpaper') {
               Text('📁')
                 .fontSize(20)
                 .padding({ left: 10, right: 12, top: 10, bottom: 10 })
-                .onClick(() => { this.importPackFile(); })
+                .onClick(() => {
+                  if (this.dialogTarget === 'vod') { this.importPackFile(); }
+                  else { this.pickWallpaper(); }
+                })
             }
           }
           .width('100%')
