@@ -9,5 +9,7 @@ export * from './src/main/ets/model/VideoModels';
 export * from './src/main/ets/decode/ConfigDecoder';
 export * from './src/main/ets/engine/SiteDriver';
 export * from './src/main/ets/engine/CmsJsonApi';
+export * from './src/main/ets/engine/AppYsApi';
 export * from './src/main/ets/engine/XmlCmsDriver';
+export * from './src/main/ets/engine/ProxyDriver';
 export * from './src/main/ets/engine/PlayUrlResolver';

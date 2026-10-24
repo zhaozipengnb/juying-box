@@ -19,12 +19,15 @@ export interface HttpFetchResult {
 export async function httpFetch(url: string, opts?: HttpFetchOptions): Promise<HttpFetchResult> {
   url = toPunycodeUrl(url);  // 中文域名转 punycode（模拟器/部分设备 DNS 不解析 IDN）
   const client = http.createHttp();
-  // 默认 UA 提取为显式类型常量（?? 右侧对象字面量需显式类型，arkts-no-untyped-obj-literals）
-  const defaultHeaders: Record<string, string> = { 'User-Agent': 'okhttp/3.15' };
+  // 合并请求头：始终保证 UA 存在（站点 header 为空对象时不能丢掉默认 UA）
+  const reqHeaders: Record<string, string> = { 'User-Agent': 'okhttp/4.9.3' };
+  if (opts?.headers) {
+    for (const k of Object.keys(opts.headers)) { reqHeaders[k] = opts.headers[k]; }
+  }
   try {
     const resp = await client.request(url, {
       method: (opts?.method === 'POST') ? http.RequestMethod.POST : http.RequestMethod.GET,
-      header: opts?.headers ?? defaultHeaders,
+      header: reqHeaders,
       connectTimeout: opts?.timeoutMs ?? 15000,
       readTimeout: opts?.timeoutMs ?? 15000,
       expectDataType: http.HttpDataType.ARRAY_BUFFER

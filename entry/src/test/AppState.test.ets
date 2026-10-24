@@ -2,8 +2,9 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { AppState } from '../main/ets/state/AppState';
 import { ConfigStore, KVStore, serializeConfig } from '../main/ets/state/ConfigStore';
-import { decodeConfigContent, TvboxConfig, SiteConfig, CmsJsonApi } from 'common';
+import { decodeConfigContent, TvboxConfig, SiteConfig, CmsJsonApi, ProxyDriver } from 'common';
 import { DrpyDriver } from '../main/ets/spider/DrpyDriver';
+import { AppSettings } from '../main/ets/state/AppSettings';
 
 // 内存 KVStore 假实现（模拟 preferences 行为）
 class FakeKVStore implements KVStore {
@@ -132,17 +133,25 @@ export default function appStateTest() {
       expect(app.switchSite('j1')).assertFalse();
       expect(app.currentSite?.key === 'c1').assertTrue();
     });
-    it('all_jar_subscription_rejected_with_clear_error', 0, async () => {
-      // 纯 JAR 型订阅：全部站点不支持 → 加载失败并给出明确错误（而非 DNS 假错误），不进 home
+    it('all_jar_subscription_routed_to_proxy_when_configured', 0, async () => {
+      // 纯 JAR 订阅：未配 proxyUrl → 不可驱动，加载失败；配了 → 首站选 JAR 代理源
       const jarOnly = `{"sites":[{"key":"j1","name":"JAR站","type":3,"api":"csp_X"},{"key":"j2","name":"JAR2","type":3,"api":"csp_Y"}]}`;
-      const app = new AppState();
-      const responses: Map<string, string> = new Map();
+      AppSettings.instance.proxyUrl = '';
+      let app = new AppState();
+      let responses: Map<string, string> = new Map();
       responses.set('https://sub.example/conf', jarOnly);
       app.testFetchText = makeFakeFetch(responses);
-      const ok = await app.loadFromUrl('https://sub.example/conf');
-      expect(ok).assertFalse();
-      expect(app.phase === 'home').assertFalse();
-      expect(app.errMsg.includes('JAR')).assertTrue();
+      expect(await app.loadFromUrl('https://sub.example/conf')).assertFalse();
+      AppSettings.instance.proxyUrl = 'http://127.0.0.1:9978';
+      app = new AppState();
+      responses = new Map();
+      responses.set('https://sub.example/conf', jarOnly);
+      app.testFetchText = makeFakeFetch(responses);
+      expect(await app.loadFromUrl('https://sub.example/conf')).assertTrue();
+      expect(app.phase === 'home').assertTrue();
+      expect(app.currentSite?.key === 'j1').assertTrue();
+      expect(app.driver instanceof ProxyDriver).assertTrue();
+      AppSettings.instance.proxyUrl = '';
     });
     it('initFromStore_empty_store_starts_builtins_only', 0, async () => {
       // 首启无订阅：直接用内置源进首页（订阅在设置页维护），subUrl 为空

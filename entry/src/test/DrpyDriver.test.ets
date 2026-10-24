@@ -43,7 +43,8 @@ const SEARCH_JSON = '{"list":[{"vod_id":11,"vod_name":"片A","vod_pic":"http://p
 // 订阅 fixture：混合站点（type 3 打头）与纯 drpy 站点
 const SUB_MIXED = '{"sites":[{"key":"d","name":"DRPY站","type":3,"api":"http://demo/drpy.js"},{"key":"c","name":"CMS站","type":1,"api":"https://c.example/api"}]}';
 const SUB_PURE_DRPY = '{"sites":[{"key":"d1","name":"DRPY1","type":3,"api":"http://x/1.js"},{"key":"d2","name":"DRPY2","type":3,"api":"http://x/2.js"}]}';
-const SUB_UNSUPPORTED = '{"sites":[{"key":"z","name":"Z","type":4,"api":"http://x/z"}]}';
+// type 4 已是 AppYs 引擎（受支持）；真正不支持的是 type 5 等
+const SUB_UNSUPPORTED = '{"sites":[{"key":"z","name":"Z","type":5,"api":"http://x/z"}]}';
 // type 0 XML 采集站路由
 const SUB_XML = '{"sites":[{"key":"x1","name":"XML站","type":0,"api":"https://x.example/api.php/provide/vod/at/xml/"}]}';
 

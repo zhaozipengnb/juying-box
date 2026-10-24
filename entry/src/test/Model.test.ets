@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { toInt, parseTvboxConfig, siteEngine, isSiteSupported, resolveUrl, resolveSiteUrls,
-  SiteConfig, TvboxConfig } from 'common';
+  SiteConfig, TvboxConfig, tryConvertCspToCms } from 'common';
 
 // 便捷构造站点（仅填分类函数关注的字段，其余给默认值）
 function mkSite(type: number, api: string): SiteConfig {
@@ -47,18 +47,20 @@ export default function modelTest() {
       expect(siteEngine(mkSite(3, 'builtin://drpy2.min.js')) === 'js').assertTrue();
       expect(isSiteSupported(mkSite(3, 'builtin://drpy2.min.js'))).assertTrue();
       // type 3 + 非 URL（csp_* 类名 / 空串 / 裸词）→ JAR spider
-      expect(siteEngine(mkSite(3, 'csp_Gz360')) === 'jar').assertTrue();
-      expect(siteEngine(mkSite(3, 'csp_Douban')) === 'jar').assertTrue();
-      expect(siteEngine(mkSite(3, '')) === 'jar').assertTrue();
-      // type 0 → XML 采集（TVBox 约定）；其余类型 → unknown
+      expect(siteEngine(mkSite(3, 'csp_Gz360')) === 'proxy').assertTrue();
+      expect(siteEngine(mkSite(3, 'csp_Douban')) === 'proxy').assertTrue();
+      expect(siteEngine(mkSite(3, '')) === 'proxy').assertTrue();
+      // type 0 → XML 采集（TVBox 约定）；type 4 → AppYs；其余类型 → unknown
       expect(siteEngine(mkSite(0, 'https://a.example/api.php/provide/vod/at/xml')) === 'xml').assertTrue();
       expect(isSiteSupported(mkSite(0, 'https://a.example/api.php/provide/vod/at/xml'))).assertTrue();
-      expect(siteEngine(mkSite(4, 'csp_X')) === 'unknown').assertTrue();
-      // 支持面：cms + xml + js，jar / unknown 不支持
+      expect(siteEngine(mkSite(4, 'https://a.example/api')) === 'appys').assertTrue();
+      expect(isSiteSupported(mkSite(4, 'https://a.example/api'))).assertTrue();
+      expect(siteEngine(mkSite(5, 'csp_X')) === 'unknown').assertTrue();
+      // 支持面：cms + xml + js + appys，jar / unknown 不支持
       expect(isSiteSupported(mkSite(1, 'https://a.example/api.php'))).assertTrue();
       expect(isSiteSupported(mkSite(3, 'https://a.example/x.js'))).assertTrue();
-      expect(isSiteSupported(mkSite(3, 'csp_Gz360'))).assertFalse();
-      expect(isSiteSupported(mkSite(4, 'x'))).assertFalse();
+      expect(isSiteSupported(mkSite(3, 'csp_Gz360'))).assertTrue();   // JAR 代理引擎（需代理服务器）
+      expect(isSiteSupported(mkSite(5, 'x'))).assertFalse();
     });
     it('resolveUrl_basics', 0, () => {
       // 绝对引用原样（含大小写协议、非 http scheme）
@@ -101,6 +103,34 @@ export default function modelTest() {
       expect(cfg.sites[3].ext).assertEqual('{"url":"./rel/"}');
       // 相对化后变为受支持的 drpy 站
       expect(isSiteSupported(cfg.sites[0])).assertTrue();
+    });
+    it('tryConvertCspToCms_appys', 0, () => {
+      // csp_AppYsV2 + ext URL → type4 appys
+      const s1: SiteConfig = mkSite(3, 'csp_AppYsV2');
+      s1.ext = 'https://api.example.com';
+      expect(tryConvertCspToCms(s1)).assertTrue();
+      expect(s1.type).assertEqual(4);
+      expect(s1.api).assertEqual('https://api.example.com');
+      expect(siteEngine(s1) === 'appys').assertTrue();
+      expect(isSiteSupported(s1)).assertTrue();
+    });
+    it('tryConvertCspToCms_cms', 0, () => {
+      // csp_Dovod + ext JSON URL → type1 cms
+      const s2: SiteConfig = mkSite(3, 'csp_Dovod');
+      s2.ext = '{"api":"https://cms.example.com/api.php"}';
+      expect(tryConvertCspToCms(s2)).assertTrue();
+      expect(s2.type).assertEqual(1);
+      expect(s2.api).assertEqual('https://cms.example.com/api.php');
+      expect(siteEngine(s2) === 'cms').assertTrue();
+    });
+    it('tryConvertCspToCms_noUrl', 0, () => {
+      // csp_XYQHiker + ext 无 URL → 不转换
+      const s3: SiteConfig = mkSite(3, 'csp_XYQHiker');
+      s3.ext = '{"rule":"div.list","title":"a.title"}';
+      expect(tryConvertCspToCms(s3)).assertFalse();
+      expect(s3.type).assertEqual(3);
+      expect(siteEngine(s3) === 'proxy').assertTrue();      // csp_* 未转换 → JAR 代理引擎（受支持）
+      expect(isSiteSupported(s3)).assertTrue();
     });
   });
 }

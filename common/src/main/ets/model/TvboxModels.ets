@@ -19,23 +19,26 @@ export interface TvboxConfig {
 // js=type3 drpy JS 插件（api 为 http(s) URL）；
 // jar=type3 TVBox JAR spider（api 为 csp_* 类名等非 URL 形态，实体在配置 spider/jar 指向的 Android JAR 内，
 // JS 引擎无法执行）；unknown=其余类型。type3 判据是「api 是否为 http(s) URL」而非 csp_ 前缀。
-export type SiteEngine = 'cms' | 'xml' | 'js' | 'jar' | 'unknown';
+export type SiteEngine = 'cms' | 'xml' | 'js' | 'appys' | 'proxy' | 'jar' | 'unknown';
 
 export function siteEngine(site: SiteConfig): SiteEngine {
   if (site.type === 0) { return 'xml'; }
   if (site.type === 1) { return 'cms'; }
   if (site.type === 3) {
     // builtin:// 为包内 drpy 源（运行时与规则在 rawfile/builtin，经桥本地加载）
-    if (/^https?:\/\//i.test(site.api.trim()) || site.api.trim().startsWith('builtin://')) { return 'js'; }
-    return 'jar';
+    if (/^https?:\/\/.+/i.test(site.api.trim()) || site.api.trim().startsWith('builtin://')) { return 'js'; }
+    // csp_AppYs* 且 ext 含 HTTP URL → appys 引擎（tryConvertCspToCms 已将 api 改为 ext 中的 URL、type 改为 4）
+    // 其余 csp_* 纯 JAR 爬虫 → proxy 引擎（需配置代理服务器执行 Java 爬虫）
+    return 'proxy';
   }
+  if (site.type === 4) { return 'appys'; }
   return 'unknown';
 }
 
-// 当前引擎（CMS JSON + XML 采集 + drpy JS）可驱动的站点
+// 当前引擎（CMS JSON + XML 采集 + drpy JS + AppYs）可驱动的站点
 export function isSiteSupported(site: SiteConfig): boolean {
   const e = siteEngine(site);
-  return e === 'cms' || e === 'xml' || e === 'js';
+  return e === 'cms' || e === 'xml' || e === 'js' || e === 'appys' || e === 'proxy';
 }
 
 // 站点 api/ext 的相对路径（./ ../ 开头）对订阅 URL 绝对化，就地修改。
@@ -46,11 +49,65 @@ function isRelativeRef(v: string): boolean {
   return v.startsWith('./') || v.startsWith('../');
 }
 
+// 尝试从 ext 中提取 HTTP(S) URL（csp_* JAR 源常把真实 API 地址放在 ext 里）
+function extractUrlFromExt(ext: string): string {
+  const trimmed = ext.trim();
+  if (trimmed === '') { return ''; }
+  // 纯 URL 形态
+  if (/^https?:\/\/.+/i.test(trimmed)) { return trimmed; }
+  // JSON 形态：先尝试已知字段名，再用正则在整串中搜索第一个 http(s) URL
+  if (trimmed.startsWith('{')) {
+    try {
+      const obj = JSON.parse(trimmed) as Record<string, Object>;
+      const candidates = ['api', 'url', 'host', 'base', 'baseUrl', 'siteUrl', 'surl', 'site', 'endpoint', 'server', 'main'];
+      for (const key of candidates) {
+        const v = obj[key];
+        if (typeof v === 'string' && /^https?:\/\/.+/i.test(v)) { return v; }
+      }
+    } catch (e) { /* 非 JSON，跳过 */ }
+  }
+  // 兜底：正则搜索第一个 http(s) URL（覆盖任意字段名或非 JSON 文本）
+  const m = trimmed.match(/https?:\/\/[^\s"'\\]+/i);
+  return m !== null ? m[0] : '';
+}
+
+// csp_* JAR 源兼容：若 ext 中含 HTTP URL，则转为 CMS 或 AppYs 站点。
+// csp_AppYs / csp_AppYsV2 → type4 AppYs（路径式 API）；其余 → type1 CMS（best effort）。
+// 就地修改 site，返回 true 表示已转换。
+export function tryConvertCspToCms(site: SiteConfig): boolean {
+  if (site.type !== 3) { return false; }
+  if (/^https?:\/\//i.test(site.api.trim()) || site.api.trim().startsWith('builtin://')) { return false; }
+  const apiUrl = extractUrlFromExt(site.ext);
+  if (apiUrl === '') { return false; }
+  // AppYs 系 Spider → type 4（AppYs 引擎）
+  if (site.api.startsWith('csp_AppYs')) {
+    site.type = 4;
+    site.api = apiUrl;
+    return true;
+  }
+  // 其余 csp_* → type 1（CMS，best effort）
+  site.type = 1;
+  site.api = apiUrl;
+  return true;
+}
+
 export function resolveSiteUrls(config: TvboxConfig, subUrl: string): void {
-  if (subUrl.trim() === '') { return; }
+  let converted = 0;
   for (const s of config.sites) {
-    if (isRelativeRef(s.api)) { s.api = resolveUrl(subUrl, s.api); }
-    if (isRelativeRef(s.ext)) { s.ext = resolveUrl(subUrl, s.ext); }
+    if (subUrl.trim() !== '') {
+      if (isRelativeRef(s.api)) { s.api = resolveUrl(subUrl, s.api); }
+      if (isRelativeRef(s.ext)) { s.ext = resolveUrl(subUrl, s.ext); }
+    }
+    // JAR 源兼容：ext 含 HTTP URL 则转为 CMS
+    if (tryConvertCspToCms(s)) {
+      converted++;
+    } else if (s.type === 3 && !/^https?:\/\//i.test(s.api.trim()) && !s.api.trim().startsWith('builtin://')) {
+      // 记录未转换的 csp_* 源，方便排查 ext 内容
+      console.info('OKV csp unsupported: key=' + s.key + ' api=' + s.api + ' jar=' + s.jar.substring(0, 80) + ' ext=' + s.ext.substring(0, 200));
+    }
+  }
+  if (converted > 0) {
+    console.info('OKV csp->cms converted ' + converted + ' site(s)');
   }
 }
 

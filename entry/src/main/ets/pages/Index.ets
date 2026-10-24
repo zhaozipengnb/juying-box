@@ -9,6 +9,7 @@ import { SettingsPage } from './SettingsPage';
 import { DetailPage } from './DetailPage';
 import { PlayerPage } from './PlayerPage';
 import { DownloadPage } from './DownloadPage';
+import { SearchPage } from './SearchPage';
 
 @Entry
 @ComponentV2
@@ -40,5 +41,6 @@ struct Index {
     else if (name === 'Detail') { DetailPage() }
     else if (name === 'Player') { PlayerPage() }
     else if (name === 'Download') { DownloadPage() }
+    else if (name === 'Search') { SearchPage() }
   }
 }

@@ -29,6 +29,8 @@ export class AppSettings {
   @Trace builtinDownload: boolean = false;   // 内置下载：详情页/播放页显示下载按钮
   @Trace wallpaper: WallpaperKind = 'default'; // 全局壁纸（颜色主题）
   @Trace wallpaperUri: string = '';            // 全局壁纸（自定义图片路径，非空时优先于颜色主题）
+  @Trace liveUrl: string = '';                 // 直播源地址
+  @Trace proxyUrl: string = '';                // JAR爬虫代理服务器地址（用于执行csp_*Java爬虫）
 
   private store: KVStore | null = null;
 
@@ -65,6 +67,10 @@ export class AppSettings {
       if (wp === 'default' || wp === 'dark' || wp === 'blue' || wp === 'green') { this.wallpaper = wp as WallpaperKind; }
       const wu = obj['wallpaperUri'];
       if (typeof wu === 'string') { this.wallpaperUri = wu; }
+      const lu = obj['liveUrl'];
+      if (typeof lu === 'string') { this.liveUrl = lu; }
+      const pu = obj['proxyUrl'];
+      if (typeof pu === 'string') { this.proxyUrl = pu; }
     } catch (e) { /* 坏数据按默认值起步 */ }
   }
 
@@ -75,7 +81,8 @@ export class AppSettings {
       'picSize': this.picSize, 'playSpeed': this.playSpeed, 'longPressSpeed': this.longPressSpeed,
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
       'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload,
-      'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri
+      'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl,
+      'proxyUrl': this.proxyUrl
     };
     this.store.putSync(KEY_SETTINGS, JSON.stringify(obj));
   }

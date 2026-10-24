@@ -50,7 +50,7 @@ export struct DownloadPage {
           if (this.dl.items.length === 0) {
             // 空态
             Column() {
-              Text('📭').fontSize(48).margin({ bottom: 12 })
+              Image($r('app.media.ic_empty')).width(48).height(48).fillColor(this.isDarkWallpaper ? '#555555' : '#CCCCCC').margin({ bottom: 12 })
               Text('暂无下载任务').fontSize(15)
                 .fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#999999')
               Text('在详情页或播放页可下载影片').fontSize(12).margin({ top: 6 })

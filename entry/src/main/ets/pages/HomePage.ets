@@ -25,7 +25,7 @@ function errText(e: Object): string {
 export struct HomePage {
   // 持有 AppState 实例：V2 观察要求经组件成员访问 @Trace（静态链式访问不建立依赖）
   app: AppState = AppState.instance;
-  @Local sites: string[] = [];        // 站点名列表（与 siteKeys 同序，Select 展示用；不支持源带「（暂不支持）」后缀）
+  @Local sites: string[] = [];        // 站点名列表（与 siteKeys 同序，Select 展示用；不支持的源不显示）
   @Local siteKeys: string[] = [];     // 站点 key 列表
   @Local siteEnabled: boolean[] = []; // 站点可用性列表（与 siteKeys 同序；csp_* 等 JAR 源为 false，Select 灰显）
   @Local siteIdx: number = 0;
@@ -38,7 +38,6 @@ export struct HomePage {
   @Local loading: boolean = false;    // 首页/分类加载中
   @Local searching: boolean = false;  // 搜索加载中（searchContent 无页码参数，结果一次性展示）
   @Local errMsg: string = '';
-  @Local showSearch: boolean = false;
   @Local searchKey: string = '';
   @Local kind: ResultKind = 'home';
   // 聚合搜索的平行归属（与 items 同序）：站 key 用于点击时切站进详情，站名用于角标与筛选
@@ -53,7 +52,7 @@ export struct HomePage {
   aboutToAppear(): void {
     this.refreshSites();
     this.lastConfigRef = this.app.config;
-    this.loadHome();
+    this.loadHome(true);
     this.searchHistory = SearchHistory.instance.getAll();
   }
 
@@ -119,6 +118,26 @@ export struct HomePage {
     return this.app.driver;
   }
 
+  // 自动跳过失败源时已尝试的 siteKey 列表
+  private _autoSkipTried: string[] = [];
+
+  // 查找下一个可用源（跳过已尝试的），优先非代理源
+  private findNextUsableSite(): string {
+    const cfg = this.app.config;
+    if (cfg === null) { return ''; }
+    for (const s of cfg.sites) {
+      if (isSiteSupported(s) && this.app.canDrive(s) && siteEngine(s) !== 'proxy' && !this._autoSkipTried.includes(s.key)) {
+        return s.key;
+      }
+    }
+    for (const s of cfg.sites) {
+      if (isSiteSupported(s) && this.app.canDrive(s) && !this._autoSkipTried.includes(s.key)) {
+        return s.key;
+      }
+    }
+    return '';
+  }
+
   // 从 AppState 同步站点列表（订阅已装配好，此处仅映射 UI 展示状态）
   private refreshSites(): void {
     const cfg = this.app.config;
@@ -127,10 +146,10 @@ export struct HomePage {
     const keys: string[] = [];
     const enabled: boolean[] = [];
     for (const s of cfg.sites) {
-      const ok = isSiteSupported(s);
-      names.push(ok ? s.name : s.name + '（暂不支持）');
+      if (!isSiteSupported(s) || !this.app.canDrive(s)) { continue; }   // 不支持或未配置代理的源不显示
+      names.push(s.name);
       keys.push(s.key);
-      enabled.push(ok);
+      enabled.push(true);
     }
     this.sites = names;
     this.siteKeys = keys;
@@ -140,14 +159,21 @@ export struct HomePage {
   }
 
   // 加载站点首页：分类 + 推荐列表（推荐无分页能力，pageCount 固定 1）
-  private async loadHome(): Promise<void> {
+  // autoSkip=true 时，加载失败自动跳到下一个可用源（初始加载/重试/配置变更用）
+  private async loadHome(autoSkip: boolean = false): Promise<void> {
     const d = this.driver();
+    console.info('OKV loadHome start autoSkip=' + autoSkip + ' driver=' + (d === null ? 'null' : 'ok') + ' site=' + (this.app.currentSite?.key ?? '?') + ' engine=' + (this.app.currentSite?.api ?? '?'));
     if (d === null) { return; }
     this.loading = true;
     this.errMsg = '';
     try {
       const hc: HomeContent = await d.getHomeContent();
       if (this.app.driver !== d) { return; }   // 站点已切换，丢弃过期响应
+      // 自动跳过时：无影片即跳过；手动选源时：仅分类和列表都为空才报错
+      const emptyFail = autoSkip ? hc.items.length === 0 : (hc.categories.length === 0 && hc.items.length === 0);
+      if (emptyFail) {
+        throw new Error('源返回空内容');
+      }
       this.cats = hc.categories.map((c: Category): string => c.name);
       this.catKeys = hc.categories.map((c: Category): string => c.tid);
       this.catIdx = 0;
@@ -156,8 +182,32 @@ export struct HomePage {
       this.pageCount = 1;
       this.kind = 'home';
       this.errMsg = '';
+      this._autoSkipTried = [];
     } catch (e) {
-      this.errMsg = errText(e as Object);
+      const msg = errText(e as Object);
+      const curKey = this.app.currentSite?.key ?? '?';
+      console.info('OKV loadHome ERR site=' + curKey + ' engine=' + (this.app.currentSite?.api ?? '?') + ' msg=' + msg);
+      // 自动跳过失败源，最多尝试 15 个
+      if (autoSkip && this._autoSkipTried.length < 50) {
+        this._autoSkipTried.push(curKey);
+        const nextKey = this.findNextUsableSite();
+        console.info('OKV autoSkip check autoSkip=true tried=' + this._autoSkipTried.length + ' nextKey=' + nextKey);
+        if (nextKey !== '' && nextKey !== curKey) {
+          console.info('OKV autoSkip ' + curKey + ' -> ' + nextKey + ' (' + this._autoSkipTried.length + ' tried)');
+          if (this.app.switchSite(nextKey)) {
+            this.siteIdx = Math.max(0, this.siteKeys.indexOf(nextKey));
+            this.loadHome(true);
+            return;
+          }
+        }
+        // 全部源都试过了，给出汇总提示
+        this.errMsg = '已尝试 ' + this._autoSkipTried.length + ' 个源均无法加载，请检查订阅或网络';
+        this._autoSkipTried = [];
+      } else {
+        console.info('OKV autoSkip skip reason autoSkip=' + autoSkip + ' tried=' + this._autoSkipTried.length);
+        this.errMsg = msg;
+        this._autoSkipTried = [];   // 重置以便重试时重新自动跳过
+      }
     } finally {
       this.loading = false;
     }
@@ -203,7 +253,7 @@ export struct HomePage {
       const tid: string = this.catKeys[this.catIdx] ?? '';
       if (tid !== '') { this.loadCategory(tid, 1, true); return; }
     }
-    this.loadHome();
+    this.loadHome(true);
   }
 
   build() {
@@ -213,7 +263,7 @@ export struct HomePage {
     Column() {
       // 顶栏：站点切换 + 搜索入口
       Row({ space: 8 }) {
-        // 注：本 SDK SelectOption 无 disabled 字段，不支持源以「（暂不支持）」后缀标记，onSelect 内校验拒绝
+        // 不支持的源已在 refreshSites 中过滤，此处仅展示可用源
         Select(this.sites.map((s: string): SelectOption => {
           const opt: SelectOption = { value: s };
           return opt;
@@ -230,77 +280,31 @@ export struct HomePage {
           })
         Blank()
         // 订阅维护入口：无订阅也能用内置源，订阅随时在这里补配/更换
-        Text('⚙')
-          .fontSize(20)
-          .margin({ right: 6 })
+        Image($r('app.media.ic_settings'))
+          .width(20).height(20)
+          .fillColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
+          .margin({ right: 10 })
           .onClick(() => { Nav.stack.pushPathByName('Settings', ''); })
         // 下载管理入口
-        Text('⬇')
-          .fontSize(18)
-          .margin({ right: 6 })
+        Image($r('app.media.ic_download'))
+          .width(20).height(20)
+          .fillColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
+          .margin({ right: 10 })
           .onClick(() => { Nav.stack.pushPathByName('Download', ''); })
-        // sys.media.ohos_ic_public_search 在本 SDK 不存在，按预案用文本图标降级
-        Text('🔍')
-          .fontSize(20)
+        // 搜索入口
+        Image($r('app.media.ic_search'))
+          .width(20).height(20)
+          .fillColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
           .onClick(() => {
             if (this.loading || this.searching) { return; }
-            this.showSearch = !this.showSearch;
-            // 收起搜索栏时若当前是搜索结果，恢复来源视图，避免网格内容与分类条错位
-            if (!this.showSearch && this.kind === 'search') {
-              if (this.catKeys.length > 0) {
-                this.loadCategory(this.catKeys[this.catIdx] ?? '', 1, true);
-              } else {
-                this.loadHome();
-              }
-            }
+            Nav.stack.pushPathByName('Search', '');
           })
       }
       .width('100%')
       .padding({ left: 12, right: 12, top: 12 })
 
-      if (this.showSearch) {
-        Row({ space: 8 }) {
-          TextInput({ placeholder: this.isIncognito ? '无痕搜索…' : '搜索影片…', text: this.searchKey })
-            .layoutWeight(1).height(40)
-            .onChange((v: string) => { this.searchKey = v; })
-            .onSubmit(() => { if (this.searching) { return; } this.doSearch(); })
-          if (this.isIncognito) {
-            Text('无痕').fontSize(10).fontColor('#FF9800')
-              .backgroundColor('#33FF9800').borderRadius(4)
-              .padding({ left: 5, right: 5, top: 2, bottom: 2 })
-          }
-          Button('搜索')
-            .height(40)
-            .enabled(!this.searching && this.searchKey.trim().length > 0)
-            .onClick(() => { this.doSearch(); })
-        }
-        .width('100%')
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-
-        // 搜索历史标签（无痕模式下不展示）
-        if (!this.isIncognito && this.searchKey.trim() === '' && this.searchHistory.length > 0) {
-          Flex({ wrap: FlexWrap.Wrap }) {
-            ForEach(this.searchHistory, (tag: string) => {
-              Text(tag)
-                .fontSize(13)
-                .fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#555555')
-                .backgroundColor(this.isDarkWallpaper ? '#33FFFFFF' : '#F5F5F5')
-                .borderRadius(12)
-                .padding({ left: 10, right: 10, top: 5, bottom: 5 })
-                .margin({ right: 6, bottom: 6 })
-                .onClick(() => {
-                  this.searchKey = tag;
-                  this.doSearch();
-                })
-            }, (tag: string): string => tag)
-          }
-          .width('100%')
-          .padding({ left: 12, right: 12, top: 6, bottom: 10 })
-        }
-      }
-
-      // 分类横滑胶囊（FongMi 风格：圆角药丸，选中实色；搜索模式下隐藏）
-      if (!this.showSearch && this.cats.length > 0) {
+      // 分类横滑胶囊（FongMi 风格：圆角药丸，选中实色）
+      if (this.cats.length > 0) {
         Scroll() {
           Row({ space: 10 }) {
             ForEach(this.cats, (c: string, i: number) => {
@@ -332,7 +336,6 @@ export struct HomePage {
           Text('返回浏览').fontSize(14).fontColor('#007DFF')
             .onClick(() => {
               if (this.loading || this.searching) { return; }
-              this.showSearch = false;
               this.loadHome();
             })
         }.width('100%').padding({ left: 12, right: 12, top: 10 })
@@ -376,7 +379,7 @@ export struct HomePage {
             this.app.clearConfig();
             this.refreshSites();
             this.lastConfigRef = this.app.config;
-            this.loadHome();
+            this.loadHome(true);
           })
         }
         .width('100%')
@@ -426,7 +429,10 @@ export struct HomePage {
       if (this.app.config !== this.lastConfigRef) {
         this.refreshSites();
         this.lastConfigRef = this.app.config;
-        this.loadHome();
+        this.loadHome(true);
+      } else if (this.items.length === 0 && this.errMsg === '' && !this.loading) {
+        // 冷启动时 initFromStore 可能晚于 aboutToAppear 完成，onShown 补拉
+        this.loadHome(true);
       }
     })
   }

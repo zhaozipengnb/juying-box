@@ -1,5 +1,5 @@
 // 全局路由栈单例：避免跨组件层层传递 NavPathStack 的样板代码。
-import { Episode, PlayLine } from 'common';
+import { Episode, PlayLine, MovieDetail } from 'common';
 
 export class Nav {
   static stack: NavPathStack = new NavPathStack();
@@ -10,7 +10,9 @@ export class Nav {
 export interface PlayerParam {
   ep: Episode;
   siteKey: string;
+  siteName?: string;
   movieName?: string;
+  detail?: MovieDetail;   // 完整详情（desc/year/actor/director 等）
   lines?: PlayLine[];   // 当前源的全部播放线路
   lineIdx?: number;     // 点击的线路索引
   epIdx?: number;       // 点击的剧集索引

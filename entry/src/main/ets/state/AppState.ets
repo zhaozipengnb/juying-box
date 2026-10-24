@@ -1,7 +1,8 @@
 // 全局状态（V2）：配置 + 当前站点 + 引擎实例。测试可注入 testFetchText 替代真网络。
-import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, XmlCmsDriver, FetchText, decodeConfigContent,
+import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, AppYsApi, XmlCmsDriver, ProxyDriver, FetchText, decodeConfigContent,
   parseTvboxConfig, siteEngine, isSiteSupported, resolveSiteUrls } from 'common';
 import { httpFetch } from '../net/HttpClient';
+import { AppSettings } from './AppSettings';
 import { ConfigStore, serializeConfig } from './ConfigStore';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { resourceManager } from '@kit.LocalizationKit';
@@ -53,18 +54,38 @@ export class AppState {
     } else if (engine === 'cms') {
       this.currentSite = site;
       this.driver = new CmsJsonApi(site, this.makeFetchText());
+    } else if (engine === 'appys') {
+      this.currentSite = site;
+      this.driver = new AppYsApi(site, this.makeFetchText());
     } else if (engine === 'xml') {
       this.currentSite = site;
       this.driver = new XmlCmsDriver(site, this.makeFetchText());
+    } else if (engine === 'proxy') {
+      const proxyUrl = AppSettings.instance.proxyUrl;
+      if (proxyUrl !== '') {
+        this.currentSite = site;
+        this.driver = new ProxyDriver(site, this.makeFetchText(), proxyUrl);
+      }
     }
   }
 
   // 首个受引擎支持的站点（订阅可能是纯 JAR 型，首站未必可用）
   private firstSupportedSite(config: TvboxConfig): SiteConfig | null {
+    // 优先非代理源（CMS/XML/JS），代理源仅在没有其他选择时才用
     for (const s of config.sites) {
-      if (isSiteSupported(s)) { return s; }
+      if (siteEngine(s) !== 'proxy' && isSiteSupported(s) && this.canDrive(s)) { return s; }
+    }
+    for (const s of config.sites) {
+      if (isSiteSupported(s) && this.canDrive(s)) { return s; }
     }
     return null;
+  }
+
+  // proxy 引擎需要 proxyUrl 配置才能驱动
+  canDrive(site: SiteConfig): boolean {
+    const e = siteEngine(site);
+    if (e === 'proxy') { return AppSettings.instance.proxyUrl !== ''; }
+    return true;
   }
 
   // 装配配置后选定起始站点：优先上次记住的 siteKey（存在且受支持），否则首个受支持站
@@ -72,13 +93,14 @@ export class AppState {
     const remembered: string = this.store?.loadCurrentSite() ?? '';
     if (remembered !== '') {
       for (const s of config.sites) {
-        if (s.key === remembered && isSiteSupported(s)) {
+        if (s.key === remembered && isSiteSupported(s) && this.canDrive(s) && siteEngine(s) !== 'proxy') {
           this.buildDriver(s);
           return;
         }
       }
     }
     this.buildDriver(this.firstSupportedSite(config) as SiteConfig);
+    console.info('OKV pickSite result=' + (this.currentSite?.key ?? 'null') + ' driver=' + (this.driver === null ? 'null' : 'ok'));
   }
 
   // 装配一份配置进 home 态：合并内置源 → 校验有受支持站点 → 选首站建 driver。
@@ -88,7 +110,7 @@ export class AppState {
     if (config.sites.length === 0) { return false; }
     const usableCount = config.sites.filter((s: SiteConfig): boolean => isSiteSupported(s)).length;
     if (usableCount === 0) {
-      this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但没有本引擎支持的源（支持 CMS JSON、XML 采集与 drpy JS 插件；csp_* 等 JAR 类名源暂不支持）';
+      this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但没有本引擎支持的源（支持 CMS JSON、XML 采集、drpy JS、AppYs；其余 JAR 源暂不支持）';
       return false;
     }
     this.config = config;
@@ -168,8 +190,14 @@ export class AppState {
   makeDriverFor(site: SiteConfig): SiteDriver | null {
     const engine = siteEngine(site);
     if (engine === 'cms') { return new CmsJsonApi(site, this.makeFetchText()); }
+    if (engine === 'appys') { return new AppYsApi(site, this.makeFetchText()); }
     if (engine === 'xml') { return new XmlCmsDriver(site, this.makeFetchText()); }
     if (engine === 'js') { return new DrpyDriver(site); }
+    if (engine === 'proxy') {
+      const proxyUrl = AppSettings.instance.proxyUrl;
+      if (proxyUrl === '') { return null; }
+      return new ProxyDriver(site, this.makeFetchText(), proxyUrl);
+    }
     return null;
   }
 
@@ -177,7 +205,7 @@ export class AppState {
     if (this.config === null) { return false; }
     for (const s of this.config.sites) {
       if (s.key === key) {
-        if (!isSiteSupported(s)) { return false; }   // JAR 等不支持源拒绝切换
+        if (!isSiteSupported(s) || !this.canDrive(s)) { return false; }   // 不支持或未配置代理的源拒绝切换
         this.buildDriver(s);
         if (this.store !== null) { this.store.saveCurrentSite(key); }   // 跨重启记忆选中源
         return true;

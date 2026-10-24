@@ -16,24 +16,18 @@ interface SourceResult {
   detail: MovieDetail | null;
 }
 
-// 展开网格卡片：line=所属线路名（红色徽标），ep=剧集
-interface EpCard {
-  line: string;
-  ep: Episode;
-}
-
 @ComponentV2
 export struct DetailPage {
   app: AppState = AppState.instance;
   settings: AppSettings = AppSettings.instance;
   dl: DownloadManager = DownloadManager.instance;
   @Local sources: SourceResult[] = [];
-  @Local srcIdx: number = 0;
+  @Local srcIdx: number = -1; // -1 = 全部
   @Local showInfo: boolean = false;      // ☰ 展开影片信息面板
   @Local loading: boolean = false;
   @Local errMsg: string = '';
   @Local descExpanded: boolean = false;  // 简介展开/收起
-  @Local cardW: number = 170;            // 剧集卡宽（实测）：FlowItem 子组件 width('100%') 会解析成整流宽
+  @Local searchName: string = '';        // 顶栏可编辑搜索词
   private movie: Movie | null = null;
 
   aboutToAppear(): void {}
@@ -60,18 +54,11 @@ export struct DetailPage {
     return src === undefined ? null : src.detail;
   }
 
-  // 当前选中源的剧集卡片（聚合全部线路）。AI去广告开启时剔除广告集
-  private cards(): EpCard[] {
-    const d = this.detail;
-    if (d === null) { return []; }
-    const out: EpCard[] = [];
-    for (const l of d.lines) {
-      for (const e of l.episodes) {
-        if (this.settings.aiAdFilter && (e.name.indexOf('广告') >= 0 || e.name.indexOf('推广') >= 0)) { continue; }
-        out.push({ line: l.from, ep: e });
-      }
-    }
-    return out;
+  // 右侧网格展示的来源列表：全部或单个
+  @Computed get displaySources(): SourceResult[] {
+    if (this.srcIdx === -1) { return this.sources; }
+    const s = this.sources[this.srcIdx];
+    return s === undefined ? [] : [s];
   }
 
   build() {
@@ -86,7 +73,7 @@ export struct DetailPage {
     .hideTitleBar(true)
     .onReady((ctx: NavDestinationContext) => {
       const m = ctx.pathInfo.param as Movie;
-      if (m !== null && m !== undefined) { this.movie = m; this.search(); }
+      if (m !== null && m !== undefined) { this.movie = m; this.searchName = m.name; this.search(); }
     })
   }
 
@@ -95,18 +82,25 @@ export struct DetailPage {
     Column() {
       // 顶栏：片名 + 源数量 + ☰ 信息开关
       Row() {
-        Text(this.movie?.name ?? '')
-          .fontSize(24).fontWeight(FontWeight.Bold)
+        TextInput({ text: this.searchName, placeholder: '输入片名搜索' })
+          .fontSize(20).fontWeight(FontWeight.Bold)
           .fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#222222')
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          .backgroundColor(Color.Transparent)
+          .maxLines(1)
           .layoutWeight(1)
+          .onChange((v: string) => { this.searchName = v; })
+          .onSubmit(() => {
+            if (this.searchName.trim() === '') { return; }
+            if (this.movie !== null) { this.movie.name = this.searchName.trim(); }
+            this.search();
+          })
         Text(this.sources.length + '源')
           .fontSize(13)
           .fontColor(this.isDarkWallpaper ? '#999999' : '#888888')
           .padding({ left: 8, right: 8 })
-        Text('☰')
-          .fontSize(22)
-          .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
+        Image($r('app.media.ic_list'))
+          .width(20).height(20)
+          .fillColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
           .padding({ left: 4, right: 4 })
           .onClick(() => { this.showInfo = !this.showInfo; })
       }
@@ -141,17 +135,30 @@ export struct DetailPage {
         .padding({ left: 16, right: 16, bottom: 10 })
       }
 
-      if (this.detail !== null && this.detail.lines.length > 0) {
+      if (this.sources.length > 0) {
         Row() {
           // 左侧来源站列表（竖排胶囊）
           Scroll() {
             Column({ space: 6 }) {
+              Text('全部')
+                .fontSize(13)
+                .fontColor(this.srcIdx === -1 ? '#F9A825' : (this.isDarkWallpaper ? '#DDDDDD' : '#333333'))
+                .fontWeight(this.srcIdx === -1 ? FontWeight.Bold : FontWeight.Normal)
+                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                .textAlign(TextAlign.Center).width('100%')
+                .backgroundColor(this.srcIdx === -1
+                  ? (this.isDarkWallpaper ? '#33F9A825' : '#1AF9A825')
+                  : (this.isDarkWallpaper ? '#26FFFFFF' : '#12000000'))
+                .borderRadius(8)
+                .padding({ left: 10, right: 10, top: 7, bottom: 7 })
+                .onClick(() => { this.srcIdx = -1; })
               ForEach(this.sources, (s: SourceResult, i: number) => {
                 Text(s.siteName)
                   .fontSize(13)
                   .fontColor(this.srcIdx === i ? '#F9A825' : (this.isDarkWallpaper ? '#DDDDDD' : '#333333'))
                   .fontWeight(this.srcIdx === i ? FontWeight.Bold : FontWeight.Normal)
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .textAlign(TextAlign.Center).width('100%')
                   .backgroundColor(this.srcIdx === i
                     ? (this.isDarkWallpaper ? '#33F9A825' : '#1AF9A825')
                     : (this.isDarkWallpaper ? '#26FFFFFF' : '#12000000'))
@@ -166,91 +173,50 @@ export struct DetailPage {
           .scrollable(ScrollDirection.Vertical)
           .scrollBar(BarState.Off)
           .align(Alignment.Top)
-          .width(116)
+          .width(84)
           .height('100%')
           .padding({ left: 12 })
 
-          // 右侧剧集海报卡网格
-          WaterFlow() {
-            ForEach(this.cards(), (c: EpCard) => {
-              FlowItem() {
-                Stack({ alignContent: Alignment.BottomStart }) {
-                  Image(this.detail!.movie.pic === '' ? $r('app.media.startIcon') : this.detail!.movie.pic)
-                    .width(this.cardW).aspectRatio(0.67)
-                    .objectFit(ImageFit.Cover)
-                    .borderRadius(10)
-                    .alt($r('app.media.startIcon'))
-                  // 全高透明容器：顶部徽标行 + 底部备注/片名叠印
-                  Column() {
-                    Row({ space: 6 }) {
-                      Text(c.line)
-                        .fontSize(11).fontColor('#FFFFFF')
-                        .maxLines(1)
-                        .backgroundColor('#CCE53935')
-                        .borderRadius(6)
-                        .padding({ left: 6, right: 6, top: 3, bottom: 3 })
-                      Blank()
-                      if (this.settings.builtinDownload && !this.dl.isDownloading(c.ep.url)) {
-                        Text('⬇')
-                          .fontSize(13).fontColor('#FFFFFF')
-                          .backgroundColor('#66000000')
-                          .borderRadius(6)
-                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                      }
-                    }
-                    .width(this.cardW)
-                    Blank()
-                    if (this.detail!.movie.remark !== '') {
-                      Text(this.detail!.movie.remark)
-                        .fontSize(11).fontColor('#FFFFFF')
-                        .maxLines(1)
-                        .backgroundColor('#CC2E7D32')
-                        .borderRadius(6)
-                        .padding({ left: 6, right: 6, top: 3, bottom: 3 })
-                        .margin({ bottom: 6 })
-                    }
-                    Text(c.ep.name)
-                      .fontSize(15).fontWeight(FontWeight.Bold)
-                      .fontColor('#FFFFFF')
-                      .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          // 右侧：所有来源站海报网格，一行两个
+          Grid() {
+            ForEach(this.displaySources, (src: SourceResult, idx: number) => {
+              GridItem() {
+                Column() {
+                  Stack({ alignContent: Alignment.BottomStart }) {
+                    Image(src.movie.pic === '' ? $r('app.media.startIcon') : src.movie.pic)
+                      .width('100%').aspectRatio(0.667)
+                      .objectFit(ImageFit.Cover).borderRadius(8)
+                      .alt($r('app.media.startIcon'))
+                    // 左上角源名徽标
+                    Text(src.siteName).fontSize(10).fontColor('#FFFFFF').maxLines(1)
+                      .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+                      .backgroundColor('#99000000').borderRadius(4)
+                      .position({ x: 6, y: 6 })
+                    // 底部片名
+                    Text(src.movie.name).fontSize(11).fontColor('#FFFFFF').maxLines(1)
+                      .padding({ left: 6, right: 6, bottom: 4, top: 4 })
+                      .width('100%').backgroundColor('#80000000')
+                      .borderRadius({ bottomLeft: 8, bottomRight: 8 })
                   }
-                  .width(this.cardW).height(this.cardW / 0.67)
-                  .padding({ left: 8, right: 8, top: 8, bottom: 8 })
-                  .linearGradient({ angle: 180, colors: [['#00111111', 0.55], ['#C2000000', 1.0]] })
                 }
-                .width(this.cardW)
+                .onClick(() => {
+                  const d = src.detail;
+                  if (d === null || d.lines.length === 0) { return; }
+                  const ep = d.lines[0].episodes[0];
+                  const param: PlayerParam = {
+                    ep: ep, siteKey: src.siteKey, siteName: src.siteName,
+                    movieName: src.movie.name, detail: d, lines: d.lines, lineIdx: 0, epIdx: 0
+                  };
+                  Nav.stack.pushPathByName('Player', param);
+                })
               }
-              .onClick(() => {
-                const src = this.sources[this.srcIdx];
-                const d = src.detail;
-                const lines = d !== null ? d.lines : [];
-                let lineIdx = 0;
-                let epIdx = 0;
-                for (let i = 0; i < lines.length; i++) {
-                  const idx = lines[i].episodes.findIndex((e: Episode) => e.url === c.ep.url);
-                  if (idx >= 0) { lineIdx = i; epIdx = idx; break; }
-                }
-                const param: PlayerParam = { ep: c.ep, siteKey: src.siteKey, movieName: src.movie.name, lines: lines, lineIdx: lineIdx, epIdx: epIdx };
-                Nav.stack.pushPathByName('Player', param);
-              })
-              .gesture(LongPressGesture({ repeat: false, duration: 500 })
-                .onAction(() => {
-                  if (!this.settings.builtinDownload || this.dl.isDownloading(c.ep.url)) { return; }
-                  const src = this.sources[this.srcIdx];
-                  this.dl.startDownload(src.movie.name, c.ep.name, c.ep.url, src.siteKey);
-                }))
-            }, (c: EpCard) => c.line + '_' + c.ep.url)
+            }, (src: SourceResult, idx: number) => `${src.siteKey}-${idx}`)
           }
           .columnsTemplate('1fr 1fr')
-          .columnsGap(12)
-          .rowsGap(12)
-          .width('100%')
-          .layoutWeight(1)
-          .height('100%')
-          .padding({ left: 12, right: 16, top: 4, bottom: 12 })
-          .onAreaChange((_o: Area, n: Area) => {
-            this.cardW = ((n.width as number) - 12 - 16 - 12) / 2;
-          })
+          .columnsGap(12).rowsGap(12)
+          .width('100%').layoutWeight(1).height('100%')
+          .padding({ left: 12, right: 16, top: 4 })
+          .scrollBar(BarState.Off)
         }
         .width('100%')
         .layoutWeight(1)
@@ -276,18 +242,20 @@ export struct DetailPage {
     this.loading = true;
     this.errMsg = '';
     this.sources = [];
-    this.srcIdx = 0;
+    this.srcIdx = -1;
     try {
-      // 单站处理：搜 → 取首条 → 加载详情 → 有线路则推入 sources（渐进显示）
+      // 单站处理：搜 → 取首条 → 加载详情 → 推入 sources（渐进显示）
+      // 搜到结果即推入，即使详情加载失败也显示该站
       const handleSite = async (s: SiteConfig): Promise<void> => {
         const driver: SiteDriver | null = this.app.makeDriverFor(s);
         if (driver === null) { return; }
         const pr: PageResult = await driver.searchContent(m.name, false);
         if (pr.items.length === 0) { return; }
-        const detail: MovieDetail = await driver.detailContent([pr.items[0].vodId]);
-        if (detail !== null && detail.lines.length > 0) {
-          this.sources = [...this.sources, { siteKey: s.key, siteName: s.name, movie: pr.items[0], detail }];
-        }
+        let detail: MovieDetail | null = null;
+        try {
+          detail = await driver.detailContent([pr.items[0].vodId]);
+        } catch (e) { /* 详情加载失败，仍推入该站 */ }
+        this.sources = [...this.sources, { siteKey: s.key, siteName: s.name, movie: pr.items[0], detail }];
       };
 
       // 1. CMS/XML 并发

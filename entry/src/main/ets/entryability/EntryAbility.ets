@@ -7,6 +7,7 @@ import { PreferencesKVStore } from '../state/PreferencesKVStore';
 import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
 import { SearchHistory } from '../state/SearchHistory';
+import { UrlHistory } from '../state/UrlHistory';
 import { DownloadManager } from '../state/DownloadManager';
 
 const DOMAIN = 0x0000;
@@ -20,6 +21,7 @@ export default class EntryAbility extends UIAbility {
     preferences.getPreferences(context, 'okvideo_settings').then((prefS: preferences.Preferences) => {
       AppSettings.instance.attach(new PreferencesKVStore(prefS));
       SearchHistory.instance.attach(new PreferencesKVStore(prefS));
+    UrlHistory.instance.attach(new PreferencesKVStore(prefS));
       DownloadManager.instance.attach(this.context, new PreferencesKVStore(prefS));
     }).catch((eS: Object) => {
       hilog.error(DOMAIN, 'testTag', 'settings 装配异常: %{public}s', eS instanceof Error ? eS.message : JSON.stringify(eS));

@@ -75,8 +75,14 @@ export class CmsJsonApi implements SiteDriver {
   }
 
   private async getJson(path: string): Promise<Record<string, Object>> {
-    const text = await this.fetchText(`${this.site.api}${path}`, this.site.header);
-    return JSON.parse(text) as Record<string, Object>;
+    const fullUrl = `${this.site.api}${path}`;
+    const text = await this.fetchText(fullUrl, this.site.header);
+    try {
+      return JSON.parse(text) as Record<string, Object>;
+    } catch (e) {
+      console.info('OKV cms JSON.parse ERR url=' + fullUrl + ' len=' + text.length + ' head=' + text.substring(0, 200));
+      throw new Error(e instanceof Error ? e.message : 'JSON parse failed');
+    }
   }
 
   async getHomeContent(): Promise<HomeContent> {
