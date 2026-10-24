@@ -11,6 +11,7 @@ import { common } from '@kit.AbilityKit';
 import fs from '@ohos.file.fs';
 import { picker } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 
 // 海报密度选项（与 PicSize 一一对应）
@@ -84,19 +85,30 @@ export struct SettingsPage {
       const res = await pv.select(opt);
       if (res.photoUris.length > 0) {
         const srcUri = res.photoUris[0];
-        const destPath = (getContext(this) as common.UIAbilityContext).filesDir + '/wallpaper.jpg';
+        // 时间戳文件名：路径变化才能触发重渲染并绕过图片路径缓存
+        const destPath = (getContext(this) as common.UIAbilityContext).filesDir + '/wallpaper_' + Date.now() + '.jpg';
         const srcFile = fs.openSync(srcUri, fs.OpenMode.READ_ONLY);
         const destFile = fs.openSync(destPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
         fs.copyFileSync(srcFile.fd, destFile.fd);
         fs.closeSync(srcFile);
         fs.closeSync(destFile);
-        this.settings.wallpaperUri = destPath;
-        this.settings.save();
+        this.replaceWallpaperFile(destPath);
         this.showUrlDialog = false;
         this.localErr = '';
         this.localOk = '壁纸已更新为本地图片';
       }
     } catch (e) { /* 用户取消或权限不足 */ }
+  }
+
+  // 更新壁纸路径并清理旧沙箱文件（仅删本应用 filesDir 下的旧拷贝，不动用户相册/链接）
+  private replaceWallpaperFile(destPath: string): void {
+    const old = this.settings.wallpaperUri;
+    this.settings.wallpaperUri = destPath;
+    this.settings.save();
+    const ctx = getContext(this) as common.UIAbilityContext;
+    if (old !== '' && old !== destPath && old.startsWith(ctx.filesDir)) {
+      try { fs.unlinkSync(old); } catch (e) { /* 旧文件已不存在则忽略 */ }
+    }
   }
 
   private clearWallpaper(): void {
@@ -107,20 +119,22 @@ export struct SettingsPage {
   // 刷新壁纸：URL 壁纸重新拉取到沙箱并落盘（覆盖旧缓存，强制重渲染）；本地壁纸重新加载
   private async refreshWallpaper(): Promise<void> {
     const uri = this.settings.wallpaperUri.trim();
+    hilog.info(0x0000, 'OKV', 'wallpaper refresh uri=%{public}s', uri);
     if (uri === '') { this.localErr = '未设置壁纸图片'; return; }
     this.localErr = '';
     this.localOk = '';
     try {
       if (/^https?:\/\//i.test(uri)) {
-        const destPath = (getContext(this) as common.UIAbilityContext).filesDir + '/wallpaper.jpg';
+        // 时间戳文件名：覆盖同名文件不会触发重渲染（路径不变 + 图片按路径缓存），
+        // 每次落新文件并删除旧沙箱文件，强制换图
+        const destPath = (getContext(this) as common.UIAbilityContext).filesDir + '/wallpaper_' + Date.now() + '.jpg';
         const r = await httpFetch(uri, {});
         if (r.status !== 200) { throw new Error('HTTP ' + r.status); }
         const destFile = fs.openSync(destPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
         fs.writeSync(destFile.fd, r.body);
         fs.closeSync(destFile);
-        this.settings.wallpaperUri = destPath;
-        this.settings.save();
-        this.localOk = '壁纸已刷新';
+        this.replaceWallpaperFile(destPath);
+        this.localOk = '壁纸已刷新（' + destPath.substring(destPath.lastIndexOf('/') + 1) + '）';
       } else {
         this.settings.save();
         this.localOk = '壁纸已重新加载';
@@ -572,10 +586,9 @@ export struct SettingsPage {
               .fontSize(12).fontColor('#999999').margin({ bottom: 10 })
           }
           Stack({ alignContent: Alignment.End }) {
-            TextInput({ text: this.dialogUrl, placeholder: 'https://…' })
+            TextInput({ text: this.dialogUrl!!, placeholder: 'https://…' })
               .width('100%').height(48)
               .fontSize(14)
-              .onChange((v: string) => { this.dialogUrl = v; })
               .onSubmit(() => { this.applyDialogUrl(); })
             if (this.dialogTarget === 'vod' || this.dialogTarget === 'wallpaper') {
               Text('📁')
@@ -686,12 +699,15 @@ export struct SettingsPage {
       this.settings.save();
       this.showUrlDialog = false;
     } else if (this.dialogTarget === 'wallpaper') {
+      hilog.info(0x0000, 'OKV', 'wallpaper apply target=%{public}s url=%{public}s', this.dialogTarget, url);
       this.showUrlDialog = false;
       if (url.length > 0) {
         try { UrlHistory.instance.add('wallpaper', url); } catch (e) { /* ignore */ }
         this.settings.wallpaperUri = url;
         this.settings.save();
+        hilog.info(0x0000, 'OKV', 'wallpaper saved uri=%{public}s', this.settings.wallpaperUri);
       } else {
+        hilog.info(0x0000, 'OKV', 'wallpaper CLEARED (empty url)');
         this.clearWallpaper();
       }
     }
