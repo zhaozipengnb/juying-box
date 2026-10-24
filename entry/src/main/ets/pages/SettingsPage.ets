@@ -1,4 +1,4 @@
-// 设置页：点播 / 直播 / JAR代理 / 壁纸 / 播放设置 / 个性设置 / 备份恢复 / DoH / 缓存 / 版本 / 关于
+// 设置页：点播 / 直播 / Proxy / 壁纸 / 播放设置 / 个性设置 / 备份恢复 / DoH / 缓存 / 版本 / 关于
 // 个性化设置即改即存（AppSettings.save），返回首页后由各消费点读取生效。
 import { AppState } from '../state/AppState';
 import { AppSettings, PicSize, WallpaperKind, SPEED_OPTIONS, LONG_PRESS_OPTIONS } from '../state/AppSettings';
@@ -202,8 +202,8 @@ export struct SettingsPage {
             this.showUrlDialog = true;
           })
 
-          // ---------- JAR代理（csp_* JAR 爬虫的远程执行地址；鸿蒙端无 JVM，JAR 须在外部设备执行）----------
-          this.sectionTitle('JAR代理')
+          // ---------- Proxy（csp_* JAR 爬虫的远程代理；鸿蒙端无 JVM，JAR 须在外部设备执行）----------
+          this.sectionTitle('Proxy')
           SettingRow({
             label: '代理地址',
             sub: this.inputProxyUrl === '' ? '未设置（纯 JAR 源不可用，不影响采集站/drpy 源）'
@@ -434,7 +434,7 @@ export struct SettingsPage {
         .onClick(() => { this.showUrlDialog = false; })
 
         Column() {
-          Text(this.dialogTarget === 'vod' ? '订阅地址' : this.dialogTarget === 'live' ? '直播源' : this.dialogTarget === 'proxy' ? 'JAR代理地址' : '壁纸图片')
+          Text(this.dialogTarget === 'vod' ? '订阅地址' : this.dialogTarget === 'live' ? '直播源' : this.dialogTarget === 'proxy' ? 'Proxy 地址' : '壁纸图片')
             .fontSize(16).fontWeight(FontWeight.Medium).fontColor('#222222')
             .margin({ bottom: 16 })
           TextInput({ text: this.dialogUrl, placeholder: 'https://…' })
