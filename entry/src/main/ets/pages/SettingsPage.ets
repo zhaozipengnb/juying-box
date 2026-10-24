@@ -1,4 +1,4 @@
-// 设置页：点播 / 直播 / 壁纸 / 播放设置 / 个性设置 / 备份恢复 / DoH / Proxy / 缓存 / 版本 / 关于
+// 设置页：点播 / 直播 / JAR代理 / 壁纸 / 播放设置 / 个性设置 / 备份恢复 / DoH / 缓存 / 版本 / 关于
 // 个性化设置即改即存（AppSettings.save），返回首页后由各消费点读取生效。
 import { AppState } from '../state/AppState';
 import { AppSettings, PicSize, WallpaperKind, SPEED_OPTIONS, LONG_PRESS_OPTIONS } from '../state/AppSettings';
@@ -202,21 +202,23 @@ export struct SettingsPage {
             this.showUrlDialog = true;
           })
 
-          // ---------- JAR代理 ----------
-          Row() {
-            Text('JAR代理').fontSize(16).fontWeight(FontWeight.Bold)
+          // ---------- JAR代理（csp_* JAR 爬虫的远程执行地址；鸿蒙端无 JVM，JAR 须在外部设备执行）----------
+          this.sectionTitle('JAR代理')
+          SettingRow({
+            label: '代理地址',
+            sub: this.inputProxyUrl === '' ? '未设置（纯 JAR 源不可用，不影响采集站/drpy 源）'
+              : '在电脑/NAS 运行 tools/proxy-server 后填入其地址'
+          }) {
+            Button('编辑')
+              .height(36)
+              .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
               .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
-            Text(this.inputProxyUrl === '' ? '未设置' : this.inputProxyUrl)
-              .fontSize(13).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              .fontColor(this.isDarkWallpaper ? '#999999' : '#888888')
-              .layoutWeight(1).margin({ left: 12 })
+              .onClick(() => {
+                this.dialogTarget = 'proxy';
+                this.dialogUrl = this.inputProxyUrl;
+                this.showUrlDialog = true;
+              })
           }
-          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-          .onClick(() => {
-            this.dialogTarget = 'proxy';
-            this.dialogUrl = this.inputProxyUrl;
-            this.showUrlDialog = true;
-          })
 
           // ---------- 壁纸 ----------
           this.sectionTitle('壁纸')
@@ -375,16 +377,6 @@ export struct SettingsPage {
           // ---------- DoH ----------
           this.sectionTitle('DoH')
           SettingRow({ label: 'DoH 地址', sub: '未设置（使用系统 DNS）' }) {
-            Button('编辑')
-              .height(36)
-              .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
-              .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
-              .onClick(() => {})
-          }
-
-          // ---------- Proxy ----------
-          this.sectionTitle('Proxy')
-          SettingRow({ label: '代理地址', sub: '未设置（直连）' }) {
             Button('编辑')
               .height(36)
               .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
