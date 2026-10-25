@@ -11,9 +11,9 @@ export struct SettingRow {
   build() {
     Row() {
       Column() {
-        Text(this.label).fontSize(15).fontColor('#222222')
+        Text(this.label).fontSize(15).fontColor('#FFFFFF')
         if (this.sub !== '') {
-          Text(this.sub).fontSize(11).fontColor('#999999').margin({ top: 4 })
+          Text(this.sub).fontSize(11).fontColor('#FFFFFF').margin({ top: 4 })
         }
       }
       .alignItems(HorizontalAlign.Start)

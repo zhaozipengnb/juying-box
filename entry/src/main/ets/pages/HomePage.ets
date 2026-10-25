@@ -310,19 +310,19 @@ export struct HomePage {
 
         Image($r('app.media.ic_settings'))
           .width(20).height(20)
-          .fillColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
+          .fillColor('#FFFFFF')
           .margin({ right: 10 })
           .onClick(() => { Nav.stack.pushPathByName('Settings', ''); })
         // 下载管理入口
         Image($r('app.media.ic_download'))
           .width(20).height(20)
-          .fillColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
+          .fillColor('#FFFFFF')
           .margin({ right: 10 })
           .onClick(() => { Nav.stack.pushPathByName('Download', ''); })
         // 搜索入口
         Image($r('app.media.ic_search'))
           .width(20).height(20)
-          .fillColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
+          .fillColor('#FFFFFF')
           .onClick(() => {
             if (this.loading || this.searching) { return; }
             Nav.stack.pushPathByName('Search', '');
@@ -338,9 +338,9 @@ export struct HomePage {
             ForEach(this.cats, (c: string, i: number) => {
               Text(c)
                 .fontSize(15)
-                .fontColor(this.catIdx === i ? '#FFFFFF' : (this.isDarkWallpaper ? '#DDDDDD' : '#444444'))
+                .fontColor('#FFFFFF')
                 .fontWeight(this.catIdx === i ? FontWeight.Bold : FontWeight.Normal)
-                .backgroundColor(this.catIdx === i ? '#007DFF' : (this.isDarkWallpaper ? '#33FFFFFF' : '#14000000'))
+                .backgroundColor(this.catIdx === i ? '#007DFF' : '#33FFFFFF')
                 .borderRadius(20)
                 .padding({ left: 16, right: 16, top: 8, bottom: 8 })
                 .onClick(() => {
@@ -360,8 +360,8 @@ export struct HomePage {
       // 搜索态标题栏：显示当前关键词与「返回浏览」入口（仅搜索结果就绪时展示）
       if (this.kind === 'search' && this.items.length > 0) {
         Row() {
-          Text(`“${this.searchKey}” 的结果`).fontSize(14).fontColor('#666666').layoutWeight(1)
-          Text('返回浏览').fontSize(14).fontColor('#007DFF')
+          Text(`“${this.searchKey}” 的结果`).fontSize(14).fontColor('#FFFFFF').layoutWeight(1)
+          Text('返回浏览').fontSize(14).fontColor('#FFFFFF')
             .onClick(() => {
               if (this.loading || this.searching) { return; }
               this.loadHome();
@@ -375,7 +375,7 @@ export struct HomePage {
           Row({ space: 8 }) {
             Text('全部')
               .fontSize(13)
-              .fontColor(this.filterSite === '' ? '#FFFFFF' : '#666666')
+              .fontColor('#FFFFFF')
               .backgroundColor(this.filterSite === '' ? '#007DFF' : '#F0F0F0')
               .borderRadius(14)
               .padding({ left: 10, right: 10, top: 5, bottom: 5 })
@@ -383,7 +383,7 @@ export struct HomePage {
             ForEach(this.filterSiteOptions(), (n: string) => {
               Text(n)
                 .fontSize(13)
-                .fontColor(this.filterSite === n ? '#FFFFFF' : '#666666')
+                .fontColor('#FFFFFF')
                 .backgroundColor(this.filterSite === n ? '#007DFF' : '#F0F0F0')
                 .borderRadius(14)
                 .padding({ left: 10, right: 10, top: 5, bottom: 5 })
@@ -415,7 +415,7 @@ export struct HomePage {
       } else if (this.loading && this.items.length === 0) {
         LoadingProgress().width(44).height(44).margin({ top: 80 })
       } else if (this.visibleItems().length === 0) {
-        Text('暂无内容').fontSize(14).fontColor(this.isDarkWallpaper ? '#888888' : '#999999').margin({ top: 80 })
+        Text('暂无内容').fontSize(14).fontColor('#FFFFFF').margin({ top: 80 })
       } else {
         MovieGrid({
           items: this.visibleItems(),

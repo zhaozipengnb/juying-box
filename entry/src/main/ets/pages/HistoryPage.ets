@@ -77,7 +77,7 @@ export struct HistoryPage {
           ForEach(TABS, (t: string, i: number) => {
             Text(t)
               .fontSize(16)
-              .fontColor(this.tab === i ? '#F9A825' : (this.isDarkWallpaper ? '#AAAAAA' : '#666666'))
+              .fontColor(this.tab === i ? '#F9A825' : '#FFFFFF')
               .fontWeight(this.tab === i ? FontWeight.Bold : FontWeight.Normal)
               .padding({ left: 20, right: 20, top: 10, bottom: 8 })
               .border({ width: { bottom: 2 }, color: this.tab === i ? '#F9A825' : Color.Transparent })
@@ -146,10 +146,10 @@ export struct HistoryPage {
       Column({ space: 6 }) {
         Text(name)
           .fontSize(15).fontWeight(FontWeight.Bold)
-          .fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#222222')
+          .fontColor('#FFFFFF')
           .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(sub)
-          .fontSize(12).fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#999999')
+          .fontSize(12).fontColor('#FFFFFF')
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(action)
           .fontSize(12).fontColor('#F9A825')
@@ -158,7 +158,7 @@ export struct HistoryPage {
       .layoutWeight(1)
       Column({ space: 4 }) {
         Text('>')
-          .fontSize(16).fontColor(this.isDarkWallpaper ? '#666666' : '#CCCCCC')
+          .fontSize(16).fontColor('#FFFFFF')
         Text('⨯')
           .fontSize(15).fontColor(this.isDarkWallpaper ? '#88999999' : '#CC999999')
           .padding({ top: 6 })

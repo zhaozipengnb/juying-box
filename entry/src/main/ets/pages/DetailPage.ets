@@ -101,7 +101,7 @@ export struct DetailPage {
       Row() {
         TextInput({ text: this.searchName, placeholder: '输入片名搜索' })
           .fontSize(20).fontWeight(FontWeight.Bold)
-          .fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#222222')
+          .fontColor('#FFFFFF')
           .backgroundColor(Color.Transparent)
           .maxLines(1)
           .layoutWeight(1)
@@ -113,11 +113,11 @@ export struct DetailPage {
           })
         Text(this.sources.length + '源')
           .fontSize(13)
-          .fontColor(this.isDarkWallpaper ? '#999999' : '#888888')
+          .fontColor('#FFFFFF')
           .padding({ left: 8, right: 8 })
         Image($r('app.media.ic_list'))
           .width(20).height(20)
-          .fillColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
+          .fillColor('#FFFFFF')
           .padding({ left: 4, right: 4 })
           .onClick(() => { this.showInfo = !this.showInfo; })
       }
@@ -132,13 +132,13 @@ export struct DetailPage {
               .width(96).height(132).objectFit(ImageFit.Cover).borderRadius(8).alt($r('app.media.startIcon'))
             Column({ space: 4 }) {
               Text('年份：' + (this.detail.year === '' ? '未知' : this.detail.year))
-                .fontSize(12).fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#666666').maxLines(1)
+                .fontSize(12).fontColor('#FFFFFF').maxLines(1)
               Text('演员：' + (this.detail.actor === '' ? '未知' : this.detail.actor))
-                .fontSize(12).fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#666666').maxLines(2)
+                .fontSize(12).fontColor('#FFFFFF').maxLines(2)
               Text('导演：' + (this.detail.director === '' ? '未知' : this.detail.director))
-                .fontSize(12).fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#666666').maxLines(1)
+                .fontSize(12).fontColor('#FFFFFF').maxLines(1)
               Text(this.detail.movie.remark === '' ? '备注：未知' : '备注：' + this.detail.movie.remark)
-                .fontSize(12).fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#666666').maxLines(1)
+                .fontSize(12).fontColor('#FFFFFF').maxLines(1)
               Row({ space: 10 }) {
                 if (this.curLastWatch !== '') {
                   Text(this.curLastWatch)
@@ -146,7 +146,7 @@ export struct DetailPage {
                 }
                 Text(this.curFav ? '❤ 已收藏' : '♡ 收藏')
                   .fontSize(12)
-                  .fontColor(this.curFav ? '#E53935' : (this.isDarkWallpaper ? '#AAAAAA' : '#666666'))
+                  .fontColor(this.curFav ? '#E53935' : '#FFFFFF')
                   .onClick(() => {
                     const src = this.sources[this.srcIdx];
                     if (src !== undefined) { this.favs.toggle(src.siteKey, src.movie); }
@@ -155,7 +155,7 @@ export struct DetailPage {
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
           }.width('100%')
           Text(this.detail.desc === '' ? '暂无简介' : this.detail.desc)
-            .fontSize(12).fontColor(this.isDarkWallpaper ? '#BBBBBB' : '#444444')
+            .fontSize(12).fontColor('#FFFFFF')
             .maxLines(this.descExpanded ? 99 : 3)
             .margin({ top: 8 })
             .onClick(() => { this.descExpanded = !this.descExpanded; })
@@ -172,7 +172,7 @@ export struct DetailPage {
             Column({ space: 6 }) {
               Text('全部')
                 .fontSize(13)
-                .fontColor(this.srcIdx === -1 ? '#F9A825' : (this.isDarkWallpaper ? '#DDDDDD' : '#333333'))
+                .fontColor(this.srcIdx === -1 ? '#F9A825' : '#FFFFFF')
                 .fontWeight(this.srcIdx === -1 ? FontWeight.Bold : FontWeight.Normal)
                 .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 .textAlign(TextAlign.Center).width('100%')
@@ -185,7 +185,7 @@ export struct DetailPage {
               ForEach(this.sources, (s: SourceResult, i: number) => {
                 Text(s.siteName)
                   .fontSize(13)
-                  .fontColor(this.srcIdx === i ? '#F9A825' : (this.isDarkWallpaper ? '#DDDDDD' : '#333333'))
+                  .fontColor(this.srcIdx === i ? '#F9A825' : '#FFFFFF')
                   .fontWeight(this.srcIdx === i ? FontWeight.Bold : FontWeight.Normal)
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   .textAlign(TextAlign.Center).width('100%')
@@ -251,14 +251,14 @@ export struct DetailPage {
         .width('100%')
         .layoutWeight(1)
       } else if (this.loading) {
-        Text('搜索片源中…').fontSize(13).fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#999999').margin({ top: 40 })
+        Text('搜索片源中…').fontSize(13).fontColor('#FFFFFF').margin({ top: 40 })
       } else if (this.errMsg !== '') {
         Column({ space: 8 }) {
           Text(this.errMsg).fontSize(13).fontColor('#E53935')
           Button('重试').fontSize(13).onClick(() => { this.search(); })
         }.margin({ top: 40 })
       } else {
-        Text('无可用播放线路').fontSize(14).fontColor(this.isDarkWallpaper ? '#888888' : '#999999').margin({ top: 40 })
+        Text('无可用播放线路').fontSize(14).fontColor('#FFFFFF').margin({ top: 40 })
       }
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
   }

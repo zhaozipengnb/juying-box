@@ -50,11 +50,11 @@ export struct DownloadPage {
           if (this.dl.items.length === 0) {
             // 空态
             Column() {
-              Image($r('app.media.ic_empty')).width(48).height(48).fillColor(this.isDarkWallpaper ? '#555555' : '#CCCCCC').margin({ bottom: 12 })
+              Image($r('app.media.ic_empty')).width(48).height(48).fillColor('#FFFFFF').margin({ bottom: 12 })
               Text('暂无下载任务').fontSize(15)
-                .fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#999999')
+                .fontColor('#FFFFFF')
               Text('在详情页或播放页可下载影片').fontSize(12).margin({ top: 6 })
-                .fontColor(this.isDarkWallpaper ? '#777777' : '#BBBBBB')
+                .fontColor('#FFFFFF')
             }
             .width('100%').height('100%')
             .justifyContent(FlexAlign.Center)
@@ -65,7 +65,7 @@ export struct DownloadPage {
                 Column() {
                   Text(`${it.movieName} · ${it.epName}`)
                     .fontSize(14).fontWeight(FontWeight.Medium)
-                    .fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#333333')
+                    .fontColor('#FFFFFF')
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     .width('100%')
 
@@ -73,9 +73,9 @@ export struct DownloadPage {
                     Progress({ value: it.progress, total: 100, type: ProgressType.Linear })
                       .width('70%').height(4)
                       .color(it.status === 'completed' ? '#4CAF50' : '#2196F3')
-                      .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#E0E0E0')
+                      .backgroundColor('#3A3A3C')
                     Text(`${it.progress}%`).fontSize(11)
-                      .fontColor(this.isDarkWallpaper ? '#999999' : '#999999')
+                      .fontColor('#FFFFFF')
                       .margin({ left: 8 })
                   }
                   .width('100%').margin({ top: 8 })
@@ -86,7 +86,7 @@ export struct DownloadPage {
                     if (it.totalSize > 0) {
                       Text(` · ${this.fmtSize(it.downloadedSize)}/${this.fmtSize(it.totalSize)}`)
                         .fontSize(11)
-                        .fontColor(this.isDarkWallpaper ? '#777777' : '#BBBBBB')
+                        .fontColor('#FFFFFF')
                     }
                   }
                   .width('100%').margin({ top: 4 })
@@ -97,13 +97,13 @@ export struct DownloadPage {
                 Row() {
                   if (it.status === 'downloading') {
                     Button('暂停').height(32).fontSize(12)
-                      .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F2F3F5')
-                      .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+                      .backgroundColor('#3A3A3C')
+                      .fontColor('#FFFFFF')
                       .onClick(() => { this.dl.pause(it.id); })
                   } else if (it.status === 'paused' || it.status === 'failed') {
                     Button('继续').height(32).fontSize(12)
-                      .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F2F3F5')
-                      .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+                      .backgroundColor('#3A3A3C')
+                      .fontColor('#FFFFFF')
                       .onClick(() => { this.dl.resume(it.id); })
                   }
                   if (it.status === 'completed') {
@@ -116,7 +116,7 @@ export struct DownloadPage {
                       })
                   }
                   Button('删除').height(32).fontSize(12).margin({ left: 6 })
-                    .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F2F3F5')
+                    .backgroundColor('#3A3A3C')
                     .fontColor('#E53935')
                     .onClick(() => { this.dl.remove(it.id); })
                 }

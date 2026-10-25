@@ -92,7 +92,7 @@ export struct SearchPage {
         Row({ space: 8 }) {
           Image($r('app.media.ic_back'))
             .width(22).height(22)
-            .fillColor(this.isDarkWallpaper ? '#CCCCCC' : '#555555')
+            .fillColor('#FFFFFF')
             .onClick(() => { Nav.stack.pop(); })
           TextInput({ placeholder: '输入片名搜索', text: this.searchKey })
             .layoutWeight(1).height(40)
@@ -116,7 +116,7 @@ export struct SearchPage {
             Row({ space: 12 }) {
               Row({ space: 8 }) {
                 Text('🕘').fontSize(18)
-                Text('观看历史').fontSize(14).fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#333333')
+                Text('观看历史').fontSize(14).fontColor('#FFFFFF')
               }
               .padding({ left: 16, right: 16, top: 10, bottom: 10 })
               .backgroundColor(this.isDarkWallpaper ? '#26FFFFFF' : '#F5F5F5')
@@ -125,7 +125,7 @@ export struct SearchPage {
 
               Row({ space: 8 }) {
                 Text('❤').fontSize(18).fontColor('#E53935')
-                Text('我的收藏').fontSize(14).fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#333333')
+                Text('我的收藏').fontSize(14).fontColor('#FFFFFF')
               }
               .padding({ left: 16, right: 16, top: 10, bottom: 10 })
               .backgroundColor(this.isDarkWallpaper ? '#26FFFFFF' : '#F5F5F5')
@@ -166,10 +166,10 @@ export struct SearchPage {
     Column() {
       Row() {
         Text('历史').fontSize(15).fontWeight(FontWeight.Bold)
-          .fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#333333')
+          .fontColor('#FFFFFF')
         Blank()
         Text('清空').fontSize(13)
-          .fontColor(this.isDarkWallpaper ? '#888888' : '#999999')
+          .fontColor('#FFFFFF')
           .onClick(() => { this.clearHistory(); })
       }.width('100%')
 
@@ -177,7 +177,7 @@ export struct SearchPage {
         ForEach(this.searchHistory, (tag: string, idx: number) => {
           Text(tag)
             .fontSize(13)
-            .fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#555555')
+            .fontColor('#FFFFFF')
             .backgroundColor(this.isDarkWallpaper ? '#33FFFFFF' : '#F5F5F5')
             .borderRadius(12)
             .padding({ left: 10, right: 10, top: 5, bottom: 5 })
@@ -197,7 +197,7 @@ export struct SearchPage {
     Column() {
       Row() {
         Text('热搜').fontSize(15).fontWeight(FontWeight.Bold)
-          .fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#333333')
+          .fontColor('#FFFFFF')
       }.width('100%')
 
       Flex({ wrap: FlexWrap.Wrap }) {
@@ -205,11 +205,11 @@ export struct SearchPage {
           Row({ space: 4 }) {
             Text(`${idx + 1}`)
               .fontSize(11)
-              .fontColor(idx < 3 ? '#F9A825' : (this.isDarkWallpaper ? '#888888' : '#AAAAAA'))
+              .fontColor(idx < 3 ? '#F9A825' : '#FFFFFF')
               .fontWeight(FontWeight.Bold)
             Text(word)
               .fontSize(13)
-              .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+              .fontColor('#FFFFFF')
           }
           .backgroundColor(this.isDarkWallpaper ? '#26FFFFFF' : '#F5F5F5')
           .borderRadius(12)

@@ -76,11 +76,11 @@ export struct LivePage {
                   Column({ space: 3 }) {
                     Text(g.name)
                       .fontSize(14)
-                      .fontColor(this.groupIdx === i ? '#F9A825' : (this.isDarkWallpaper ? '#CCCCCC' : '#333333'))
+                      .fontColor(this.groupIdx === i ? '#F9A825' : '#FFFFFF')
                       .fontWeight(this.groupIdx === i ? FontWeight.Bold : FontWeight.Normal)
                       .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     Text(String(g.channels.length) + '台')
-                      .fontSize(10).fontColor(this.isDarkWallpaper ? '#888888' : '#999999')
+                      .fontSize(10).fontColor('#FFFFFF')
                   }
                   .width('100%')
                   .padding({ left: 12, right: 8, top: 10, bottom: 10 })
@@ -100,7 +100,7 @@ export struct LivePage {
                     Text('▶').fontSize(12).fontColor('#F9A825')
                     Text(ch.name)
                       .fontSize(14)
-                      .fontColor(this.isDarkWallpaper ? '#EEEEEE' : '#222222')
+                      .fontColor('#FFFFFF')
                       .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     Blank()
                     Text('LIVE').fontSize(9).fontColor('#E53935')

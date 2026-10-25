@@ -271,7 +271,7 @@ export struct SettingsPage {
 
   @Builder
   sectionTitle(t: string) {
-    Text(t).fontSize(16).fontWeight(FontWeight.Bold).fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+    Text(t).fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
       .width('100%').padding({ left: 16 }).margin({ top: 28 })
   }
 
@@ -283,14 +283,14 @@ export struct SettingsPage {
           // ---------- 点播 ----------
           Row() {
             Text('点播').fontSize(16).fontWeight(FontWeight.Bold)
-              .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+              .fontColor('#FFFFFF')
             Text(this.vodRowText())
               .fontSize(13).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              .fontColor(this.isDarkWallpaper ? '#999999' : '#888888')
+              .fontColor('#FFFFFF')
               .layoutWeight(1).margin({ left: 12 })
             if (!this.app.isPackSource) {
               Text('更新')
-                .fontSize(13).fontColor(this.app.subUrl === '' ? (this.isDarkWallpaper ? '#555555' : '#CCCCCC') : '#007AFF')
+                .fontSize(13).fontColor(this.app.subUrl === '' ? '#FFFFFF' : '#007AFF')
                 .padding({ left: 8, right: 8, top: 4, bottom: 4 })
                 .borderRadius(6)
                 .backgroundColor(this.isDarkWallpaper ? '#26FFFFFF' : '#F5F5F5')
@@ -299,7 +299,7 @@ export struct SettingsPage {
                 .onClick(() => { this.refreshSub(); })
               Image($r('app.media.ic_history'))
                 .width(20).height(20)
-                .fillColor(this.isDarkWallpaper ? '#AAAAAA' : '#888888')
+                .fillColor('#FFFFFF')
                 .margin({ left: 8 })
                 .hitTestBehavior(HitTestMode.Block)
                 .onClick(() => { this.dialogTarget = 'vod'; this.showHistory = true; })
@@ -312,23 +312,23 @@ export struct SettingsPage {
             this.showUrlDialog = true;
           })
           if (this.localErr !== '') {
-            Text('错误：' + this.localErr).fontSize(13).fontColor('#E53935').width('100%').padding({ left: 16, right: 16 })
+            Text('错误：' + this.localErr).fontSize(13).fontColor('#FFFFFF').width('100%').padding({ left: 16, right: 16 })
           }
           if (this.localOk !== '') {
-            Text(this.localOk).fontSize(13).fontColor('#2E7D32').width('100%').padding({ left: 16, right: 16 })
+            Text(this.localOk).fontSize(13).fontColor('#FFFFFF').width('100%').padding({ left: 16, right: 16 })
           }
 
           // ---------- 直播 ----------
           Row() {
             Text('直播').fontSize(16).fontWeight(FontWeight.Bold)
-              .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+              .fontColor('#FFFFFF')
             Text(this.inputLiveUrl === '' ? '未设置' : this.inputLiveUrl)
               .fontSize(13).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              .fontColor(this.isDarkWallpaper ? '#999999' : '#888888')
+              .fontColor('#FFFFFF')
               .layoutWeight(1).margin({ left: 12 })
             Image($r('app.media.ic_history'))
               .width(20).height(20)
-              .fillColor(this.isDarkWallpaper ? '#AAAAAA' : '#888888')
+              .fillColor('#FFFFFF')
               .margin({ left: 8 })
               .hitTestBehavior(HitTestMode.Block)
               .onClick(() => { this.dialogTarget = 'live'; this.showHistory = true; })
@@ -349,8 +349,8 @@ export struct SettingsPage {
           }) {
             Button('编辑')
               .height(36)
-              .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
-              .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+              .backgroundColor('#3A3A3C')
+              .fontColor('#FFFFFF')
               .onClick(() => {
                 this.dialogTarget = 'proxy';
                 this.dialogUrl = this.inputProxyUrl;
@@ -368,6 +368,7 @@ export struct SettingsPage {
               .selected(WALLPAPERS.indexOf(this.settings.wallpaper))
               .value(WALLPAPER_LABELS[WALLPAPERS.indexOf(this.settings.wallpaper)] ?? '默认（白）')
               .width(140)
+              .fontColor('#FFFFFF')
               .onSelect((idx: number) => {
                 this.settings.wallpaper = WALLPAPERS[idx];
                 this.settings.save();
@@ -375,14 +376,14 @@ export struct SettingsPage {
           }
           Row() {
             Text('壁纸图片').fontSize(15)
-              .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+              .fontColor('#FFFFFF')
             Text(this.wallpaperUri !== '' ? this.wallpaperUri : '未设置')
               .fontSize(13).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              .fontColor(this.isDarkWallpaper ? '#999999' : '#888888')
+              .fontColor('#FFFFFF')
               .layoutWeight(1).margin({ left: 12 })
             Text('↻')
               .fontSize(22)
-              .fontColor(this.isDarkWallpaper ? '#AAAAAA' : '#888888')
+              .fontColor('#FFFFFF')
               .margin({ left: 8 })
               .hitTestBehavior(HitTestMode.Block)
               .onClick(() => { this.refreshWallpaper(); })
@@ -403,7 +404,7 @@ export struct SettingsPage {
                   .border(this.selectedBg === idx ? { width: 2, color: '#007AFF' } : { width: 0 })
                 Text(bg.name)
                   .fontSize(11).margin({ top: 4 })
-                  .fontColor(this.selectedBg === idx ? '#007AFF' : (this.isDarkWallpaper ? '#AAAAAA' : '#666666'))
+                  .fontColor(this.selectedBg === idx ? '#007AFF' : '#FFFFFF')
               }
               .margin({ right: 12, bottom: 12 })
               .onClick(() => {
@@ -425,6 +426,7 @@ export struct SettingsPage {
               .selected(SPEED_OPTIONS.indexOf(this.settings.playSpeed))
               .value(this.settings.playSpeed + 'x')
               .width(110)
+              .fontColor('#FFFFFF')
               .onSelect((idx: number) => {
                 this.settings.playSpeed = SPEED_OPTIONS[idx];
                 this.settings.save();
@@ -438,6 +440,7 @@ export struct SettingsPage {
               .selected(LONG_PRESS_OPTIONS.indexOf(this.settings.longPressSpeed))
               .value(this.settings.longPressSpeed === 0 ? '关闭' : this.settings.longPressSpeed + 'x')
               .width(110)
+              .fontColor('#FFFFFF')
               .onSelect((idx: number) => {
                 this.settings.longPressSpeed = LONG_PRESS_OPTIONS[idx];
                 this.settings.save();
@@ -462,6 +465,7 @@ export struct SettingsPage {
               .selected(PIC_SIZES.indexOf(this.settings.picSize))
               .value(PIC_LABELS[PIC_SIZES.indexOf(this.settings.picSize)] ?? '标准（3列）')
               .width(140)
+              .fontColor('#FFFFFF')
               .onSelect((idx: number) => {
                 this.settings.picSize = PIC_SIZES[idx];
                 this.settings.save();
@@ -486,7 +490,7 @@ export struct SettingsPage {
           SettingRow({ label: '搜索历史', sub: this.searchHistoryCount > 0 ? `${this.searchHistoryCount} 条记录` : '暂无记录' }) {
             Button('清除')
               .height(36)
-              .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
+              .backgroundColor('#3A3A3C')
               .fontColor('#C62828')
               .enabled(this.searchHistoryCount > 0)
               .onClick(() => {
@@ -500,15 +504,15 @@ export struct SettingsPage {
           SettingRow({ label: '配置备份', sub: '导出订阅与个性化设置' }) {
             Button('导出')
               .height(36)
-              .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
-              .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+              .backgroundColor('#3A3A3C')
+              .fontColor('#FFFFFF')
               .onClick(() => { this.exportBackup(); })
           }
           SettingRow({ label: '配置恢复', sub: '从备份文件导入配置' }) {
             Button('导入')
               .height(36)
-              .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
-              .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+              .backgroundColor('#3A3A3C')
+              .fontColor('#FFFFFF')
               .onClick(() => { this.importBackup(); })
           }
 
@@ -517,8 +521,8 @@ export struct SettingsPage {
           SettingRow({ label: 'DoH 地址', sub: '未设置（使用系统 DNS）' }) {
             Button('编辑')
               .height(36)
-              .backgroundColor(this.isDarkWallpaper ? '#3A3A3C' : '#F5F5F5')
-              .fontColor(this.isDarkWallpaper ? '#CCCCCC' : '#333333')
+              .backgroundColor('#3A3A3C')
+              .fontColor('#FFFFFF')
               .onClick(() => {})
           }
 
@@ -536,7 +540,7 @@ export struct SettingsPage {
           SettingRow({ label: '当前版本', sub: 'v1.0.0' }) {
             Text('检查更新')
               .fontSize(14)
-              .fontColor(this.isDarkWallpaper ? '#888888' : '#999999')
+              .fontColor('#FFFFFF')
               .onClick(() => {})
           }
 
@@ -545,12 +549,12 @@ export struct SettingsPage {
           SettingRow({ label: '关于应用', sub: '点播 / 直播聚合播放器' }) {
             Text('>')
               .fontSize(16)
-              .fontColor(this.isDarkWallpaper ? '#888888' : '#CCCCCC')
+              .fontColor('#FFFFFF')
               .onClick(() => {})
           }
 
           Text('清除订阅不影响个性化设置；个性化设置与订阅分开存储。')
-            .fontSize(12).fontColor(this.isDarkWallpaper ? '#888888' : '#999999')
+            .fontSize(12).fontColor('#FFFFFF')
             .width('100%').padding({ left: 16, right: 16 }).margin({ top: 16, bottom: 30 })
         }
         .width('100%')
