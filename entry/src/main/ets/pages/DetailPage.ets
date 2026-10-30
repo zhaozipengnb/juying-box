@@ -142,7 +142,7 @@ export struct DetailPage {
               Row({ space: 10 }) {
                 if (this.curLastWatch !== '') {
                   Text(this.curLastWatch)
-                    .fontSize(12).fontColor('#F9A825')
+                    .fontSize(12).fontColor('#FFFFFF')
                 }
                 Text(this.curFav ? '❤ 已收藏' : '♡ 收藏')
                   .fontSize(12)
@@ -172,7 +172,7 @@ export struct DetailPage {
             Column({ space: 6 }) {
               Text('全部')
                 .fontSize(13)
-                .fontColor(this.srcIdx === -1 ? '#F9A825' : '#FFFFFF')
+                .fontColor('#FFFFFF')
                 .fontWeight(this.srcIdx === -1 ? FontWeight.Bold : FontWeight.Normal)
                 .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 .textAlign(TextAlign.Center).width('100%')
@@ -183,7 +183,7 @@ export struct DetailPage {
               ForEach(this.sources, (s: SourceResult, i: number) => {
                 Text(s.siteName)
                   .fontSize(13)
-                  .fontColor(this.srcIdx === i ? '#F9A825' : '#FFFFFF')
+                  .fontColor('#FFFFFF')
                   .fontWeight(this.srcIdx === i ? FontWeight.Bold : FontWeight.Normal)
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   .textAlign(TextAlign.Center).width('100%')

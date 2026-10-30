@@ -205,7 +205,7 @@ export struct SearchPage {
           Row({ space: 4 }) {
             Text(`${idx + 1}`)
               .fontSize(11)
-              .fontColor(idx < 3 ? '#F9A825' : '#FFFFFF')
+              .fontColor('#FFFFFF')
               .fontWeight(FontWeight.Bold)
             Text(word)
               .fontSize(13)

@@ -77,7 +77,7 @@ export struct HistoryPage {
           ForEach(TABS, (t: string, i: number) => {
             Text(t)
               .fontSize(16)
-              .fontColor(this.tab === i ? '#F9A825' : '#FFFFFF')
+              .fontColor('#FFFFFF')
               .fontWeight(this.tab === i ? FontWeight.Bold : FontWeight.Normal)
               .padding({ left: 20, right: 20, top: 10, bottom: 8 })
               .border({ width: { bottom: 2 }, color: this.tab === i ? '#CCCCCC' : Color.Transparent })
@@ -152,7 +152,7 @@ export struct HistoryPage {
           .fontSize(12).fontColor('#FFFFFF')
           .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
         Text(action)
-          .fontSize(12).fontColor('#F9A825')
+          .fontSize(12).fontColor('#FFFFFF')
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)

@@ -76,7 +76,7 @@ export struct LivePage {
                   Column({ space: 3 }) {
                     Text(g.name)
                       .fontSize(14)
-                      .fontColor(this.groupIdx === i ? '#F9A825' : '#FFFFFF')
+                      .fontColor('#FFFFFF')
                       .fontWeight(this.groupIdx === i ? FontWeight.Bold : FontWeight.Normal)
                       .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                     Text(String(g.channels.length) + '台')
@@ -97,7 +97,7 @@ export struct LivePage {
               ForEach(this.curChannels, (ch: LiveChannel) => {
                 ListItem() {
                   Row({ space: 8 }) {
-                    Text('▶').fontSize(12).fontColor('#F9A825')
+                    Text('▶').fontSize(12).fontColor('#FFFFFF')
                     Text(ch.name)
                       .fontSize(14)
                       .fontColor('#FFFFFF')

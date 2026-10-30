@@ -310,7 +310,7 @@ export struct PlayerPage {
         Text('1080P').fontSize(11).fontColor('#FFFFFF')
         Row({ space: 4 }) {
           Text(this.showDanmaku ? '💬 弹幕开' : '💬 弹幕关').fontSize(11)
-            .fontColor(this.showDanmaku ? '#F9A825' : '#FFFFFF')
+            .fontColor('#FFFFFF')
             .onClick(() => { this.showDanmaku = !this.showDanmaku; })
         }
       }
@@ -376,7 +376,7 @@ export struct PlayerPage {
         if (this.siteName !== '') {
           Row({ space: 6 }) {
             Text('站源:').fontSize(12).fontColor('#FFFFFF')
-            Text(this.siteName).fontSize(13).fontColor('#F9A825')
+            Text(this.siteName).fontSize(13).fontColor('#FFFFFF')
           }.width('100%').padding({ left: 16, right: 16, bottom: 6 })
         }
 
