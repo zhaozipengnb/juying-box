@@ -37,7 +37,7 @@ export default class EntryAbility extends UIAbility {
     }).catch((e: Object) => {
       // 装配失败兜底：preferences 打开或恢复链路异常时降级到配置页，用户可重新输入订阅
       hilog.error(DOMAIN, 'testTag', '装配链路异常: %{public}s', e instanceof Error ? e.message : JSON.stringify(e));
-      AppState.instance.phase = 'config';
+      AppState.instance.phase = 'home';
     });
   }
 

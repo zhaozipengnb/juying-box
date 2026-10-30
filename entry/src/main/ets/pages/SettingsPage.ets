@@ -1,6 +1,7 @@
 // 设置页：点播 / 直播 / Proxy / 壁纸 / 播放设置 / 个性设置 / 备份恢复 / DoH / 缓存 / 版本 / 关于
 // 个性化设置即改即存（AppSettings.save），返回首页后由各消费点读取生效。
 import { AppState } from '../state/AppState';
+import { pickImportPack } from '../state/PackImport';
 import { AppSettings, PicSize, WallpaperKind, SPEED_OPTIONS, LONG_PRESS_OPTIONS } from '../state/AppSettings';
 import { SearchHistory } from '../state/SearchHistory';
 import { UrlHistory } from '../state/UrlHistory';
@@ -718,36 +719,16 @@ export struct SettingsPage {
   }
 
   // 点播弹窗 📁：选择聚合源 JSON 文件 → 解析装载 → 替换当前源（subUrl 清空为本地源包形态）
-  private importPackFile(): void {
+  private async importPackFile(): Promise<void> {
     this.localErr = '';
     this.localOk = '';
     try {
-      const opt = new picker.DocumentSelectOptions();
-      opt.maxSelectNumber = 1;
-      opt.fileSuffixFilters = ['json'];
-      const dp = new picker.DocumentViewPicker();
-      dp.select(opt).then((uris: string[]) => {
-        if (uris.length === 0) { return; }
-        try {
-          const f = fs.openSync(uris[0], fs.OpenMode.READ_ONLY);
-          const stat = fs.statSync(f.fd);
-          const buf = new ArrayBuffer(Math.max(stat.size, 1));
-          const n = fs.readSync(f.fd, buf);
-          fs.closeSync(f);
-          const text = new util.TextDecoder('utf-8').decodeToString(new Uint8Array(buf.slice(0, n)));
-          if (this.app.loadFromPackText(text)) {
-            this.showUrlDialog = false;
-            this.localOk = `已导入本地源包（${this.app.config?.sites.length ?? 0} 个源），已替换当前源`;
-            Nav.stack.pop();   // 回首页；HomePage onShown 检测到配置更换后自动刷新
-          } else {
-            this.localErr = '源包导入失败：' + this.app.errMsg;
-          }
-        } catch (e) {
-          this.localErr = '源包导入失败：' + (e instanceof Error ? e.message : String(e));
-        }
-      }).catch((_e: Object) => { /* 未选择文件 */ });
+      const total = await pickImportPack(this.app);
+      if (total < 0) { return; }   // 未选择文件
+      this.localOk = `已导入本地源包（${total} 个源），已替换当前源`;
+      Nav.stack.pop();   // 回首页；HomePage onShown 检测到配置更换后自动刷新
     } catch (e) {
-      this.localErr = '打开文件选择器失败';
+      this.localErr = '源包导入失败：' + (e instanceof Error ? e.message : String(e));
     }
   }
 

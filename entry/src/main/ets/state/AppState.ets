@@ -7,7 +7,7 @@ import { ConfigStore, serializeConfig } from './ConfigStore';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
-export type AppPhase = 'initing' | 'config' | 'home';
+export type AppPhase = 'initing' | 'home';
 
 // 错误信息提取：Error/BusinessError/普通对象统一取 message（避免 [object Object]）
 function errText(e: Object): string {
@@ -154,22 +154,23 @@ export class AppState {
     this.store = store;
     this.phase = 'initing';
     const stored = store.load();
-    // 无持久化源：进入配置页（点播弹窗填订阅链接或 📁 导入本地源包）
-    if (stored === null) { this.phase = 'config'; return; }
+    // 无持久化源：进首页空态引导（点播弹窗填订阅链接或 📁 导入本地源包）
+    if (stored === null) { this.phase = 'home'; return; }
     try {
       // 存的是 serializeConfig 序列化后的 JSON 字符串，直接走解码链文本分支
       const config = decodeConfigContent(stored.configJson);
       resolveSiteUrls(config, stored.url);   // 旧版本持久化数据里的相对路径同样归一
       if (!this.applyConfig(config)) {
-        console.info('OKV initFromStore 无可用站点，回退配置页');
-        this.phase = 'config';
+        console.info('OKV initFromStore 无可用站点，首页空态引导');
+        this.config = null;
+        this.phase = 'home';
         return;
       }
       this.subUrl = stored.url;
       this.isPackSource = stored.url === '';
     } catch (e) {
       console.info('OKV initFromStore ERR ' + (e instanceof Error ? e.message : JSON.stringify(e)));
-      this.phase = 'config';
+      this.phase = 'home';
     }
   }
 
@@ -209,7 +210,7 @@ export class AppState {
     this.currentSite = null;
     this.driver = null;
     this.isPackSource = false;
-    this.phase = 'config';
+    this.phase = 'home';
   }
 
   // 订阅加载成功后持久化当前配置（fire-and-forget，调用方无需等待）

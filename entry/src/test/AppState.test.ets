@@ -153,16 +153,17 @@ export default function appStateTest() {
       expect(app.driver instanceof ProxyDriver).assertTrue();
       AppSettings.instance.proxyUrl = '';
     });
-    it('initFromStore_empty_store_goes_config_phase', 0, async () => {
-      // 首启无持久化源：进入配置页（点播弹窗填订阅链接或 📁 导入本地源包）
+    it('initFromStore_empty_store_goes_home_empty_guide', 0, async () => {
+      // 首启无持久化源：进首页空态引导（ConfigPage 已移除，导入入口在首页/点播弹窗）
       const app = new AppState();
       await app.initFromStore(new ConfigStore(new FakeKVStore()));
-      expect(app.phase === 'config').assertTrue();
+      expect(app.phase === 'home').assertTrue();
+      expect(app.config === null).assertTrue();
       expect(app.subUrl === '').assertTrue();
       expect(app.isPackSource).assertFalse();
     });
-    it('clearConfig_returns_to_config_phase', 0, async () => {
-      // 清除订阅：回配置页重新填订阅或导入源包
+    it('clearConfig_returns_to_home_empty_guide', 0, async () => {
+      // 清除订阅：回首页空态引导（无源时首页显示导入入口）
       const app = new AppState();
       const responses: Map<string, string> = new Map();
       responses.set('https://sub.example/conf', SUB_JSON);
@@ -170,7 +171,8 @@ export default function appStateTest() {
       await app.loadFromUrl('https://sub.example/conf');
       expect(app.phase === 'home').assertTrue();
       app.clearConfig();
-      expect(app.phase === 'config').assertTrue();
+      expect(app.phase === 'home').assertTrue();
+      expect(app.config === null).assertTrue();
       expect(app.isPackSource).assertFalse();
     });
     it('loadFromPackText_replaces_source_and_routes_drpy', 0, async () => {

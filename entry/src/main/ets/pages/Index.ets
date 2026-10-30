@@ -3,7 +3,6 @@
 // 订阅在首页 ⚙ 设置里维护（SettingsPage）。
 import { AppState } from '../state/AppState';
 import { Nav } from '../nav/Nav';
-import { ConfigPage } from './ConfigPage';
 import { HomePage } from './HomePage';
 import { SettingsPage } from './SettingsPage';
 import { DetailPage } from './DetailPage';
@@ -19,11 +18,8 @@ struct Index {
   app: AppState = AppState.instance;
   build() {
     Navigation(Nav.stack) {
-
-      if (this.app.phase === 'config') { ConfigPage() }
-      // 正常首页在 NavDestination 'Home'；此根分支仅在栈被弹空前短暂可见（Home 上 Back 已改为退后台）
-      else if (this.app.phase === 'home') { Column() { LoadingProgress().width(44).height(44) }.width('100%').height('100%').justifyContent(FlexAlign.Center) }
-      else { Column() { Text('正在加载…') }.width('100%').height('100%').justifyContent(FlexAlign.Center) }
+      // 首页在 NavDestination 'Home'（无源时首页显示空态引导）；此根分支仅在栈被弹空前短暂可见
+      Column() { LoadingProgress().width(44).height(44) }.width('100%').height('100%').justifyContent(FlexAlign.Center)
     }
     .mode(NavigationMode.Stack)
     .hideTitleBar(true)
@@ -32,8 +28,9 @@ struct Index {
   }
 
   aboutToAppear(): void {
-    // 冷启动已恢复配置（或无订阅用内置源起步）→ 直接路由进首页（initFromStore 通常先于首帧完成）
+    // 冷启动恢复完成（或无源空态）→ 路由进首页；延迟重查兜底 initFromStore 晚于首帧的情况
     if (this.app.phase === 'home') { Nav.stack.replacePath({ name: 'Home' }); }
+    setTimeout(() => { if (this.app.phase === 'home') { Nav.stack.replacePath({ name: 'Home' }); } }, 1000);
   }
 
   @Builder
