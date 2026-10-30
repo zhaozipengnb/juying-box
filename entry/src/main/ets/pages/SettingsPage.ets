@@ -484,6 +484,11 @@ export struct SettingsPage {
             Toggle({ type: ToggleType.Switch, isOn: this.settings.siteFilter })
               .onChange((v: boolean) => { this.settings.siteFilter = v; this.settings.save(); })
           }
+          SettingRow({ label: '自动跳过失效源', sub: '开启后加载失败或无内容的源自动切换并隐藏；关闭后原地提示，可手动换源' }) {
+            Toggle({ type: ToggleType.Switch, isOn: this.settings.autoSkipDead })
+              .onChange((v: boolean) => { this.settings.autoSkipDead = v; this.settings.save(); })
+          }
+
           SettingRow({ label: '无痕模式', sub: '不保留搜索记录，搜索栏不展示历史标签' }) {
             Toggle({ type: ToggleType.Switch, isOn: this.settings.incognito })
               .onChange((v: boolean) => { this.settings.incognito = v; this.settings.save(); })

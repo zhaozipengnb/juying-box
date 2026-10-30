@@ -175,6 +175,8 @@ export struct HomePage {
     this.loading = true;
     this.errMsg = '';
     let emptyHit = false;   // 区分「无影片」与网络/解析类错误：前者记死源，后者可重试
+    // 自动跳源开关（设置页可关）：关闭后失败/空内容原地提示，不标记不隐藏不跳源
+    const skip = autoSkip && this.settings.autoSkipDead;
     try {
       const hc: HomeContent = await d.getHomeContent();
       if (this.app.driver !== d) { return; }   // 站点已切换，丢弃过期响应
@@ -182,7 +184,7 @@ export struct HomePage {
       const bothEmpty = hc.categories.length === 0 && hc.items.length === 0;
       if (bothEmpty) { emptyHit = true; }
       // 自动跳过时：无推荐即跳过；手动选源时：分类和列表都为空才报错
-      const emptyFail = autoSkip ? hc.items.length === 0 : bothEmpty;
+      const emptyFail = skip ? hc.items.length === 0 : bothEmpty;
       if (emptyFail) {
         throw new Error('源返回空内容');
       }
@@ -200,14 +202,14 @@ export struct HomePage {
       const msg = errText(e as Object);
       const curKey = this.app.currentSite?.key ?? '?';
       console.info('OKV loadHome ERR site=' + curKey + ' engine=' + (this.app.currentSite?.api ?? '?') + ' msg=' + msg);
-      // 已确认无影片：记入死源并从下拉隐藏（网络类错误不记，保留在列表可重试）
-      if (emptyHit && curKey !== '?' && curKey !== '' && !this._deadSites.includes(curKey)) {
+      // 已确认无影片且开关开启：记入死源并从下拉隐藏（网络类错误不记，保留在列表可重试）
+      if (emptyHit && skip && curKey !== '?' && curKey !== '' && !this._deadSites.includes(curKey)) {
         this._deadSites.push(curKey);
         this.refreshSites();
       }
       if (!emptyHit) { this._skipHitErr = true; }
       // 自动跳过失败源；手动选中的源无影片时同样跳到下一可用源
-      if ((autoSkip || emptyHit) && this._autoSkipTried.length < 50) {
+      if (skip && this._autoSkipTried.length < 50) {
         if (!this._autoSkipTried.includes(curKey)) { this._autoSkipTried.push(curKey); }
         const nextKey = this.findNextUsableSite();
         console.info('OKV autoSkip check autoSkip=' + autoSkip + ' tried=' + this._autoSkipTried.length + ' nextKey=' + nextKey);

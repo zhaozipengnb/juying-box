@@ -4,7 +4,7 @@
 // 解析不出的地址不静默降级，而是给出错误卡片（重试 / 网页播放 / 返回），由用户决定。
 // 线路轮循：当前线路播放失败时自动切到下一线路同集继续尝试，全部线路失败才报错。
 import { Nav, PlayerParam } from '../nav/Nav';
-import { Episode, PlayLine, MovieDetail, SiteConfig, isDirectMedia, resolvePlayUrl, siteEngine } from 'common';
+import { Episode, PlayLine, MovieDetail, SiteConfig, isDirectMedia, resolvePlayUrl, siteEngine, formatDuration } from 'common';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
 import { window } from '@kit.ArkUI';
@@ -37,6 +37,8 @@ export struct PlayerPage {
   @Local showDanmaku: boolean = false;
   @Local isFav: boolean = false;
   @Local isTheater: boolean = false;   // 影院模式：横屏全屏、隐藏下方详情
+  @Local curTime: number = 0;          // 当前播放进度（秒），onUpdate 驱动
+  @Local dur: number = 0;              // 视频总时长（秒），onPrepared 回调取得
   ph: PlayHistory = PlayHistory.instance;
   favs: Favorites = Favorites.instance;
   private lastPos: number = 0;         // 最近一次进度（秒），退出时落盘
@@ -283,9 +285,12 @@ export struct PlayerPage {
         Video({ src: this.playUrl, controller: this.controller })
           .width('100%').height('100%')
           .autoPlay(true)
+          .controls(false)
           .objectFit(ImageFit.Contain)
+          .onPrepared((ev) => { this.dur = ev.duration; })
           .onError(() => { this.playUrl = ''; this.tryNextLine(); })
           .onUpdate((ev) => {
+            this.curTime = ev.time;
             this.lastPos = ev.time;
             this.saveProgress(false);
             // 断点续播：首次进度回调时 seek 一次（PlaybackInfo 无 duration，看完的由切集覆盖断点）
@@ -317,7 +322,7 @@ export struct PlayerPage {
       .position({ x: 12, y: 12 })
       .alignItems(HorizontalAlign.Start)
 
-      // 右上角：收藏（全屏走 Video 自带控制条按钮）
+      // 右上角：收藏（全屏按钮移至底部控制栏）
       Row({ space: 18 }) {
         Image($r('app.media.ic_heart')).width(20).height(20)
           .fillColor(this.isFav ? '#E53935' : '#FFFFFF')
@@ -345,6 +350,29 @@ export struct PlayerPage {
         }
         .justifyContent(FlexAlign.Center)
         .width('100%')
+      }
+
+      // 底部：进度条 + 时间 + 全屏（自有控制栏，全屏直接切影院模式）
+      if (this.playUrl !== '' && this.errMsg === '' && !this.resolving && !this.useWeb) {
+        Row({ space: 10 }) {
+          Text(formatDuration(this.curTime)).fontSize(11).fontColor('#FFFFFF')
+          Slider({ value: Math.min(this.curTime, this.dur > 0 ? this.dur : 1), min: 0, max: this.dur > 0 ? this.dur : 1 })
+            .layoutWeight(1)
+            .selectedColor('#007DFF')
+            .trackColor('#66FFFFFF')
+            .blockColor('#FFFFFF')
+            .onChange((value: number) => {
+              this.curTime = value;
+              this.controller.setCurrentTime(value);
+            })
+          Text(formatDuration(this.dur)).fontSize(11).fontColor('#FFFFFF')
+          Text(this.isTheater ? '⤡' : '⤢').fontSize(18).fontColor('#FFFFFF')
+            .onClick(() => { this.toggleTheater(); })
+        }
+        .width('100%')
+        .position({ x: 0, y: '100%' })
+        .markAnchor({ x: 0, y: '100%' })
+        .padding({ left: 12, right: 12, bottom: 8 })
       }
     }
 

@@ -1,5 +1,6 @@
 import localUnitTest from './LocalUnit.test';
 import modelTest from './Model.test';
+import timeUtilTest from './TimeUtil.test';
 import codingTest from './Coding.test';
 import configDecoderTest from './ConfigDecoder.test';
 import cmsJsonApiTest from './CmsJsonApi.test';
@@ -16,6 +17,7 @@ import idnTest from './Idn.test';
 export default function testsuite() {
   localUnitTest();
   modelTest();
+  timeUtilTest();
   codingTest();
   configDecoderTest();
   cmsJsonApiTest();

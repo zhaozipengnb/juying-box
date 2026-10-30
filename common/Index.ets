@@ -3,6 +3,7 @@
 export * from './src/main/ets/util/TypeUtil';
 export * from './src/main/ets/util/Coding';
 export * from './src/main/ets/util/UrlUtil';
+export * from './src/main/ets/util/TimeUtil';
 export * from './src/main/ets/util/HlsAdFilter';
 export * from './src/main/ets/util/LiveSourceParser';
 export * from './src/main/ets/model/TvboxModels';

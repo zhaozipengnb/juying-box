@@ -26,6 +26,7 @@ export class AppSettings {
   @Trace showSite: boolean = true;           // 显示站源：搜索结果卡片角标展示来源站名
   @Trace siteFilter: boolean = false;        // 站源搜索：搜索结果顶部按站点筛选（聚合结果就绪后展示）
   @Trace aiAdFilter: boolean = false;        // AI去广告（预留：将作用于播放地址解析阶段）
+  @Trace autoSkipDead: boolean = false;      // 自动跳过失效源：加载失败/无内容的源自动切下一个并隐藏
   @Trace builtinDownload: boolean = false;   // 内置下载：详情页/播放页显示下载按钮
   @Trace wallpaper: WallpaperKind = 'default'; // 全局壁纸（颜色主题）
   @Trace wallpaperUri: string = '';            // 全局壁纸（自定义图片路径，非空时优先于颜色主题）
@@ -73,6 +74,8 @@ export class AppSettings {
       const sf = obj['siteFilter'];
       if (typeof sf === 'boolean') { this.siteFilter = sf; }
       const ai = obj['aiAdFilter'];
+      const asd = obj['autoSkipDead'];
+      if (typeof asd === 'boolean') { this.autoSkipDead = asd; }
       if (typeof ai === 'boolean') { this.aiAdFilter = ai; }
       const dl = obj['builtinDownload'];
       if (typeof dl === 'boolean') { this.builtinDownload = dl; }
@@ -92,7 +95,7 @@ export class AppSettings {
     const obj: Record<string, Object> = {
       'picSize': this.picSize, 'playSpeed': this.playSpeed, 'longPressSpeed': this.longPressSpeed,
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
-      'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload,
+      'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload, 'autoSkipDead': this.autoSkipDead,
       'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl, 'proxyUrl': this.proxyUrl
     };
     return JSON.stringify(obj);
@@ -104,7 +107,7 @@ export class AppSettings {
     const obj: Record<string, Object> = {
       'picSize': this.picSize, 'playSpeed': this.playSpeed, 'longPressSpeed': this.longPressSpeed,
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
-      'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload,
+      'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload, 'autoSkipDead': this.autoSkipDead,
       'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl,
       'proxyUrl': this.proxyUrl
     };
