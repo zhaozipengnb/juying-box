@@ -2,7 +2,6 @@
 // 个性化设置消费点：图片尺寸（列数）、壁纸（背景）、无痕（搜索词不保留）、
 // 聚合搜索 + 显示站源 + 站源筛选（搜索链路）。
 import { AppState } from '../state/AppState';
-import { pickImportPack } from '../state/PackImport';
 import { AppSettings, PicSize } from '../state/AppSettings';
 import { SearchHistory } from '../state/SearchHistory';
 import { DrpyWebContainer } from '../spider/DrpyWebBridge';
@@ -279,69 +278,11 @@ export struct HomePage {
     this.loadHome(true);
   }
 
-  // 空态引导：导入本地源包 / 加载订阅链接（无任何源时的首页形态）
-  @Local guideUrl: string = '';
-  @Local guideErr: string = '';
-  @Local guideBusy: boolean = false;
-
-  private async guideImportPack(): Promise<void> {
-    this.guideErr = '';
-    try {
-      const n = await pickImportPack(this.app);
-      if (n < 0) { return; }
-      this.refreshSites();
-      this.loadHome(true);
-    } catch (e) {
-      this.guideErr = e instanceof Error ? e.message : JSON.stringify(e);
-    }
-  }
-
-  private async guideLoadUrl(): Promise<void> {
-    const url = this.guideUrl.trim();
-    if (url === '' || this.guideBusy) { return; }
-    this.guideBusy = true;
-    this.guideErr = '';
-    const ok = await this.app.loadFromUrl(url);
-    this.guideBusy = false;
-    if (ok) {
-      this.app.persistCurrent();
-      this.refreshSites();
-      this.loadHome(true);
-    } else {
-      this.guideErr = this.app.errMsg;
-    }
-  }
-
   build() {
     NavDestination() {
     Column() {
     // drpy JS 插件运行环境（1x1 不可见；Home 是栈底 NavDestination，常驻存活覆盖 Detail/Player 调用期）
     DrpyWebContainer()
-    if (this.app.config === null || this.app.config.sites.length === 0) {
-      // 空态引导：无任何源时居中展示导入入口（替代原 ConfigPage）
-      Column({ space: 14 }) {
-        Text('聚源盒').fontSize(28).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').margin({ top: 120 })
-        Text('导入本地源包（聚合源 JSON），或粘贴订阅链接')
-          .fontSize(13).fontColor('#FFFFFF')
-        Button('📁 导入本地源包')
-          .width('72%').height(46)
-          .backgroundColor('#007DFF').fontColor('#FFFFFF')
-          .onClick(() => { this.guideImportPack(); })
-        TextInput({ placeholder: 'https://…/config.json', text: this.guideUrl })
-          .type(InputType.URL).width('72%').height(46)
-          .onChange((v: string) => { this.guideUrl = v; })
-        Button(this.guideBusy ? '解析中…' : '加载订阅')
-          .width('72%').height(46)
-          .backgroundColor('#666666').fontColor('#FFFFFF')
-          .enabled(!this.guideBusy && this.guideUrl.trim().length > 0)
-          .onClick(() => { this.guideLoadUrl(); })
-        if (this.guideErr !== '') {
-          Text('错误：' + this.guideErr).fontSize(13).fontColor('#FF8A80').width('72%')
-        }
-      }
-      .width('100%').height('100%')
-      .alignItems(HorizontalAlign.Center)
-    } else {
       // 顶栏：站点切换 + 搜索入口
       Row({ space: 8 }) {
         // 不支持的源已在 refreshSites 中过滤，此处仅展示可用源
@@ -492,7 +433,6 @@ export struct HomePage {
             this.loadCategory(tid, this.page + 1, false);
           }
         })
-      }
       }
     }
     .width('100%')
