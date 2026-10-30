@@ -80,7 +80,7 @@ export struct HistoryPage {
               .fontColor(this.tab === i ? '#F9A825' : '#FFFFFF')
               .fontWeight(this.tab === i ? FontWeight.Bold : FontWeight.Normal)
               .padding({ left: 20, right: 20, top: 10, bottom: 8 })
-              .border({ width: { bottom: 2 }, color: this.tab === i ? '#666666' : Color.Transparent })
+              .border({ width: { bottom: 2 }, color: this.tab === i ? '#CCCCCC' : Color.Transparent })
               .onClick(() => { this.tab = i; })
           }, (t: string) => t)
           Blank()
