@@ -340,7 +340,7 @@ export struct HomePage {
                 .fontSize(15)
                 .fontColor('#FFFFFF')
                 .fontWeight(this.catIdx === i ? FontWeight.Bold : FontWeight.Normal)
-                .backgroundColor(this.catIdx === i ? '#007DFF' : '#33FFFFFF')
+                .backgroundColor(this.catIdx === i ? '#007DFF' : '#666666')
                 .borderRadius(20)
                 .padding({ left: 16, right: 16, top: 8, bottom: 8 })
                 .onClick(() => {
