@@ -317,7 +317,7 @@ export struct PlayerPage {
       .position({ x: 12, y: 12 })
       .alignItems(HorizontalAlign.Start)
 
-      // 右上角：收藏 + 影院模式（全屏横屏）
+      // 右上角：收藏（全屏走 Video 自带控制条按钮）
       Row({ space: 18 }) {
         Image($r('app.media.ic_heart')).width(20).height(20)
           .fillColor(this.isFav ? '#E53935' : '#FFFFFF')
@@ -325,9 +325,6 @@ export struct PlayerPage {
             const m = this.detail?.movie;
             if (m !== null && m !== undefined) { this.isFav = this.favs.toggle(this.siteKey, m); }
           })
-        Text(this.isTheater ? '⤡' : '⤢')
-          .fontSize(20).fontColor('#FFFFFF')
-          .onClick(() => { this.toggleTheater(); })
       }
       .position({ x: '100%', y: 14 })
       .markAnchor({ x: '100%' })
