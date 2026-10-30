@@ -97,7 +97,7 @@ export struct SearchPage {
           TextInput({ placeholder: '输入片名搜索', text: this.searchKey })
             .layoutWeight(1).height(40)
             .fontSize(15)
-            .backgroundColor('#99888888')
+            .backgroundColor('#1A888888')
             .borderRadius(8)
             .onChange((v: string) => { this.searchKey = v; })
             .onSubmit(() => { this.doSearch(this.searchKey); })
@@ -119,7 +119,7 @@ export struct SearchPage {
                 Text('观看历史').fontSize(14).fontColor('#FFFFFF')
               }
               .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-              .backgroundColor('#99888888')
+              .backgroundColor('#1A888888')
               .borderRadius(10)
               .onClick(() => { Nav.stack.pushPathByName('History', ''); })
 
@@ -128,7 +128,7 @@ export struct SearchPage {
                 Text('我的收藏').fontSize(14).fontColor('#FFFFFF')
               }
               .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-              .backgroundColor('#99888888')
+              .backgroundColor('#1A888888')
               .borderRadius(10)
               .onClick(() => { Nav.stack.pushPathByName('History', 'fav'); })
             }
@@ -178,7 +178,7 @@ export struct SearchPage {
           Text(tag)
             .fontSize(13)
             .fontColor('#FFFFFF')
-            .backgroundColor('#99888888')
+            .backgroundColor('#1A888888')
             .borderRadius(12)
             .padding({ left: 10, right: 10, top: 5, bottom: 5 })
             .margin({ right: 6, bottom: 6 })
@@ -211,7 +211,7 @@ export struct SearchPage {
               .fontSize(13)
               .fontColor('#FFFFFF')
           }
-          .backgroundColor('#99888888')
+          .backgroundColor('#1A888888')
           .borderRadius(12)
           .padding({ left: 10, right: 10, top: 5, bottom: 5 })
           .margin({ right: 6, bottom: 6 })

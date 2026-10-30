@@ -426,7 +426,7 @@ export struct PlayerPage {
                   Text(line.from || ('线路' + (li + 1)))
                     .fontSize(12)
                     .fontColor(this.lineIdx === li ? '#FFFFFF' : '#DDDDDD')
-                    .backgroundColor('#99888888')
+                    .backgroundColor('#1A888888')
                     .borderRadius(4)
                     .padding({ left: 8, right: 8, top: 4, bottom: 4 })
                     .onClick(() => { this.switchTo(li, 0); })
@@ -437,7 +437,7 @@ export struct PlayerPage {
             if (this.ep !== null && this.settings.builtinDownload) {
               Text('下载')
                 .fontSize(12).fontColor('#333333')
-                .backgroundColor('#99888888').borderRadius(4)
+                .backgroundColor('#1A888888').borderRadius(4)
                 .padding({ left: 8, right: 8, top: 4, bottom: 4 })
                 .onClick(() => {
                   if (this.ep !== null && !this.dl.isDownloading(this.ep.url)) {
@@ -458,7 +458,7 @@ export struct PlayerPage {
                   Text(e.name)
                     .fontSize(12)
                     .fontColor(this.epIdx === ei ? '#FFFFFF' : '#DDDDDD')
-                    .backgroundColor('#99888888')
+                    .backgroundColor('#1A888888')
                     .borderRadius(4)
                     .width('100%').height(32)
                     .textAlign(TextAlign.Center)
