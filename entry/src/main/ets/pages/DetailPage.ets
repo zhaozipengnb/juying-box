@@ -176,9 +176,7 @@ export struct DetailPage {
                 .fontWeight(this.srcIdx === -1 ? FontWeight.Bold : FontWeight.Normal)
                 .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 .textAlign(TextAlign.Center).width('100%')
-                .backgroundColor(this.srcIdx === -1
-                  ? (this.isDarkWallpaper ? '#33F9A825' : '#1AF9A825')
-                  : (this.isDarkWallpaper ? '#26FFFFFF' : '#12000000'))
+                .backgroundColor(this.srcIdx === -1 ? '#F9A825' : '#666666')
                 .borderRadius(8)
                 .padding({ left: 10, right: 10, top: 7, bottom: 7 })
                 .onClick(() => { this.srcIdx = -1; })
@@ -189,9 +187,7 @@ export struct DetailPage {
                   .fontWeight(this.srcIdx === i ? FontWeight.Bold : FontWeight.Normal)
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   .textAlign(TextAlign.Center).width('100%')
-                  .backgroundColor(this.srcIdx === i
-                    ? (this.isDarkWallpaper ? '#33F9A825' : '#1AF9A825')
-                    : (this.isDarkWallpaper ? '#26FFFFFF' : '#12000000'))
+                  .backgroundColor(this.srcIdx === i ? '#F9A825' : '#666666')
                   .borderRadius(8)
                   .padding({ left: 10, right: 10, top: 7, bottom: 7 })
                   .onClick(() => { this.srcIdx = i; })
