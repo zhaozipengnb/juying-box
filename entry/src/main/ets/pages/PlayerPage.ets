@@ -447,6 +447,10 @@ export struct PlayerPage {
     })
     .onWillDisappear(() => {
       this.saveProgress(true);
+      this.sniffClear();
+      // AVPlayer 不随页面销毁自动停止:退出播放页必须显式停掉并释放(否则声音继续)
+      this.engine.stop();
+      this.engine.release();
       if (this.ctrlTimer >= 0) { clearTimeout(this.ctrlTimer); this.ctrlTimer = -1; }
       this.showCtrl = false;
       this.setImmersive(false);
