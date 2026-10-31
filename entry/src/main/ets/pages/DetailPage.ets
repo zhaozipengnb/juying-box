@@ -108,7 +108,7 @@ export struct DetailPage {
   @Builder
   detailBody() {
     Column() {
-      // 顶栏：片名 + 源数量 + ☰ 信息开关
+      // 顶栏：片名 + 源数量/详情开关 + ▦ 视图切换(直接生效)
       Row() {
         TextInput({ text: this.searchName, placeholder: '输入片名搜索' })
           .fontSize(20).fontWeight(FontWeight.Bold)
@@ -125,37 +125,24 @@ export struct DetailPage {
         Text(this.sources.length + '源')
           .fontSize(13)
           .fontColor('#FFFFFF')
-          .padding({ left: 8, right: 8 })
-        Image($r('app.media.ic_list'))
+          .padding({ left: 8 })
+        Text(this.detail === null ? '' : this.showInfo ? '收起 ⌃' : '详情 ⌄')
+          .fontSize(13)
+          .fontColor('#B3FFFFFF')
+          .padding({ left: 2, right: 6 })
+          .onClick(() => { if (this.detail !== null) { this.showInfo = !this.showInfo; } })
+        Image(this.gridView ? $r('app.media.ic_grid') : $r('app.media.ic_list'))
           .width(20).height(20)
-          .fillColor('#FFFFFF')
+          .fillColor(this.gridView ? '#4D9EFF' : '#FFFFFF')
           .padding({ left: 4, right: 4 })
-          .onClick(() => { this.showInfo = !this.showInfo; })
+          .onClick(() => { this.gridView = !this.gridView; })
       }
       .width('100%')
       .padding({ left: 16, right: 16, top: 14, bottom: 6 })
 
-      // 影片信息面板（☰ 展开）
+      // 影片信息面板（"详情 ⌄" 展开）
       if (this.showInfo && this.detail !== null) {
         Column() {
-          // 视图偏好(从顶栏 ▦ 挪入):列表/网格
-          Row({ space: 8 }) {
-            Text('聚合视图').fontSize(12).fontColor('#B3FFFFFF')
-            Text('列表')
-              .fontSize(12).fontColor(this.gridView ? '#4D9EFF' : '#FFFFFF')
-              .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-              .backgroundColor(this.gridView ? '#1A4D9EFF' : '#33888888')
-              .borderRadius(6)
-              .onClick(() => { this.gridView = false; })
-            Text('网格')
-              .fontSize(12).fontColor(!this.gridView ? '#4D9EFF' : '#FFFFFF')
-              .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-              .backgroundColor(!this.gridView ? '#1A4D9EFF' : '#33888888')
-              .borderRadius(6)
-              .onClick(() => { this.gridView = true; })
-          }
-          .width('100%')
-          .padding({ left: 16, right: 16, bottom: 6 })
           Row({ space: 12 }) {
             Image(this.detail.movie.pic === '' ? $r('app.media.startIcon') : this.detail.movie.pic)
               .width(96).height(132).objectFit(ImageFit.Cover).borderRadius(8).alt($r('app.media.startIcon'))
