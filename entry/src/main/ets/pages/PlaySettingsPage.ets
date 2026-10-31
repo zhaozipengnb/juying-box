@@ -63,26 +63,6 @@ export struct PlaySettingsPage {
     };
   }
 
-  private pickFit(): void {
-    const labels: string[] = ['适应窗口', '填满裁剪', '拉伸铺满'];
-    const values: VideoFit[] = ['contain', 'cover', 'fill'];
-    this.picker = {
-      title: '缩放比例',
-      options: labels,
-      index: values.indexOf(this.videoFit),
-      onPick: (idx: number): void => {
-        this.videoFit = values[idx];
-        this.sync();
-      }
-    };
-  }
-
-  private fitLabel(): string {
-    if (this.videoFit === 'cover') { return '填满裁剪'; }
-    if (this.videoFit === 'fill') { return '拉伸铺满'; }
-    return '适应窗口';
-  }
-
   build() {
     NavDestination() {
       Stack() {
@@ -98,8 +78,6 @@ export struct PlaySettingsPage {
             SettingRow({ label: '长按倍速',
               value: this.longPressSpeed === 0 ? '关闭' : this.longPressSpeed + 'x',
               onTap: (): void => { this.pickLongPress(); } })
-            SettingRow({ label: '缩放比例', value: this.fitLabel(),
-              onTap: (): void => { this.pickFit(); } })
             SettingRow({ label: '线路播放', value: this.lineAutoPlay ? '自动' : '手动',
               onTap: (): void => {
                 this.lineAutoPlay = !this.lineAutoPlay;

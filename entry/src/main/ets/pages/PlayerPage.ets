@@ -6,6 +6,7 @@
 import { Nav, PlayerParam } from '../nav/Nav';
 import { Episode, PlayLine, MovieDetail, SiteConfig, isDirectMedia, resolvePlayUrl, siteEngine, formatDuration } from 'common';
 import { OptionPicker, PickerSpec } from '../components/OptionPicker';
+import { AVPlayerEngine, EngineState, speedEnum } from '../media/AVPlayerEngine';
 import { SPEED_OPTIONS } from '../state/AppSettings';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
@@ -25,7 +26,6 @@ export struct PlayerPage {
   @Local resolving: boolean = true;
   @Local errMsg: string = '';
   @Local useWeb: boolean = false;
-  @Local speed: number = 1.0;
   settings: AppSettings = AppSettings.instance;
   dl: DownloadManager = DownloadManager.instance;
   @Local movieName: string = '';
@@ -66,7 +66,7 @@ export struct PlayerPage {
   @Local seekDelta: number = 0;        // 滑动偏移（秒，右正左负）
   private seekFrom: number = 0;        // 手势起点的基准进度
   private panSeeking: boolean = false; // 本次手势是否有效（起手条件不满足则整段忽略）
-  private controller: VideoController = new VideoController();
+  engine: AVPlayerEngine = new AVPlayerEngine();   // AVPlayer 内核(真倍速/循环/精准 seek)
   private webController: webview.WebviewController = new webview.WebviewController();
 
   // 播放页顶部为黑色视频区，状态栏图标用白色；离开时还原
@@ -223,7 +223,7 @@ export struct PlayerPage {
     this.panSeeking = false;
     this.seekPreview = false;
     const target = Math.max(0, Math.min(this.seekFrom + this.seekDelta, this.dur));
-    this.controller.setCurrentTime(target);
+    this.engine.seek(target);
     this.curTime = target;
     this.lastPos = target;
     this.armCtrlHide();
@@ -272,6 +272,35 @@ export struct PlayerPage {
       const d = display.getDefaultDisplaySync();
       this.videoH = d.width / (d.densityPixels > 0 ? d.densityPixels : 1) / 1.78;
     } catch (e) { }
+    // AVPlayer 回调:进度/状态/错误;倍速与循环由设置驱动
+    this.engine.speed = speedEnum(this.settings.playSpeed);
+    this.engine.onTime = (sec: number): void => {
+      this.curTime = sec;
+      this.lastPos = sec;
+      this.saveProgress(false);
+      // 断点续播:首次进度回调时 seek 一次(PlaybackInfo 无 duration,看完的由切集覆盖断点)
+      if (!this.seekedResume && this.ep !== null) {
+        this.seekedResume = true;
+        const m = this.detail?.movie;
+        const resume = (m !== null && m !== undefined)
+          ? this.ph.resumePosition(this.siteKey, m.vodId, this.ep.url) : 0;
+        if (resume > 0) { this.engine.seek(resume); }
+      }
+    };
+    this.engine.onState = (st: EngineState): void => {
+      if (st === 'playing') { this.isPlaying = true; }
+      else if (st === 'paused') { this.isPlaying = false; }
+      else if (st === 'error') {
+        this.playUrl = '';
+        if (this.settings.lineAutoPlay) { this.tryNextLine(); }
+        else { this.errMsg = '播放失败,请手动切换线路重试'; }
+      }
+    };
+    this.engine.onError = (msg: string): void => {
+      this.playUrl = '';
+      if (this.settings.lineAutoPlay) { this.tryNextLine(); }
+      else { this.errMsg = '播放失败,请手动切换线路重试'; }
+    };
   }
 
   build() {
@@ -374,36 +403,12 @@ export struct PlayerPage {
           LoadingProgress().width(36).height(36).color('#FFFFFF')
         }.width('100%').height('100%').justifyContent(FlexAlign.Center)
       } else {
-        Video({ src: this.playUrl, controller: this.controller })
+        XComponent({ id: 'playerSurface', type: 'surface' })
           .width('100%').height('100%')
-          .autoPlay(true)
-          .controls(false)
-          .loop(this.loopPlay)
-          .objectFit(this.videoFitEnum())
-          .onPrepared((ev) => {
-            this.dur = ev.duration;
-            this.curSpeed = this.settings.playSpeed;
-          })
-          .onError(() => {
-            this.playUrl = '';
-            if (this.settings.lineAutoPlay) {
-              this.tryNextLine();
-            } else {
-              this.errMsg = '播放失败，请手动切换线路重试';
-            }
-          })
-          .onUpdate((ev) => {
-            this.curTime = ev.time;
-            this.lastPos = ev.time;
-            this.saveProgress(false);
-            // 断点续播：首次进度回调时 seek 一次（PlaybackInfo 无 duration，看完的由切集覆盖断点）
-            if (!this.seekedResume && this.ep !== null) {
-              this.seekedResume = true;
-              const m = this.detail?.movie;
-              const resume = (m !== null && m !== undefined)
-                ? this.ph.resumePosition(this.siteKey, m.vodId, this.ep.url) : 0;
-              if (resume > 0) { this.controller.setCurrentTime(resume); }
-            }
+          .onLoad((_ctx?: object) => {
+            // surface 就绪:注入引擎(AVPlayer 用 surfaceId 渲染)
+            const xc = _ctx as XComponentController;
+            this.engine.setSurface(xc.getXComponentSurfaceId());
           })
       }
 
@@ -445,7 +450,7 @@ export struct PlayerPage {
           Image(this.isPlaying ? $r('app.media.ic_pause') : $r('app.media.ic_play')).width(26).height(26).fillColor('#FFFFFF')
             .onClick(() => {
               this.isPlaying = !this.isPlaying;
-              if (this.isPlaying) { this.controller.start(); } else { this.controller.pause(); }
+              if (this.isPlaying) { this.engine.pause(); } else { this.engine.play(); }
               this.armCtrlHide();
             })
           Image($r('app.media.ic_skip_forward')).width(22).height(22).fillColor('#FFFFFF')
@@ -466,7 +471,7 @@ export struct PlayerPage {
             .blockColor('#FFFFFF')
             .onChange((value: number) => {
               this.curTime = value;
-              this.controller.setCurrentTime(value);
+              this.engine.seek(value);
               this.armCtrlHide();
             })
           Text(formatDuration(this.dur)).fontSize(11).fontColor('#FFFFFF')
@@ -508,6 +513,7 @@ export struct PlayerPage {
                   this.curSpeed = SPEED_OPTIONS[idx];
                   this.settings.playSpeed = this.curSpeed;
                   this.settings.save();
+                  this.engine.setSpeed(this.curSpeed);
                 }
               };
             })
@@ -534,6 +540,7 @@ export struct PlayerPage {
                     this.curSpeed = SPEED_OPTIONS[idx];
                     this.settings.playSpeed = this.curSpeed;
                     this.settings.save();
+                    this.engine.setSpeed(this.curSpeed);
                   }
                 };
               })
@@ -565,7 +572,10 @@ export struct PlayerPage {
               .onClick(() => { this.playUrl = ''; this.prepare(); })
             Text(this.loopPlay ? '循环开' : '循环关')
               .fontSize(12).fontColor('#FFFFFF')
-              .onClick(() => { this.loopPlay = !this.loopPlay; })
+              .onClick(() => {
+                this.loopPlay = !this.loopPlay;
+                this.engine.setLoop(this.loopPlay);
+              })
           }
           .width('100%')
           .justifyContent(FlexAlign.Center)
@@ -611,13 +621,14 @@ export struct PlayerPage {
       .onAction((_e: GestureEvent) => {
         if (this.settings.longPressSpeed > 0 && this.isPlaying && this.playUrl !== '') {
           this.boost = this.settings.longPressSpeed;
+          this.engine.setSpeed(this.boost);
         }
       })
       .onActionEnd((_e: GestureEvent) => {
-        if (this.boost > 0) { this.boost = 0; }
+        if (this.boost > 0) { this.boost = 0; this.engine.setSpeed(this.curSpeed); }
       })
       .onActionCancel(() => {
-        if (this.boost > 0) { this.boost = 0; }
+        if (this.boost > 0) { this.boost = 0; this.engine.setSpeed(this.curSpeed); }
       }))
 
   }
