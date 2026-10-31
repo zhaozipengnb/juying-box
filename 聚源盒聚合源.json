@@ -404,7 +404,7 @@
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 0,
-      "ext": "https://v.aiwule.com",
+      "ext": "{\"数组\": \"href=\\\"/voddetail/&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"data-original=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://v.aiwule.com/vodtype/{cateId}.html\", \"分类\": \"电影$20#电视剧$21#综艺$22#动漫$23#短剧$47\", \"搜索url\": \"https://v.aiwule.com/vodsearch/{wd}-------------.html\", \"搜索数组\": \"href=\\\"/voddetail/&&</a\", \"搜索标题\": \"title=\\\"&&\\\"\", \"搜索链接\": \"href=\\\"&&\\\"\"}",
       "header": {}
     },
     {
@@ -2254,7 +2254,7 @@
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 1,
-      "ext": "{\"请求头\": \"User-Agent$MOBILE_UA\", \"编码\": \"UTF-8\", \"主页url\": \"https://m.yncmfs.com/\", \"数组\": \"class=\\\"module-item-pic\\\"&&</div>\", \"链接\": \"href=\\\"&&\\\"\", \"图片\": \"data-src=\\\"&&\\\"\", \"标题\": \"title=\\\"&&\\\"\", \"播放数组\": \"class=\\\"scroll-content\\\"&&</div>\", \"播放列表\": \"<a&&a>[不包含:дрр滈凊]\", \"播放链接\": \"href=\\\"&&\\\"\", \"播放标题\": \">&&</\", \"线路数组\": \"class=\\\"module-tab-item&&</div>\", \"线路标题\": \"<span>&&</span>\", \"跳转播放链接\": \"var player_*\\\"url\\\":\\\"&&\\\"\", \"分类url\": \"https://m.yncmfs.com/vssysw/{cateId}-{area}-{by}-{class}-{lang}-{letter}---{catePg}---{year}.html\", \"分类\": \"电影$1#电视剧$2#综艺$3#动漫$4#短剧$31\"}",
+      "ext": "{\"数组\": \"module-item-pic&&</div\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"data-original=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://m.yncmfs.com/vssytp/{cateId}.html\", \"分类\": \"电影$1#电视剧$2#综艺$3\", \"搜索url\": \"https://m.yncmfs.com/vodsearch/{wd}-------------.html\", \"搜索数组\": \"module-item-pic&&</div\", \"搜索标题\": \"title=\\\"&&\\\"\", \"搜索图片\": \"data-original=\\\"&&\\\"\", \"搜索链接\": \"href=\\\"&&\\\"\", \"请求头\": \"User-Agent$MOBILE_UA\"}",
       "header": {}
     },
     {

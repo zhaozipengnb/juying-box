@@ -21,7 +21,8 @@ const PC_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHT
 // 列表/字段选择器的候选（按常见模板族排序，现场验证取首个命中）
 const LIST_CANDIDATES: string[] = [
   'stui-vodlist__box&&</a', 'module-item-pic&&</div', 'hl-lazy&&</a', 'video-item&&</a',
-  'card-img-bili&&</a', 'public-list-box&&</a', 'myui-vodlist__box&&</a', 'list-img&&</a'
+  'card-img-bili&&</a', 'public-list-box&&</a', 'myui-vodlist__box&&</a', 'list-img&&</a',
+  'href="/voddetail/&&</a'
 ];
 const TITLE_CANDIDATES: string[] = ['title="&&"', 'alt="&&"'];
 const PIC_CANDIDATES: string[] = ['data-original="&&"', 'data-src="&&"', 'data-url="&&"', 'src="&&"'];
