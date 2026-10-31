@@ -1,6 +1,6 @@
 // 全局状态（V2）：配置 + 当前站点 + 引擎实例。测试可注入 testFetchText 替代真网络。
 import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, AppYsApi, XmlCmsDriver, ProxyDriver, FetchText, decodeConfigContent,
-  siteEngine, isSiteSupported, resolveSiteUrls } from 'common';
+  siteEngine, isSiteSupported, resolveSiteUrls, LiveGroupConfig } from 'common';
 import { httpFetch } from '../net/HttpClient';
 import { AppSettings } from './AppSettings';
 import { ConfigStore, serializeConfig } from './ConfigStore';
@@ -149,10 +149,22 @@ export class AppState {
       this.errMsg = '该订阅共 ' + config.sites.length + ' 个站点，但没有本引擎支持的源（支持 CMS JSON、XML 采集、drpy JS、AppYs；其余 JAR 源暂不支持）';
       return false;
     }
+    this.applyLives(config);
     this.config = config;
     this.pickInitialSite(config);
     this.phase = 'home';
     return true;
+  }
+
+  // TVBox 语义：配置/源包声明了 lives 就采纳首个直播源（导入时应用一次，日常改动仍走直播设置）
+  private applyLives(config: TvboxConfig): void {
+    const first = config.lives.find((l: LiveGroupConfig): boolean => l.url.trim() !== '');
+    if (first === undefined) { return; }
+    if (AppSettings.instance.liveUrl !== first.url) {
+      AppSettings.instance.liveUrl = first.url;
+      AppSettings.instance.save();
+      console.info('OKV lives adopted url=' + first.url);
+    }
   }
 
   async loadFromUrl(url: string): Promise<boolean> {
