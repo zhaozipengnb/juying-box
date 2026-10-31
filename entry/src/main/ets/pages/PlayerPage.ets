@@ -426,7 +426,9 @@ export struct PlayerPage {
             this.areaW = n.width as number;
             this.areaH = n.height as number;
           })
-          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+        // 不加 expandSafeArea：根布局已扩到状态栏下，本容器画在 [0,videoH]；
+        // 自带 expandSafeArea(TOP) 会使子组件布局原点下移一个状态栏高度，clip 又按本容器盒子裁，
+        // 底部锚定的控制行会被裁掉 124px（进度条看不到的直接根因）
         if (!this.isTheater) {
           this.detailArea()
         }
@@ -600,6 +602,7 @@ export struct PlayerPage {
       }
 
       // 底部：进度条 + 时间 + 全屏（随控制层显隐；全屏直接切影院模式）
+      // 锚定依赖「容器盒子=裁剪盒=子布局空间」三者重合——视频容器不可加 expandSafeArea(见上)
       if (this.playUrl !== '' && this.errMsg === '' && !this.resolving && !this.useWeb && this.showCtrl) {
         Row({ space: 10 }) {
           Text(formatDuration(this.curTime)).fontSize(11).fontColor('#FFFFFF')
@@ -747,6 +750,9 @@ export struct PlayerPage {
         .borderRadius(12)
       }
     }
+    // Stack 必须钉死为容器大小：底部控制层 position(y:'100%') 锚定 Stack 底边，
+    // XComponent 按宽高比缩放后 Stack 若自适应子组件，锚点随之漂移(cover 时进度条被 clip 裁出容器)
+    .width('100%').height('100%')
     // 点视频任意处切换控制层（子控件自身的 onClick 消费掉的不冒泡）；
     // 横向拖动（位移超 5vp）进滑动快进/快退，与点按互斥不冲突
     .onClick(() => { this.toggleCtrl(); })
