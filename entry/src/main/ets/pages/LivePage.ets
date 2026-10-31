@@ -135,6 +135,9 @@ export struct LivePage {
                         const gi = this.displayGroups.findIndex((g: LiveGroup): boolean => g.name === name);
                         this.groupIdx = gi >= 0 ? gi : 0;
                       })
+                    if ((ch.urls?.length ?? 1) > 1) {
+                      Text(`${ch.urls?.length}线`).fontSize(9).fontColor('#4D9EFF').margin({ left: 6 })
+                    }
                     Text('LIVE').fontSize(9).fontColor('#E53935').margin({ left: 6 })
                   }
                   .width('100%')
@@ -146,7 +149,8 @@ export struct LivePage {
                     const idx = eps.findIndex((c: LiveChannel): boolean => c.url === ch.url);
                     const param: PlayerParam = {
                       ep: { name: ch.name, url: ch.url }, siteKey: 'live',
-                      movieName: ch.name, lines: lines, lineIdx: 0, epIdx: idx >= 0 ? idx : 0
+                      movieName: ch.name, lines: lines, lineIdx: 0, epIdx: idx >= 0 ? idx : 0,
+                      channelUrls: ch.urls
                     };
                     Nav.stack.pushPathByName('Player', param);
                   })

@@ -69,6 +69,19 @@ export struct SiteManagePage {
     this.rebuild();
   }
 
+  // 删除站点：居中确认 → 移出配置并清理禁用记录
+  private confirmRemove(row: SiteRow): void {
+    this.getUIContext().showAlertDialog({
+      title: '删除站点',
+      message: `将「${row.name}」从当前配置中移除？订阅重新拉取后会恢复。`,
+      primaryButton: { value: '取消', action: (): void => {} },
+      secondaryButton: { value: '删除', fontColor: '#E53935', action: (): void => {
+        this.app.removeSite(row.key);
+        this.rebuild();
+      } }
+    });
+  }
+
   private onMove(index: number, dir: number): void {
     const to = index + dir;
     if (to < 0 || to >= this.rows.length) { return; }
@@ -122,6 +135,12 @@ export struct SiteManagePage {
                 Toggle({ type: ToggleType.Switch, isOn: !r.disabled })
                   .selectedColor('#007DFF')
                   .onChange((_v: boolean) => { this.onToggle(r); })
+                Text('删')
+                  .fontSize(12).fontColor('#E57373')
+                  .padding({ left: 6, right: 6, top: 4, bottom: 4 })
+                  .borderRadius(6)
+                  .backgroundColor('#26E57373')
+                  .onClick(() => { this.confirmRemove(r); })
               }
               .width('100%')
               .padding({ left: 18, right: 16, top: 10, bottom: 10 })

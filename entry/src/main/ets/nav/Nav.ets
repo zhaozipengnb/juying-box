@@ -16,4 +16,5 @@ export interface PlayerParam {
   lines?: PlayLine[];   // 当前源的全部播放线路
   lineIdx?: number;     // 点击的线路索引
   epIdx?: number;       // 点击的剧集索引
+  channelUrls?: string[]; // 直播多线路：当前频道的备选地址（>1 时播放页显示线路切换）
 }

@@ -40,6 +40,8 @@ export struct PlayerPage {
   @Local curSpeed: number = 1.0;       // 当前生效倍速（起播读设置，长按/菜单可变）
   @Local boost: number = 0;            // 长按加速中的倍速（0 = 未加速）
   @Local picker: PickerSpec | null = null;   // 居中选择弹层
+  @Local channelLine: number = 0;      // 直播多线路当前线路（0 基）
+  private channelUrls: string[] = [];  // 直播多线路地址表（来自 PlayerParam）
   private videoFitEnum(): ImageFit {
     if (this.settings.videoFit === 'cover') { return ImageFit.Cover; }
     if (this.settings.videoFit === 'fill') { return ImageFit.Fill; }
@@ -158,6 +160,10 @@ export struct PlayerPage {
       this.epIdx = ei >= 0 ? ei : 0;
       this.ep = eps[this.epIdx] ?? null;
       this.playUrl = '';
+      // 对齐 FongMi:换线有提示(挖掘自 OK影视 onErrorEvent 降级链)
+      this.getUIContext().getPromptAction().showToast({
+        message: `正在切换线路至 ${next + 1}/${this.lines.length}:${this.lines[next].from}`
+      });
       if (this.ep !== null) { this.prepare(); }
     } else {
       this.errMsg = '全部线路均无法播放';
@@ -315,9 +321,11 @@ export struct PlayerPage {
       return false;
     })
     .onReady((ctx: NavDestinationContext) => {
+      this.channelLine = 0;
       const p = ctx.pathInfo.param as PlayerParam;
       if (p !== null && p !== undefined) {
         this.ep = p.ep;
+        this.channelUrls = p.channelUrls ?? [];
         this.movieName = p.movieName ?? '';
         this.siteName = p.siteName ?? '';
         this.siteKey = p.siteKey;
@@ -458,6 +466,21 @@ export struct PlayerPage {
               this.armCtrlHide();
             })
           Text(formatDuration(this.dur)).fontSize(11).fontColor('#FFFFFF')
+          if (this.channelUrls.length > 1) {
+            Text(`线路${this.channelLine + 1}`)
+              .fontSize(12).fontColor('#FFFFFF')
+              .onClick(() => {
+                this.picker = {
+                  title: '切换线路',
+                  options: this.channelUrls.map((_u: string, i: number): string => `线路${i + 1}`),
+                  index: this.channelLine,
+                  onPick: (idx: number): void => {
+                    this.channelLine = idx;
+                    this.playUrl = this.channelUrls[idx];
+                  }
+                };
+              })
+          }
           Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x')
             .fontSize(12).fontColor('#FFFFFF')
             .onClick(() => {

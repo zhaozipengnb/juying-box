@@ -9,6 +9,7 @@
 export interface LiveChannel {
   name: string;
   url: string;
+  urls?: string[];   // 多线路（FongMi txt：频道名,url1#url2#url3；url = 首线路）
 }
 
 export interface LiveGroup {
@@ -53,7 +54,7 @@ export function parseM3u(text: string): LiveGroup[] {
     if (t.startsWith('#')) { continue; }
     if (pendingName !== '' && /^https?:\/\//i.test(t)) {
       findGroup(pendingGroup === '' ? '未分组' : pendingGroup)
-        .channels.push({ name: pendingName, url: t });
+        .channels.push({ name: pendingName, url: t, urls: [t] });
     }
     pendingName = '';
     pendingGroup = '';
@@ -82,12 +83,22 @@ export function parseTxt(text: string): LiveGroup[] {
       cur = g;
       continue;
     }
-    if (/^https?:\/\//i.test(right)) {
+    if (/^https?:\/\//i.test(right) || right.indexOf('#') >= 0) {
       if (cur === null) {
         cur = { name: '未分组', channels: [] };
         groups.push(cur);
       }
-      cur.channels.push({ name: left, url: right });
+      // 多线路：url1#url2#url3（每段可选 url$别名，别名暂不展示）
+      const urls: string[] = [];
+      const parts = right.split('#');
+      for (let k = 0; k < parts.length; k++) {
+        const seg = parts[k].trim();
+        if (!/^https?:\/\//i.test(seg)) { continue; }
+        const dollar = seg.indexOf('$');
+        urls.push(dollar >= 0 ? seg.substring(0, dollar).trim() : seg);
+      }
+      if (urls.length === 0) { continue; }
+      cur.channels.push({ name: left, url: urls[0], urls: urls });
     }
   }
   return groups.filter((g: LiveGroup): boolean => g.channels.length > 0);

@@ -81,6 +81,29 @@ export class AppState {
   }
 
   // 站点管理排序：交换 config.sites 中两项并持久化当前配置快照（订阅与源包通用）
+  // 站点管理删除：移出 config.sites 并持久化；若删的是当前站则切到首个可用源
+  removeSite(key: string): void {
+    const cfg = this.config;
+    if (cfg === null) { return; }
+    const idx = cfg.sites.findIndex((s: SiteConfig): boolean => s.key === key);
+    if (idx < 0) { return; }
+    cfg.sites.splice(idx, 1);
+    AppSettings.instance.disabledSites = AppSettings.instance.disabledSites.filter((k: string): boolean => k !== key);
+    AppSettings.instance.save();
+    if (this.store !== null) {
+      this.store.save(this.subUrl, serializeConfig(this.subUrl, cfg));
+    }
+    if (this.currentSite?.key === key) {
+      this.currentSite = null;
+      this.driver = null;
+      const next = this.firstSupportedSite(cfg);
+      if (next !== null) {
+        this.buildDriver(next);
+        if (this.store !== null) { this.store.saveCurrentSite(next.key); }
+      }
+    }
+  }
+
   reorderSite(from: number, to: number): void {
     const cfg = this.config;
     if (cfg === null) { return; }
