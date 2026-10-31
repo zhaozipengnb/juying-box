@@ -1,12 +1,13 @@
 // AVPlayerEngine:AVPlayer 封装(替代 Video 组件)。
 // Video 组件的 currentProgressRate 仅构造期生效、VideoController 无 setSpeed——
 // 本封装直接操作 AVPlayer:真倍速(setSpeed)、循环(loop)、精准 seek、状态机回调。
-// surface 经 XComponent(onLoad 回调取 surfaceId)注入;open 前未就绪则挂起待 surface。
+// 关键时序:set url 后状态异步跳 initialized → 此时才能设 surfaceId → prepare →
+// prepared → 才能 setSpeed/loop → play。同步赋值会打在 idle 上被状态机拒绝。
 import { media } from '@kit.MediaKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 const ETAG = 'OKV-AVP';
 
-export type EngineState = 'idle' | 'prepared' | 'playing' | 'paused' | 'error';
+export type EngineState = 'idle' | 'initialized' | 'prepared' | 'playing' | 'paused' | 'error';
 
 // 播放倍速数值 → AVPlayer 档位
 export function speedEnum(s: number): media.PlaybackSpeed {
@@ -23,8 +24,8 @@ export function speedEnum(s: number): media.PlaybackSpeed {
 export class AVPlayerEngine {
   private player: media.AVPlayer | null = null;
   private surfaceId: string = '';
-  private pendingUrl: string = '';     // surface 未就绪时挂起的打开请求
-  private pendingAutoPlay: boolean = false;
+  private state: EngineState = 'idle';
+  private pendingPlay: boolean = false;   // prepared 后是否自动播放
   url: string = '';
   speed: media.PlaybackSpeed = media.PlaybackSpeed.SPEED_FORWARD_1_00_X;
   loop: boolean = false;
@@ -33,59 +34,57 @@ export class AVPlayerEngine {
   onVideoSize?: (w: number, h: number) => void;
   onError?: (msg: string) => void;
 
-  // XComponent onLoad 时注入 surface;有挂起的打开请求则继续
+  // XComponent onLoad 时注入 surface;若 open 已先行(url 已设),补设并继续
   setSurface(id: string): void {
-    hilog.info(0x0000, ETAG, 'setSurface %{public}s pending=%{public}s', id, this.pendingUrl !== '' ? 'Y' : 'N');
     this.surfaceId = id;
-    if (this.pendingUrl !== '') {
-      // surface 后到:续跑挂起的 open(此时 player 尚未创建,open 内部会 createAVPlayer)
-      const url = this.pendingUrl;
-      const auto = this.pendingAutoPlay;
-      this.pendingUrl = '';
-      this.open(url, auto);
+    if (this.player !== null && this.state === 'initialized') {
+      this.player.surfaceId = id;
     }
   }
 
-  // 打开地址:重建播放器(reset→设 url/surface/loop→prepare→按需 play)
+  // 打开地址:设 url → 状态机异步走到 initialized → 设 surface → prepare →
+  // prepared → 设倍速/循环 → 按 pendingPlay 自动播放
   async open(url: string, autoPlay: boolean): Promise<void> {
     this.url = url;
-    this.pendingUrl = '';
-    if (this.surfaceId === '') {
-      // surface 未就绪:挂起,等 setSurface 注入后再继续
-      this.pendingUrl = url;
-      this.pendingAutoPlay = autoPlay;
-      return;
-    }
+    this.pendingPlay = autoPlay;
     if (this.player === null) {
       hilog.info(0x0000, ETAG, 'createAVPlayer');
       this.player = await media.createAVPlayer();
       this.wire(this.player);
     } else {
-      hilog.info(0x0000, ETAG, 'reset existing');
-      await this.player.reset();
+      await this.player.reset();   // → idle
     }
-    const p = this.player;
-    p.url = url;
-    p.loop = this.loop;
-    p.surfaceId = this.surfaceId;
-    p.setSpeed(this.speed);
-    hilog.info(0x0000, ETAG, 'open url=%{public}s surface=%{public}s speed=%{public}d', url.substring(0, 60), this.surfaceId, this.speed);
+    this.state = 'idle';
+    this.player.url = url;         // 触发异步 initialized → 见 wire
     this.onState?.('idle');
-    await p.prepare();
-    hilog.info(0x0000, ETAG, 'prepared, dur=%{public}d', p.duration);
-    this.onState?.('prepared');
-    if (autoPlay) { await p.play(); hilog.info(0x0000, ETAG, 'play() done'); }
   }
 
   private wire(p: media.AVPlayer): void {
+    p.on('stateChange', (state: string, _reason: media.StateChangeReason): void => {
+      hilog.info(0x0000, ETAG, 'state -> %{public}s', state);
+      if (state === 'initialized') {
+        // 此时才允许设 surfaceId
+        if (this.surfaceId !== '') { p.surfaceId = this.surfaceId; }
+        p.prepare();
+      } else if (state === 'prepared') {
+        this.state = 'prepared';
+        p.setSpeed(this.speed);   // prepared 状态才允许 setSpeed
+        p.loop = this.loop;
+        this.onState?.('prepared');
+        if (this.pendingPlay) {
+          this.pendingPlay = false;
+          p.play();
+        }
+      } else if (state === 'playing') {
+        this.state = 'playing';
+        this.onState?.('playing');
+      } else if (state === 'paused') {
+        this.state = 'paused';
+        this.onState?.('paused');
+      }
+    });
     p.on('timeUpdate', (timeMs: number): void => {
       this.onTime?.(Math.floor(timeMs / 1000));
-    });
-    p.on('stateChange', (state: string, reason: media.StateChangeReason): void => {
-      hilog.info(0x0000, ETAG, 'state -> %{public}s', state);
-      if (state === 'playing') { this.onState?.('playing'); }
-      else if (state === 'paused') { this.onState?.('paused'); }
-      else if (state === 'prepared') { this.onState?.('prepared'); }
     });
     p.on('videoSizeChange', (w: number, h: number): void => {
       this.onVideoSize?.(w, h);
@@ -93,7 +92,7 @@ export class AVPlayerEngine {
     p.on('error', (err: Object): void => {
       const msg = err instanceof Error ? err.message : JSON.stringify(err);
       hilog.error(0x0000, ETAG, 'AVP error %{public}s', msg);
-      this.onState?.('error');
+      this.state = 'error';
       this.onError?.(msg);
     });
   }
@@ -118,21 +117,27 @@ export class AVPlayerEngine {
     this.player?.seek(Math.max(0, Math.floor(sec * 1000)));
   }
 
-  // 真倍速(Video 组件做不到的能力)
+  // 真倍速(prepared/playing/paused 下合法;idle 只存值,prepared 回调统一应用)
   setSpeed(s: number): void {
-    this.speed = speedEnum(s);
-    this.player?.setSpeed(this.speed);
+    const e = speedEnum(s);
+    if (this.player !== null && (this.state === 'prepared' || this.state === 'playing' || this.state === 'paused')) {
+      this.player.setSpeed(e);
+    }
+    this.speed = e;
   }
 
   setLoop(v: boolean): void {
     this.loop = v;
-    if (this.player !== null) { this.player.loop = v; }
+    if (this.player !== null && (this.state === 'prepared' || this.state === 'playing' || this.state === 'paused')) {
+      this.player.loop = v;
+    }
   }
 
   async release(): Promise<void> {
     if (this.player !== null) {
       await this.player.release();
       this.player = null;
+      this.state = 'idle';
     }
   }
 }
