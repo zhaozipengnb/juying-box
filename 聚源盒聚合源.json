@@ -1594,7 +1594,7 @@
       "searchable": 1,
       "quickSearch": 0,
       "filterable": 0,
-      "ext": "https://y2s52n7.com",
+      "ext": "{\"数组\": \"card&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"src=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://y2s52n7.com/vod/show/id/{cateId}\", \"分类\": \"电影$1#电视剧$2#综艺$3#动漫$4#短剧$88\", \"搜索url\": \"https://y2s52n7.com/vod/search/{wd}\"}",
       "header": {}
     },
     {
@@ -1814,7 +1814,7 @@
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 0,
-      "ext": "{\"分类url\": \"https://maihaolian.com/\"}",
+      "ext": "{\"数组\": \"public-list-box&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"data-original=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://maihaolian.com/\", \"分类\": \"全部$home\"}",
       "header": {}
     },
     {
