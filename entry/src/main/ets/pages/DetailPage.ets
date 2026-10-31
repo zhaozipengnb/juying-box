@@ -387,8 +387,9 @@ export struct DetailPage {
       // 1. CMS/XML/AppYs 有限并发：runPool 懒启动 12 路 lane（合包后站点数可达数百，
       //    无上限 Promise.all 会同时发起数百个 HTTP 请求），单站失败跳过
       const cmsSites: SiteConfig[] = [];
+      const drpySites: SiteConfig[] = [];
       for (const s of supported) {
-        if (siteEngine(s) === 'js') { continue; }
+        if (siteEngine(s) === 'js') { drpySites.push(s); continue; }
         cmsSites.push(s);
       }
       await this.runPool(cmsSites, 12, handleSite);
