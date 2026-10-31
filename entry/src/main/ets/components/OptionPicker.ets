@@ -19,10 +19,16 @@ export struct OptionPicker {
   build() {
     Column() {
       Column() {
-        Text(this.title)
-          .fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-          .width('100%').textAlign(TextAlign.Center)
-          .padding({ top: 18, bottom: 6 })
+        Row() {
+          Text(this.title)
+            .fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+          Blank()
+          Text('✕').fontSize(16).fontColor('#99FFFFFF')
+            .padding({ left: 10, right: 2, top: 4, bottom: 4 })
+            .onClick(() => { this.onClose(); })
+        }
+        .width('100%')
+        .padding({ left: 20, right: 12, top: 14, bottom: 6 })
         ForEach(this.options, (o: string, i: number) => {
           Row() {
             Text(o)
@@ -54,6 +60,5 @@ export struct OptionPicker {
     .width('100%').height('100%')
     .backgroundColor('#66000000')
     .justifyContent(FlexAlign.Center)
-    .onClick(() => { this.onClose(); })
   }
 }
