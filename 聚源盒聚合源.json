@@ -1422,17 +1422,6 @@
       "header": {}
     },
     {
-      "key": "sub_wn4kcom",
-      "name": "🐌┆蜗牛┆4K",
-      "type": 1,
-      "api": "https://wn4k.com/",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "{\"数组\": \"video-card&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"src=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://wn4k.com/vodtype/{cateId}/\", \"分类\": \"电影$1#连续剧$2#综艺$3#动漫$4\", \"搜索url\": \"https://wn4k.com/vodsearch/{wd}-------------/\"}",
-      "header": {}
-    },
-    {
       "key": "sub_wwwqwnullcom",
       "name": "🌈┆七味┆4K",
       "type": 1,
@@ -1760,17 +1749,6 @@
       "quickSearch": 1,
       "filterable": 0,
       "ext": "{\"分类url\": \"https://www.guan-feng.com/\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_maihaolianco",
-      "name": "蓝兔 | 4K",
-      "type": 1,
-      "api": "https://maihaolian.com/",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "{\"数组\": \"public-list-box&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"data-original=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://maihaolian.com/\", \"分类\": \"全部$home\"}",
       "header": {}
     },
     {
