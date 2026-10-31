@@ -10,6 +10,7 @@ import { SearchHistory } from '../state/SearchHistory';
 import { UrlHistory } from '../state/UrlHistory';
 import { PlayHistory } from '../state/PlayHistory';
 import { Favorites } from '../state/Favorites';
+import { LiveFavs } from '../state/LiveFavs';
 import { DownloadManager } from '../state/DownloadManager';
 
 const DOMAIN = 0x0000;
@@ -26,6 +27,7 @@ export default class EntryAbility extends UIAbility {
     UrlHistory.instance.attach(new PreferencesKVStore(prefS));
       PlayHistory.instance.attach(new PreferencesKVStore(prefS));
       Favorites.instance.attach(new PreferencesKVStore(prefS));
+      LiveFavs.instance.attach(new PreferencesKVStore(prefS));
       DownloadManager.instance.attach(this.context, new PreferencesKVStore(prefS));
     }).catch((eS: Object) => {
       hilog.error(DOMAIN, 'testTag', 'settings 装配异常: %{public}s', eS instanceof Error ? eS.message : JSON.stringify(eS));

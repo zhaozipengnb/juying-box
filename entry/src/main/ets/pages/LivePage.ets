@@ -3,11 +3,14 @@
 import { Nav, PlayerParam } from '../nav/Nav';
 import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
-import { LiveGroup, LiveChannel, parseLiveSource } from 'common';
+import { MainTabBar } from '../components/MainTabBar';
+import { LiveGroup, LiveChannel, PlayLine, parseLiveSource } from 'common';
+import { LiveFavs } from '../state/LiveFavs';
 
 @ComponentV2
 export struct LivePage {
   settings: AppSettings = AppSettings.instance;
+  favs: LiveFavs = LiveFavs.instance;
   @Local groups: LiveGroup[] = [];
   @Local groupIdx: number = 0;
   @Local loading: boolean = false;
@@ -25,8 +28,24 @@ export struct LivePage {
     return true;   // 默认背景为青橙渐变图，文字统一白色
   }
 
+  // 展示分组：有收藏频道时「收藏」组置顶（按 url 去重，跨分组聚合）
+  @Computed get displayGroups(): LiveGroup[] {
+    const out: LiveGroup[] = [];
+    if (this.favs.urls.length > 0) {
+      const favChannels: LiveChannel[] = [];
+      const seen = new Set<string>();
+      for (const g of this.groups) {
+        for (const ch of g.channels) {
+          if (this.favs.has(ch.url) && !seen.has(ch.url)) { seen.add(ch.url); favChannels.push(ch); }
+        }
+      }
+      if (favChannels.length > 0) { out.push({ name: '★ 收藏', channels: favChannels }); }
+    }
+    return out.concat(this.groups);
+  }
+
   @Computed get curChannels(): LiveChannel[] {
-    const g = this.groups[this.groupIdx];
+    const g = this.displayGroups[this.groupIdx];
     return g === undefined ? [] : g.channels;
   }
 
@@ -55,23 +74,25 @@ export struct LivePage {
   build() {
     NavDestination() {
       Column() {
-        if (this.loading) {
-          LoadingProgress().width(44).height(44).margin({ top: 120 })
-        } else if (this.errMsg !== '') {
-          Column({ space: 12 }) {
-            Text(this.errMsg).fontSize(14).fontColor('#E53935')
-            if (this.settings.liveUrl.trim() === '') {
-              Button('去设置直播源')
-                .onClick(() => { Nav.stack.pushPathByName('Settings', ''); })
-            } else {
-              Button('重试').onClick(() => { this.load(); })
-            }
-          }.margin({ top: 100 })
-        } else {
-          Row() {
+        // 主内容区（flex 占满，底部导航栏之外的全部空间）
+        Column() {
+          if (this.loading) {
+            LoadingProgress().width(44).height(44).margin({ top: 120 })
+          } else if (this.errMsg !== '') {
+            Column({ space: 12 }) {
+              Text(this.errMsg).fontSize(14).fontColor('#E53935')
+              if (this.settings.liveUrl.trim() === '') {
+                Button('去设置直播源')
+                  .onClick(() => { Nav.stack.pushPathByName('Settings', ''); })
+              } else {
+                Button('重试').onClick(() => { this.load(); })
+              }
+            }.margin({ top: 100 })
+          } else {
+            Row() {
             // 左：分组列表
             List() {
-              ForEach(this.groups, (g: LiveGroup, i: number) => {
+              ForEach(this.displayGroups, (g: LiveGroup, i: number) => {
                 ListItem() {
                   Column({ space: 3 }) {
                     Text(g.name)
@@ -97,18 +118,36 @@ export struct LivePage {
               ForEach(this.curChannels, (ch: LiveChannel) => {
                 ListItem() {
                   Row({ space: 8 }) {
-                    Text('▶').fontSize(12).fontColor('#FFFFFF')
+                    Image($r('app.media.ic_play')).width(12).height(12).fillColor('#FFFFFF')
                     Text(ch.name)
                       .fontSize(14)
                       .fontColor('#FFFFFF')
                       .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                    Blank()
-                    Text('LIVE').fontSize(9).fontColor('#E53935')
+                      .layoutWeight(1)
+                    Image($r('app.media.ic_heart'))
+                      .width(16).height(16)
+                      .fillColor(this.favs.has(ch.url) ? '#E53935' : '#80FFFFFF')
+                      .hitTestBehavior(HitTestMode.Block)
+                      .onClick(() => {
+                        // 收藏切换会增删「收藏」组，按组名回定位避免索引漂移
+                        const name = this.displayGroups[this.groupIdx]?.name ?? '';
+                        this.favs.toggle(ch.url);
+                        const gi = this.displayGroups.findIndex((g: LiveGroup): boolean => g.name === name);
+                        this.groupIdx = gi >= 0 ? gi : 0;
+                      })
+                    Text('LIVE').fontSize(9).fontColor('#E53935').margin({ left: 6 })
                   }
                   .width('100%')
                   .padding({ left: 12, right: 12, top: 10, bottom: 10 })
                   .onClick(() => {
-                    const param: PlayerParam = { ep: { name: ch.name, url: ch.url }, siteKey: 'live' };
+                    // 携带整组频道作为播放线路：播放页上/下一颗即换台
+                    const eps = this.curChannels;
+                    const lines: PlayLine[] = [{ from: '直播', episodes: eps }];
+                    const idx = eps.findIndex((c: LiveChannel): boolean => c.url === ch.url);
+                    const param: PlayerParam = {
+                      ep: { name: ch.name, url: ch.url }, siteKey: 'live',
+                      movieName: ch.name, lines: lines, lineIdx: 0, epIdx: idx >= 0 ? idx : 0
+                    };
                     Nav.stack.pushPathByName('Player', param);
                   })
                 }
@@ -121,7 +160,13 @@ export struct LivePage {
           }
           .width('100%')
           .layoutWeight(1)
+          }
         }
+        .width('100%')
+        .layoutWeight(1)
+
+        // 底部导航栏（TV 不渲染）
+        MainTabBar({ active: 'live' })
       }
       .width('100%').height('100%')
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
@@ -129,7 +174,6 @@ export struct LivePage {
       .backgroundImageSize(ImageSize.Cover)
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
-    .hideTitleBar(false)
-    .title('直播')
+    .hideTitleBar(true)
   }
 }
