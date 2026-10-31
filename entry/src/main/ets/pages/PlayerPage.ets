@@ -5,9 +5,11 @@
 // 线路轮循：当前线路播放失败时自动切到下一线路同集继续尝试，全部线路失败才报错。
 import { Nav, PlayerParam } from '../nav/Nav';
 import { Episode, PlayLine, MovieDetail, SiteConfig, isDirectMedia, resolvePlayUrl, siteEngine, formatDuration } from 'common';
+import { OptionPicker, PickerSpec } from '../components/OptionPicker';
+import { SPEED_OPTIONS } from '../state/AppSettings';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
-import { window } from '@kit.ArkUI';
+import { display, window } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
@@ -34,9 +36,18 @@ export struct PlayerPage {
   @Local lineIdx: number = 0;
   @Local epIdx: number = 0;
   @Local isPlaying: boolean = true;
-  @Local showDanmaku: boolean = false;
+  // 设置中的画面缩放 → Video objectFit（即改即生效）
+  @Local curSpeed: number = 1.0;       // 当前生效倍速（起播读设置，长按/菜单可变）
+  @Local boost: number = 0;            // 长按加速中的倍速（0 = 未加速）
+  @Local picker: PickerSpec | null = null;   // 居中选择弹层
+  private videoFitEnum(): ImageFit {
+    if (this.settings.videoFit === 'cover') { return ImageFit.Cover; }
+    if (this.settings.videoFit === 'fill') { return ImageFit.Fill; }
+    return ImageFit.Contain;
+  }
   @Local isFav: boolean = false;
   @Local isTheater: boolean = false;   // 影院模式：横屏全屏、隐藏下方详情
+  @Local videoH: number = 0;           // 非影院模式视频区高度（vp）＝容器宽/1.78，onAreaChange 修正
   @Local curTime: number = 0;          // 当前播放进度（秒），onUpdate 驱动
   @Local dur: number = 0;              // 视频总时长（秒），onPrepared 回调取得
   ph: PlayHistory = PlayHistory.instance;
@@ -45,6 +56,12 @@ export struct PlayerPage {
   private lastDur: number = 0;
   private lastSaveAt: number = 0;      // 上次持久化时间戳（节流 5s）
   private seekedResume: boolean = false;  // 断点续播只 seek 一次
+  @Local showCtrl: boolean = false;    // 自绘控制层显隐：默认隐藏，点击视频切换，播放中 4s 无操作自动隐藏
+  private ctrlTimer: number = -1;      // 自动隐藏定时器（-1 = 未挂）
+  @Local seekPreview: boolean = false; // 横向滑动快进/快退的预览气泡
+  @Local seekDelta: number = 0;        // 滑动偏移（秒，右正左负）
+  private seekFrom: number = 0;        // 手势起点的基准进度
+  private panSeeking: boolean = false; // 本次手势是否有效（起手条件不满足则整段忽略）
   private controller: VideoController = new VideoController();
   private webController: webview.WebviewController = new webview.WebviewController();
 
@@ -104,7 +121,7 @@ export struct PlayerPage {
     } else {
       this.errMsg = '无法解析播放地址';
     }
-    if (this.errMsg !== '' && this.lines.length > 0) {
+    if (this.errMsg !== '' && this.lines.length > 0 && this.settings.lineAutoPlay) {
       this.tryNextLine();
     }
     this.resolving = false;
@@ -171,7 +188,46 @@ export struct PlayerPage {
     this.ph.update(this.siteKey, m, this.ep, this.lineIdx, this.epIdx, this.lastPos, this.lastDur);
   }
 
-  // 影院模式：横屏 + 播放器铺满 + 隐藏详情；再点还原
+  // 控制层显隐：点击视频切换；挂 4s 自动隐藏（仅播放中），暂停时常驻不隐藏
+  private toggleCtrl(): void {
+    this.showCtrl = !this.showCtrl;
+    this.armCtrlHide();
+  }
+
+  // 横向滑动快进/快退：起手记录基准进度，拖动按 0.3s/vp 实时预览，松手一次 seek。
+  // 时长未知（dur<=0）/非直链播放状态时整段手势忽略，不影响点按显隐
+  private panSeekStart(): void {
+    this.panSeeking = this.playUrl !== '' && this.errMsg === '' && !this.resolving && !this.useWeb && this.dur > 0;
+    if (!this.panSeeking) { return; }
+    this.seekFrom = Math.min(this.lastPos > 0 ? this.lastPos : this.curTime, this.dur);
+    this.seekDelta = 0;
+    this.seekPreview = true;
+  }
+
+  private panSeekMove(offsetX: number): void {
+    if (!this.panSeeking) { return; }
+    this.seekDelta = offsetX * 0.3;
+  }
+
+  private panSeekEnd(): void {
+    if (!this.panSeeking) { return; }
+    this.panSeeking = false;
+    this.seekPreview = false;
+    const target = Math.max(0, Math.min(this.seekFrom + this.seekDelta, this.dur));
+    this.controller.setCurrentTime(target);
+    this.curTime = target;
+    this.lastPos = target;
+    this.armCtrlHide();
+  }
+
+  private armCtrlHide(): void {
+    if (this.ctrlTimer >= 0) { clearTimeout(this.ctrlTimer); this.ctrlTimer = -1; }
+    if (!this.showCtrl || !this.isPlaying) { return; }
+    this.ctrlTimer = setTimeout(() => { this.showCtrl = false; this.ctrlTimer = -1; }, 4000);
+  }
+
+  // 影院模式：横屏 + 播放器铺满 + 隐藏详情；再点还原。
+  // 视频区常驻（见 build），切换只改布局属性与窗口方向，Video 不重建、进度与解码状态天然保留
   private toggleTheater(): void {
     this.isTheater = !this.isTheater;
     if (this.isTheater) {
@@ -201,23 +257,63 @@ export struct PlayerPage {
     return [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
   }
 
+  aboutToAppear(): void {
+    // 视频区初始高度按屏宽/1.78 预置，避免首帧 0 高；onAreaChange 随实际容器宽度修正
+    try {
+      const d = display.getDefaultDisplaySync();
+      this.videoH = d.width / (d.densityPixels > 0 ? d.densityPixels : 1) / 1.78;
+    } catch (e) { }
+  }
+
   build() {
     NavDestination() {
+      Stack() {
       Column() {
-        if (this.isTheater) {
-          this.videoAreaTheater()
-        } else {
-          this.videoArea()
+        // 视频区常驻不重建：影院切换只改高度属性（'100%' ↔ 屏宽/1.78），Video 持续播放无卡顿
+        Column() { this.videoInner() }
+          .width('100%')
+          .height(this.isTheater ? '100%' : this.videoH)
+          .backgroundColor('#000000')
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
+        if (!this.isTheater) {
           this.detailArea()
         }
       }
       .width('100%').height('100%')
+      .onAreaChange((_o: Area, n: Area) => {
+        const w = n.width as number;
+        if (w > 0) { this.videoH = w / 1.78; }
+      })
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
       .backgroundImage(this.settings.bgImage())
       .backgroundImageSize(ImageSize.Cover)
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+
+      if (this.picker !== null) {
+        OptionPicker({
+          title: this.picker.title,
+          options: this.picker.options,
+          selectedIndex: this.picker.index,
+          onPick: (idx: number): void => {
+            const pk: PickerSpec | null = this.picker;
+            if (pk !== null) { pk.onPick(idx); }
+            this.picker = null;
+          },
+          onClose: (): void => { this.picker = null; }
+        })
+      }
+      }
+      .width('100%').height('100%')
     }
     .hideTitleBar(true)
+    // 影院模式时返回先还原竖屏播放界面（消费本次返回），再次返回才退出播放页
+    .onBackPressed((): boolean => {
+      if (this.isTheater) {
+        this.toggleTheater();
+        return true;
+      }
+      return false;
+    })
     .onReady((ctx: NavDestinationContext) => {
       const p = ctx.pathInfo.param as PlayerParam;
       if (p !== null && p !== undefined) {
@@ -238,27 +334,12 @@ export struct PlayerPage {
     })
     .onWillDisappear(() => {
       this.saveProgress(true);
+      if (this.ctrlTimer >= 0) { clearTimeout(this.ctrlTimer); this.ctrlTimer = -1; }
+      this.showCtrl = false;
       this.setImmersive(false);
       this.setStatusBarContent('#000000');
       this.setOrientation(window.Orientation.UNSPECIFIED);
     })
-  }
-
-  @Builder
-  videoArea() {
-    Column() { this.videoInner() }
-      .width('100%')
-      .aspectRatio(1.78)
-      .backgroundColor('#000000')
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
-  }
-
-  @Builder
-  videoAreaTheater() {
-    Column() { this.videoInner() }
-      .width('100%')
-      .height('100%')
-      .backgroundColor('#000000')
   }
 
   @Builder
@@ -286,9 +367,19 @@ export struct PlayerPage {
           .width('100%').height('100%')
           .autoPlay(true)
           .controls(false)
-          .objectFit(ImageFit.Contain)
-          .onPrepared((ev) => { this.dur = ev.duration; })
-          .onError(() => { this.playUrl = ''; this.tryNextLine(); })
+          .objectFit(this.videoFitEnum())
+          .onPrepared((ev) => {
+            this.dur = ev.duration;
+            this.curSpeed = this.settings.playSpeed;
+          })
+          .onError(() => {
+            this.playUrl = '';
+            if (this.settings.lineAutoPlay) {
+              this.tryNextLine();
+            } else {
+              this.errMsg = '播放失败，请手动切换线路重试';
+            }
+          })
           .onUpdate((ev) => {
             this.curTime = ev.time;
             this.lastPos = ev.time;
@@ -304,39 +395,38 @@ export struct PlayerPage {
           })
       }
 
-      // 左上角：剧名 + 正在播放第几集 + 分辨率 + 弹幕开关
-      Column({ space: 4 }) {
-        Text(this.movieName)
-          .fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Bold)
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        if (this.ep !== null) {
-          Text('正在播放：' + this.ep.name).fontSize(12).fontColor('#FFFFFF')
+      // 左上角：剧名 + 正在播放第几集 + 分辨率 + 弹幕开关（随控制层显隐）
+      if (this.showCtrl) {
+        Column({ space: 4 }) {
+          Text(this.movieName)
+            .fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Bold)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          if (this.ep !== null) {
+            Text('正在播放：' + this.ep.name).fontSize(12).fontColor('#FFFFFF')
+          }
+          Text('1080P').fontSize(11).fontColor('#FFFFFF')
         }
-        Text('1080P').fontSize(11).fontColor('#FFFFFF')
-        Row({ space: 4 }) {
-          Text(this.showDanmaku ? '💬 弹幕开' : '💬 弹幕关').fontSize(11)
-            .fontColor('#FFFFFF')
-            .onClick(() => { this.showDanmaku = !this.showDanmaku; })
+        .position({ x: 12, y: 12 })
+        .alignItems(HorizontalAlign.Start)
+      }
+
+      // 右上角：收藏（全屏按钮移至底部控制栏；随控制层显隐）
+      if (this.showCtrl) {
+        Row({ space: 18 }) {
+          Image($r('app.media.ic_heart')).width(20).height(20)
+            .fillColor(this.isFav ? '#E53935' : '#FFFFFF')
+            .onClick(() => {
+              const m = this.detail?.movie;
+              if (m !== null && m !== undefined) { this.isFav = this.favs.toggle(this.siteKey, m); }
+            })
         }
+        .position({ x: '100%', y: 14 })
+        .markAnchor({ x: '100%' })
+        .padding({ right: 12 })
       }
-      .position({ x: 12, y: 12 })
-      .alignItems(HorizontalAlign.Start)
 
-      // 右上角：收藏（全屏按钮移至底部控制栏）
-      Row({ space: 18 }) {
-        Image($r('app.media.ic_heart')).width(20).height(20)
-          .fillColor(this.isFav ? '#E53935' : '#FFFFFF')
-          .onClick(() => {
-            const m = this.detail?.movie;
-            if (m !== null && m !== undefined) { this.isFav = this.favs.toggle(this.siteKey, m); }
-          })
-      }
-      .position({ x: '100%', y: 14 })
-      .markAnchor({ x: '100%' })
-      .padding({ right: 12 })
-
-      // 中间：上一集、暂停/播放、下一集
-      if (this.playUrl !== '' && this.errMsg === '') {
+      // 中间：上一集、暂停/播放、下一集（随控制层显隐）
+      if (this.playUrl !== '' && this.errMsg === '' && this.showCtrl) {
         Row({ space: 32 }) {
           Image($r('app.media.ic_skip_back')).width(22).height(22).fillColor('#FFFFFF')
             .onClick(() => { this.prevEp(); })
@@ -344,6 +434,7 @@ export struct PlayerPage {
             .onClick(() => {
               this.isPlaying = !this.isPlaying;
               if (this.isPlaying) { this.controller.start(); } else { this.controller.pause(); }
+              this.armCtrlHide();
             })
           Image($r('app.media.ic_skip_forward')).width(22).height(22).fillColor('#FFFFFF')
             .onClick(() => { this.nextEp(); })
@@ -352,8 +443,8 @@ export struct PlayerPage {
         .width('100%')
       }
 
-      // 底部：进度条 + 时间 + 全屏（自有控制栏，全屏直接切影院模式）
-      if (this.playUrl !== '' && this.errMsg === '' && !this.resolving && !this.useWeb) {
+      // 底部：进度条 + 时间 + 全屏（随控制层显隐；全屏直接切影院模式）
+      if (this.playUrl !== '' && this.errMsg === '' && !this.resolving && !this.useWeb && this.showCtrl) {
         Row({ space: 10 }) {
           Text(formatDuration(this.curTime)).fontSize(11).fontColor('#FFFFFF')
           Slider({ value: Math.min(this.curTime, this.dur > 0 ? this.dur : 1), min: 0, max: this.dur > 0 ? this.dur : 1 })
@@ -364,9 +455,25 @@ export struct PlayerPage {
             .onChange((value: number) => {
               this.curTime = value;
               this.controller.setCurrentTime(value);
+              this.armCtrlHide();
             })
           Text(formatDuration(this.dur)).fontSize(11).fontColor('#FFFFFF')
-          Text(this.isTheater ? '⤡' : '⤢').fontSize(18).fontColor('#FFFFFF')
+          Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x')
+            .fontSize(12).fontColor('#FFFFFF')
+            .onClick(() => {
+              this.picker = {
+                title: '播放倍速',
+                options: SPEED_OPTIONS.map((s: number): string => s + 'x'),
+                index: SPEED_OPTIONS.indexOf(this.curSpeed),
+                onPick: (idx: number): void => {
+                  this.curSpeed = SPEED_OPTIONS[idx];
+                  this.settings.playSpeed = this.curSpeed;
+                  this.settings.save();
+                }
+              };
+            })
+          Image(this.isTheater ? $r('app.media.ic_shrink') : $r('app.media.ic_expand'))
+            .width(22).height(22).fillColor('#FFFFFF')
             .onClick(() => { this.toggleTheater(); })
         }
         .width('100%')
@@ -374,7 +481,52 @@ export struct PlayerPage {
         .markAnchor({ x: 0, y: '100%' })
         .padding({ left: 12, right: 12, bottom: 8 })
       }
+
+      // 长按加速提示
+      if (this.boost > 0) {
+        Text(`${this.boost}x 倍速播放中 »`)
+          .fontSize(15).fontColor('#FFEB3B').fontWeight(FontWeight.Medium)
+          .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+          .backgroundColor('#B3000000')
+          .borderRadius(10)
+          .position({ x: '50%', y: 60 }).markAnchor({ x: '50%' })
+      }
+
+      // 横向滑动快进/快退预览气泡（Stack 默认居中）
+      if (this.seekPreview) {
+        Column({ space: 4 }) {
+          Text((this.seekDelta >= 0 ? '快进 ' : '快退 ') + Math.abs(Math.round(this.seekDelta)) + ' 秒')
+            .fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Medium)
+          Text(formatDuration(Math.max(0, Math.min(this.seekFrom + this.seekDelta, this.dur)))
+            + ' / ' + formatDuration(this.dur))
+            .fontSize(12).fontColor('#CCFFFFFF')
+        }
+        .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+        .backgroundColor('#B3000000')
+        .borderRadius(12)
+      }
     }
+    // 点视频任意处切换控制层（子控件自身的 onClick 消费掉的不冒泡）；
+    // 横向拖动（位移超 5vp）进滑动快进/快退，与点按互斥不冲突
+    .onClick(() => { this.toggleCtrl(); })
+    .gesture(PanGesture({ fingers: 1, direction: PanDirection.Horizontal, distance: 5 })
+      .onActionStart((_e: GestureEvent) => { this.panSeekStart(); })
+      .onActionUpdate((e: GestureEvent) => { this.panSeekMove(e.offsetX); })
+      .onActionEnd((_e: GestureEvent) => { this.panSeekEnd(); })
+      .onActionCancel(() => { this.panSeeking = false; this.seekPreview = false; }))
+    // 长按临时加速（设置里长按倍速 >0 时生效），松开恢复起播倍速
+    .gesture(LongPressGesture({ duration: 350, repeat: false })
+      .onAction((_e: GestureEvent) => {
+        if (this.settings.longPressSpeed > 0 && this.isPlaying && this.playUrl !== '') {
+          this.boost = this.settings.longPressSpeed;
+        }
+      })
+      .onActionEnd((_e: GestureEvent) => {
+        if (this.boost > 0) { this.boost = 0; }
+      })
+      .onActionCancel(() => {
+        if (this.boost > 0) { this.boost = 0; }
+      }))
 
   }
 
