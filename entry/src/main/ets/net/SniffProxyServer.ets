@@ -12,6 +12,7 @@ import socket from '@ohos.net.socket';
 import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { httpFetch } from './HttpClient';
+import http from '@ohos.net.http';
 import { resolveUrl } from 'common';
 
 const TAG = 'OKV-SNP';
@@ -106,23 +107,32 @@ class SniffProxyServer {
       await this.respond(client, 400, 'text/plain', 'bad target');
       return;
     }
+    const isM3u8: boolean = /\.m3u8($|\?)/i.test(target);
     try {
-      const r = await httpFetch(target, { headers: headers });
-      let ctype: string = r.headers['content-type'] ?? 'application/octet-stream';
-      hilog.info(0x0000, TAG, 'serve %{public}d %{public}s', r.status, target.substring(0, 80));
-      let body: string = '';
-      const isM3u8: boolean = ctype.indexOf('mpegurl') >= 0 || /\.m3u8($|\?)/i.test(target);
       if (isM3u8) {
-        // m3u8:分片/密钥地址改写为同 headers 的代理地址(嵌套)
-        body = this.rewriteM3u8(r.text(), target, headers);
-        ctype = 'application/vnd.apple.mpegurl';
+        // 播放列表(小文件):整体取回 → 分片/密钥地址改写为同 headers 的代理地址
+        const r = await httpFetch(target, { headers: headers, timeoutMs: 30000 });
+        if (r.status !== 200) { await this.respond(client, r.status, 'text/plain', 'upstream ' + r.status); return; }
+        // 按内容分类:头 7 字节 #EXTM3U → 播放列表(改写);否则视为媒体字节直传
+        // (嗅探端点可能直出视频流,按 URL 后缀强判会损坏二进制 → CONTAINER_ERR)
+        const buf: ArrayBuffer = r.body;
+        const headStr: string = new util.TextDecoder('utf-8').decodeToString(new Uint8Array(buf.slice(0, 7)));
+        if (!headStr.startsWith('#EXTM3U')) {
+          const ctype: string = r.headers['content-type'] ?? 'video/mp2t';
+          hilog.info(0x0000, TAG, 'serve raw %{public}d B %{public}s ctype=%{public}s', buf.byteLength, target.substring(0, 60), ctype);
+          await this.respondBytes(client, r.status, ctype, new Uint8Array(buf));
+          return;
+        }
+        const body: string = this.rewriteM3u8(new util.TextDecoder('utf-8').decodeToString(new Uint8Array(buf)), target, headers);
+        hilog.info(0x0000, TAG, 'serve m3u8 %{public}d B %{public}s', body.length, target.substring(0, 70));
+        await this.respond(client, 200, 'application/vnd.apple.mpegurl', body);
       } else {
-        body = r.text();
+        // 分片/媒体:流式透传(边收边转发,不受单次超时限制,内存零累积)
+        await this.streamPass(client, target, headers);
       }
-      await this.respond(client, r.status, ctype, body);
     } catch (e) {
       hilog.error(0x0000, TAG, 'upstream fail %{public}s', e instanceof Error ? e.message : JSON.stringify(e));
-      await this.respond(client, 502, 'text/plain', 'upstream error');
+      try { await this.respond(client, 502, 'text/plain', 'upstream error'); } catch (_e2) { /* 已发送则忽略 */ }
     }
   }
 
@@ -138,6 +148,59 @@ class SniffProxyServer {
       out.push(this.baseUrl() + '/h/' + hj + '/' + b64urlEncode(abs));
     }
     return out.join('\n');
+  }
+
+  // 分片流式透传:上游 requestInStream 边收边转发给播放器(分段回源也不受 15s 超时限制)
+  private async streamPass(client: socket.TCPSocketConnection, target: string, headers: Record<string, string>): Promise<void> {
+    const req = http.createHttp();
+    let headSent = false;
+    const sendHead = (code: number, ctype: string): void => {
+      const enc: util.TextEncoder = new util.TextEncoder();
+      const head: string = 'HTTP/1.1 ' + code + ' ' + (code === 200 ? 'OK' : 'Err')
+        + '\r\nContent-Type: ' + ctype
+        + '\r\nConnection: close\r\n\r\n';
+      try { client.send({ data: enc.encodeInto(head).buffer }); } catch (e) { /* 对端已断开 */ }
+      headSent = true;
+    };
+    req.on('headersReceive', (h: Object): void => {
+      const ch = (h as Record<string, string>)['content-type'] ?? 'video/mp2t';
+      sendHead(200, ch as string);
+    });
+    req.on('dataReceive', (data: ArrayBuffer): void => {
+      if (!headSent) { sendHead(200, 'video/mp2t'); }
+      try { client.send({ data: data }); } catch (e) { /* 对端已断开 */ }
+    });
+    const done = new Promise<void>((resolve: (v: void | PromiseLike<void>) => void): void => {
+      req.on('dataEnd', (): void => { resolve(); });
+    });
+    try {
+      const code: number = await req.requestInStream(target, {
+        method: http.RequestMethod.GET,
+        header: headers,
+        expectDataType: http.HttpDataType.ARRAY_BUFFER,
+        connectTimeout: 20000,
+        readTimeout: 120000   // 大分片慢 CDN:读超时 120s(流式有数据即不触发)
+      });
+      if (code !== 200 && !headSent) { sendHead(200, 'video/mp2t'); }
+    } catch (e) {
+      if (!headSent) { sendHead(200, 'video/mp2t'); }
+    }
+    await done;
+    try { await client.close(); } catch (e) { /* 关闭失败忽略 */ }
+  }
+
+  private async respondBytes(client: socket.TCPSocketConnection, code: number, ctype: string, body: Uint8Array): Promise<void> {
+    const enc: util.TextEncoder = new util.TextEncoder();
+    const head: string = 'HTTP/1.1 ' + code + ' ' + statusText(code)
+      + '\r\nContent-Type: ' + ctype
+      + '\r\nContent-Length: ' + body.length
+      + '\r\nConnection: close\r\n\r\n';
+    const hb: Uint8Array = enc.encodeInto(head);
+    const buf: Uint8Array = new Uint8Array(hb.length + body.length);
+    buf.set(hb, 0);
+    buf.set(body, hb.length);
+    try { await client.send({ data: buf.buffer }); } catch (e) { /* 对端已断开 */ }
+    try { await client.close(); } catch (e) { /* 关闭失败忽略 */ }
   }
 
   private async respond(client: socket.TCPSocketConnection, code: number, ctype: string, bodyText: string): Promise<void> {
