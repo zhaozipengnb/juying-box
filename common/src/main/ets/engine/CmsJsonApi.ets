@@ -82,7 +82,8 @@ export class CmsJsonApi implements SiteDriver {
       return JSON.parse(text) as Record<string, Object>;
     } catch (e) {
       console.info('OKV cms JSON.parse ERR url=' + fullUrl + ' len=' + text.length + ' head=' + text.substring(0, 200));
-      throw new Error(e instanceof Error ? e.message : 'JSON parse failed');
+      // 原始 parse 报错(如 "Unexpected Text in JSON")对用户无意义,翻译成人话
+      throw new Error('站点返回的不是 JSON 数据(该源可能已失效或为网页站)');
     }
   }
 

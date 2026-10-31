@@ -27,7 +27,8 @@ export class AppSettings {
   @Trace showSite: boolean = true;           // 显示站源：搜索结果卡片角标展示来源站名
   @Trace siteFilter: boolean = false;        // 站源搜索：搜索结果顶部按站点筛选（聚合结果就绪后展示）
   @Trace aiAdFilter: boolean = false;        // AI去广告（预留：将作用于播放地址解析阶段）
-  @Trace autoSkipDead: boolean = false;      // 自动跳过失效源：加载失败/无内容的源自动切下一个并隐藏
+  @Trace autoSkipDead: boolean = true;       // 自动跳过失效源：加载失败/无内容的源自动切下一个并隐藏
+                                             // （默认开：合包采集站质量参差，坏站卡住首页不可接受；可在个性设置关）
   @Trace builtinDownload: boolean = false;   // 内置下载：详情页/播放页显示下载按钮
   @Trace videoFit: VideoFit = 'contain';     // 播放画面缩放：contain=适应 contain/cover=裁剪铺满/fill=拉伸
   @Trace danmakuOn: boolean = true;          // 弹幕加载：进播放页时弹幕的默认状态
