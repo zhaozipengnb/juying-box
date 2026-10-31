@@ -31,6 +31,8 @@ struct Index {
   }
 
   aboutToAppear(): void {
+    // 页面切换不做滑动转场：整栈关闭推入/弹出动画，页面秒切（用户反馈滑动易晕）
+    Nav.stack.disableAnimation(true);
     // 冷启动恢复完成（或无源空态）→ 路由进首页；延迟重查兜底 initFromStore 晚于首帧的情况
     if (this.app.phase === 'home') { Nav.stack.replacePath({ name: 'Home' }); }
     setTimeout(() => {
