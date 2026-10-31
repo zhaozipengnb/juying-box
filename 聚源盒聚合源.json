@@ -1246,50 +1246,6 @@
       "header": {}
     },
     {
-      "key": "sub_nosneteasecoxxx",
-      "name": "📚少儿┃教育",
-      "type": 1,
-      "api": "https://nos.netease.com/ysf/89370c8ddf36b5e1beb4d71adb921bda.txt",
-      "searchable": 0,
-      "quickSearch": 0,
-      "filterable": 0,
-      "ext": "{\"json\": \"https://nos.netease.com/ysf/89370c8ddf36b5e1beb4d71adb921bda.txt\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_nosneteasecoxxxx",
-      "name": "📚小学┃课堂",
-      "type": 1,
-      "api": "https://nos.netease.com/ysf/d7a21cf34ede56f5c686ecfba5fc7e3f.txt",
-      "searchable": 0,
-      "quickSearch": 0,
-      "filterable": 0,
-      "ext": "{\"json\": \"https://nos.netease.com/ysf/d7a21cf34ede56f5c686ecfba5fc7e3f.txt\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_nosneteasecoxxxxx",
-      "name": "📚初中┃课堂",
-      "type": 1,
-      "api": "https://nos.netease.com/ysf/8f55d520f8d70056695740ef151744a7.txt",
-      "searchable": 0,
-      "quickSearch": 0,
-      "filterable": 0,
-      "ext": "{\"json\": \"https://nos.netease.com/ysf/8f55d520f8d70056695740ef151744a7.txt\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_nosneteasecoxxxxxx",
-      "name": "📚高中┃课堂",
-      "type": 1,
-      "api": "https://nos.netease.com/ysf/c66a4b5356141c49fd45ec51568017b4.txt",
-      "searchable": 0,
-      "quickSearch": 0,
-      "filterable": 0,
-      "ext": "{\"json\": \"https://nos.netease.com/ysf/c66a4b5356141c49fd45ec51568017b4.txt\"}",
-      "header": {}
-    },
-    {
       "key": "sub_wwwwoggnet",
       "name": "👽玩偶哥哥┃4K弹幕",
       "type": 1,
