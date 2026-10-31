@@ -158,11 +158,8 @@ export struct PlayerPage {
     if (this.sniffTimer >= 0) { clearTimeout(this.sniffTimer); this.sniffTimer = -1; }
     this.sniffing = false;
     this.sniffUrl = '';
-    // 直链可能带防盗链:以嗅探页 origin 为 referer 交给 AVPlayer(MediaSource)
-    let referer = this.sniffReferer;
-    const slash = referer.indexOf('/', 8);
-    if (slash > 0) { referer = referer.substring(0, slash); }
-    this.engine.open(mediaUrl, this.isPlaying, { referer: referer });
+    // 直链可能带防盗链:SDK 的 AVPlayer 不支持自定义 headers,裸播失败会落回错误卡(网页播放兜底)
+    this.engine.open(mediaUrl, this.isPlaying);
   }
 
   private sniffFail(): void {
@@ -453,10 +450,26 @@ export struct PlayerPage {
           .width('100%').height('100%')
           .javaScriptAccess(true).domStorageAccess(true).mediaPlayGestureAccess(true)
       } else if (this.sniffing) {
-        Column({ space: 10 }) {
-          LoadingProgress().width(36).height(36).color('#FFFFFF')
-          Text('正在嗅探视频地址…').fontSize(13).fontColor('#FFFFFF')
-        }.width('100%').height('100%').justifyContent(FlexAlign.Center)
+        // 嗅探:视频区直接加载网页(真实尺寸,页面播放器才会发起视频请求),
+        // onInterceptRequest 抓到媒体直链后由 AVPlayer 接管
+        Stack() {
+          Web({ src: this.sniffUrl, controller: this.sniffController })
+            .width('100%').height('100%')
+            .javaScriptAccess(true)
+            .onInterceptRequest((event): WebResourceResponse | undefined => {
+              const reqUrl: string = (event as OnInterceptRequestEvent).request.getRequestUrl();
+              if (this.sniffing && /\.(m3u8|mp4|mkv|flv)(\?|&|#|$)/i.test(reqUrl)) {
+                this.sniffHit(reqUrl);
+              }
+              return undefined;
+            })
+          Text('正在嗅探视频地址…')
+            .fontSize(12).fontColor('#FFFFFF')
+            .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+            .backgroundColor('#B3000000')
+            .borderRadius(8)
+            .position({ x: '50%', y: 14 }).markAnchor({ x: '50%' })
+        }.width('100%').height('100%').backgroundColor('#000000')
       } else if (this.resolving || this.playUrl === '') {
         Column() {
           LoadingProgress().width(36).height(36).color('#FFFFFF')
@@ -470,19 +483,6 @@ export struct PlayerPage {
           })
       }
 
-      // 嗅探:隐藏 Web 加载播放页(onInterceptRequest 抓媒体直链)
-      if (this.sniffUrl !== '') {
-        Web({ src: this.sniffUrl, controller: this.sniffController })
-          .width(1).height(1)
-          .javaScriptAccess(true)
-          .onInterceptRequest((event): WebResourceResponse | undefined => {
-            const reqUrl: string = (event as OnInterceptRequestEvent).request.getRequestUrl();
-            if (this.sniffing && /\.(m3u8|mp4|mkv|flv)(\?|&|#|$)/i.test(reqUrl)) {
-              this.sniffHit(reqUrl);
-            }
-            return undefined;
-          })
-      }
 
       // 左上角：剧名 + 正在播放第几集 + 分辨率 + 弹幕开关（随控制层显隐）
       if (this.showCtrl) {
