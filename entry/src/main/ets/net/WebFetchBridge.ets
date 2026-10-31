@@ -28,10 +28,13 @@ export struct WebFetchContainer {
   }
 }
 
-// 挑战页特征(任一命中即视为未过盾)
+// 挑战页特征(任一命中即视为未过盾):CF 标准挑战 + 自建"浏览器验证"门(如 libvio 的
+// 纯文本 403 Forbidden: browser verification required)
 export function isCfChallenge(text: string): boolean {
-  return text.indexOf('Just a moment') >= 0 || text.indexOf('cf_chl_opt') >= 0
-    || text.indexOf('challenge-platform') >= 0 || text.indexOf('_cf_chl') >= 0;
+  if (text.indexOf('Just a moment') >= 0 || text.indexOf('cf_chl_opt') >= 0
+    || text.indexOf('challenge-platform') >= 0 || text.indexOf('_cf_chl') >= 0) { return true; }
+  const t = text.trim();
+  return t.length < 500 && t.indexOf('browser verification required') >= 0;
 }
 
 export class WebFetchBridge {
