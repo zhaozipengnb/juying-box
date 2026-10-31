@@ -5,6 +5,9 @@ import { AppState } from '../state/AppState';
 import { Nav } from '../nav/Nav';
 import { HomePage } from './HomePage';
 import { SettingsPage } from './SettingsPage';
+import { PlaySettingsPage } from './PlaySettingsPage';
+import { PersonSettingsPage } from './PersonSettingsPage';
+import { SiteManagePage } from './SiteManagePage';
 import { DetailPage } from './DetailPage';
 import { PlayerPage } from './PlayerPage';
 import { DownloadPage } from './DownloadPage';
@@ -30,13 +33,20 @@ struct Index {
   aboutToAppear(): void {
     // 冷启动恢复完成（或无源空态）→ 路由进首页；延迟重查兜底 initFromStore 晚于首帧的情况
     if (this.app.phase === 'home') { Nav.stack.replacePath({ name: 'Home' }); }
-    setTimeout(() => { if (this.app.phase === 'home') { Nav.stack.replacePath({ name: 'Home' }); } }, 1000);
+    setTimeout(() => {
+      // 仅栈空才补路由：Home 已在栈顶时重复 replacePath 会重建首页组件，
+      // loadHome 二次并发在 drpy 桥上互踩（表现为「Unexpected Text in JSON」/「调用超时」）
+      if (this.app.phase === 'home' && Nav.stack.size() === 0) { Nav.stack.replacePath({ name: 'Home' }); }
+    }, 1000);
   }
 
   @Builder
   pagesMap(name: string) {
     if (name === 'Home') { HomePage() }
     else if (name === 'Settings') { SettingsPage() }
+    else if (name === 'PlaySettings') { PlaySettingsPage() }
+    else if (name === 'PersonSettings') { PersonSettingsPage() }
+    else if (name === 'SiteManage') { SiteManagePage() }
     else if (name === 'Detail') { DetailPage() }
     else if (name === 'Player') { PlayerPage() }
     else if (name === 'Download') { DownloadPage() }
