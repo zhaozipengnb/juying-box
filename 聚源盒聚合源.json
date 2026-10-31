@@ -925,17 +925,6 @@
       "header": {}
     },
     {
-      "key": "sub_cz01vip",
-      "name": "厂长 • 影视",
-      "type": 1,
-      "api": "https://cz01.vip",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "https://cz01.vip",
-      "header": {}
-    },
-    {
       "key": "sub_wwwvip1949co",
       "name": "枫叶 • 影视",
       "type": 1,
@@ -1397,61 +1386,6 @@
       "quickSearch": 1,
       "filterable": 0,
       "ext": "https://img2.gelonghui.com/library/d6014-7a5d5b19-3fe5-456a-8335-925bc845606fnull",
-      "header": {}
-    },
-    {
-      "key": "sub_ghproxynet",
-      "name": "📚┃儿童┃启蒙",
-      "type": 3,
-      "api": "https://gh-proxy.net/https://raw.githubusercontent.com/fantaiying7/EXT/refs/heads/main/drpy2.min.js",
-      "searchable": 0,
-      "quickSearch": 0,
-      "filterable": 0,
-      "ext": "https://gh-proxy.net/https://raw.githubusercontent.com/fantaiying7/EXT/refs/heads/main/%E5%85%94%E5%B0%8F%E8%B4%9D.js",
-      "header": {}
-    },
-    {
-      "key": "sub_img2gelonghux",
-      "name": "📚┃少儿┃教育",
-      "type": 1,
-      "api": "https://img2.gelonghui.com/library/1903b-eb0f1675-2437-4e72-bcf0-427b1626d79fnull",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "{\"json\": \"https://img2.gelonghui.com/library/1903b-eb0f1675-2437-4e72-bcf0-427b1626d79fnull\", \"cookie\": \"\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_img2gelonghuxx",
-      "name": "📚┃小学┃课堂",
-      "type": 1,
-      "api": "https://img2.gelonghui.com/library/a1140-144855fe-3eaa-44f3-b689-6812c233de54null",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "{\"json\": \"https://img2.gelonghui.com/library/a1140-144855fe-3eaa-44f3-b689-6812c233de54null\", \"cookie\": \"\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_img2gelonghuxxx",
-      "name": "📚┃初中┃课堂",
-      "type": 1,
-      "api": "https://img2.gelonghui.com/library/ba156-73e16cad-8257-4f33-b8c0-e051e72e546dnull",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "{\"json\": \"https://img2.gelonghui.com/library/ba156-73e16cad-8257-4f33-b8c0-e051e72e546dnull\", \"cookie\": \"\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_img2gelonghuxxxx",
-      "name": "📚┃高中┃课堂",
-      "type": 1,
-      "api": "https://img2.gelonghui.com/library/e44b3-4a82ab48-e014-49b2-bb66-ee5207e8f195null",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "{\"json\": \"https://img2.gelonghui.com/library/e44b3-4a82ab48-e014-49b2-bb66-ee5207e8f195null\", \"cookie\": \"\"}",
       "header": {}
     },
     {
