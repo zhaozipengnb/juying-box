@@ -1,35 +1,21 @@
-// 设置页：点播 / 直播 / Proxy / 壁纸 / 播放设置 / 个性设置 / 备份恢复 / DoH / 缓存 / 版本 / 关于
+// 设置页（FongMi 格式）：三张 URL 卡（点播/直播/壁纸）+ 播放设置/个性设置入口行
+// + Proxy/DoH/缓存/版本/关于 值行；播放与个性配置收拢在二级页（PlaySettings/PersonSettings）。
 // 个性化设置即改即存（AppSettings.save），返回首页后由各消费点读取生效。
 import { AppState } from '../state/AppState';
 import { pickImportPack } from '../state/PackImport';
-import { AppSettings, PicSize, WallpaperKind, SPEED_OPTIONS, LONG_PRESS_OPTIONS } from '../state/AppSettings';
-import { SearchHistory } from '../state/SearchHistory';
+import { AppSettings } from '../state/AppSettings';
 import { UrlHistory } from '../state/UrlHistory';
 import { SettingRow } from '../components/SettingRow';
+import { MainTabBar } from '../components/MainTabBar';
 import { Nav } from '../nav/Nav';
 import { httpFetch } from '../net/HttpClient';
 import { common } from '@kit.AbilityKit';
 import fs from '@ohos.file.fs';
+import { pasteboard } from '@kit.BasicServicesKit';
 import { picker } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
-
-// 海报密度选项（与 PicSize 一一对应）
-const PIC_SIZES: PicSize[] = ['small', 'normal', 'large'];
-const PIC_LABELS: string[] = ['小（4列）', '标准（3列）', '大（2列）'];
-const WALLPAPERS: WallpaperKind[] = ['default', 'dark', 'blue', 'green'];
-const WALLPAPER_LABELS: string[] = ['默认（青橙渐变）', '暗黑', '深蓝渐变', '墨绿渐变'];
-
-interface BuiltinBg { name: string; res: Resource; }
-const BUILTIN_BGS: BuiltinBg[] = [
-  { name: '丁香粉', res: $r('app.media.player_bg_landscape_01_lilac_pink') },
-  { name: '薄荷青', res: $r('app.media.player_bg_landscape_02_mint_teal') },
-  { name: '莫兰灰', res: $r('app.media.player_bg_landscape_03_morandi_gray') },
-  { name: '天际蓝', res: $r('app.media.player_bg_portrait_01_sky_blue') },
-  { name: '薰衣草', res: $r('app.media.player_bg_portrait_02_lavender_blue') },
-  { name: '蜜桃暮', res: $r('app.media.player_bg_portrait_03_peach_sunset') },
-];
 
 @ComponentV2
 export struct SettingsPage {
@@ -42,14 +28,12 @@ export struct SettingsPage {
   @Local inputWallpaperUrl: string = '';
   @Local showUrlDialog: boolean = false;
   @Local showHistory: boolean = false;
-  @Local selectedBg: number = -1;
   @Local dialogUrl: string = '';
   @Local dialogTarget: string = '';   // 'vod' | 'live' | 'proxy' | 'wallpaper'
   @Local busy: boolean = false;
   @Local localErr: string = '';
   @Local localOk: string = '';
   @Local cacheBytes: number = -1;   // -1 = 未统计
-  @Local searchHistoryCount: number = 0;
   @Local editingSub: boolean = false;
 
   aboutToAppear(): void {
@@ -57,7 +41,6 @@ export struct SettingsPage {
     this.inputLiveUrl = this.settings.liveUrl;
     this.inputProxyUrl = this.settings.proxyUrl;
     this.refreshCacheSize();
-    this.searchHistoryCount = SearchHistory.instance.getAll().length;
   }
 
   // @Computed 直接读取 @Trace 属性，确保 V2 依赖建立，壁纸变更立即生效
@@ -221,6 +204,23 @@ export struct SettingsPage {
     }
   }
 
+  // 分享：备份 JSON 复制到剪贴板（微信/网盘等任意途径传到其他设备粘贴导入）
+  private shareBackup(): void {
+    try {
+      this.settings.save();
+      interface BackupPayload { settingsJson: string; exportedAt: string; }
+      const payload: BackupPayload = {
+        settingsJson: this.settings.toJson(),
+        exportedAt: String(Date.now())
+      };
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, JSON.stringify(payload));
+      pasteboard.getSystemPasteboard().setData(data);
+      this.localOk = '配置已复制到剪贴板';
+    } catch (e) {
+      this.localErr = '分享失败：' + (e instanceof Error ? e.message : String(e));
+    }
+  }
+
   // 导入：系统文件选择器选备份 json → 读回 → AppSettings.restore
   private importBackup(): void {    this.localErr = '';
     this.localOk = '';
@@ -270,17 +270,16 @@ export struct SettingsPage {
     return (b / 1024 / 1024).toFixed(1) + ' MB';
   }
 
-  @Builder
-  sectionTitle(t: string) {
-    Text(t).fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
-      .width('100%').padding({ left: 16 }).margin({ top: 28 })
-  }
-
   build() {
     NavDestination() {
+      Column() {
       Stack() {
       Scroll() {
         Column() {
+          // 页面标题（系统标题栏已去，自绘与首页同风格）
+          Text('设置')
+            .fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+            .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 4 })
           // ---------- 点播 ----------
           Row() {
             Text('点播').fontSize(16).fontWeight(FontWeight.Bold)
@@ -306,7 +305,10 @@ export struct SettingsPage {
                 .onClick(() => { this.dialogTarget = 'vod'; this.showHistory = true; })
             }
           }
-          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+          .width('100%').padding({ left: 16, right: 14, top: 8, bottom: 8 })
+          .backgroundColor('#66888888')
+          .borderRadius(9)
+          .margin({ top: 4, bottom: 4 })
           .onClick(() => {
             this.dialogTarget = 'vod';
             this.dialogUrl = this.app.subUrl;
@@ -334,15 +336,50 @@ export struct SettingsPage {
               .hitTestBehavior(HitTestMode.Block)
               .onClick(() => { this.dialogTarget = 'live'; this.showHistory = true; })
           }
-          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
+          .width('100%').padding({ left: 16, right: 14, top: 8, bottom: 8 })
+          .backgroundColor('#66888888')
+          .borderRadius(9)
+          .margin({ top: 4, bottom: 4 })
           .onClick(() => {
             this.dialogTarget = 'live';
             this.dialogUrl = this.inputLiveUrl;
             this.showUrlDialog = true;
           })
 
+          // ---------- 壁纸图片 ----------
+          Row() {
+            Text('壁纸').fontSize(16).fontWeight(FontWeight.Bold)
+              .fontColor('#FFFFFF')
+            Text(this.wallpaperUri !== '' ? this.wallpaperUri : '未设置')
+              .fontSize(13).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+              .fontColor('#FFFFFF')
+              .layoutWeight(1).margin({ left: 12 })
+            Image($r('app.media.ic_refresh'))
+              .width(20).height(20)
+              .fillColor('#FFFFFF')
+              .margin({ left: 8 })
+              .hitTestBehavior(HitTestMode.Block)
+              .onClick(() => { this.refreshWallpaper(); })
+          }
+          .width('100%').padding({ left: 16, right: 14, top: 8, bottom: 8 })
+          .backgroundColor('#66888888')
+          .borderRadius(9)
+          .margin({ top: 4, bottom: 4 })
+          .onClick(() => {
+            this.dialogTarget = 'wallpaper';
+            this.dialogUrl = this.wallpaperUri;
+            this.showUrlDialog = true;
+          })
+
+          // ---------- 入口行：二级页 ----------
+          SettingRow({ label: '站点管理', sub: '启用/禁用与排序当前配置中的站点', arrow: true,
+            onTap: (): void => { Nav.stack.pushPathByName('SiteManage', ''); } })
+          SettingRow({ label: '播放设置', sub: '倍速 / 长按 / 去广告 / 下载', arrow: true,
+            onTap: (): void => { Nav.stack.pushPathByName('PlaySettings', ''); } })
+          SettingRow({ label: '个性设置', sub: '壁纸主题 / 海报密度 / 搜索偏好', arrow: true,
+            onTap: (): void => { Nav.stack.pushPathByName('PersonSettings', ''); } })
+
           // ---------- Proxy（csp_* JAR 爬虫的远程代理；鸿蒙端无 JVM，JAR 须在外部设备执行）----------
-          this.sectionTitle('Proxy')
           SettingRow({
             label: '代理地址',
             sub: this.inputProxyUrl === '' ? '未设置（纯 JAR 源不可用，不影响采集站/drpy 源）'
@@ -359,160 +396,19 @@ export struct SettingsPage {
               })
           }
 
-          // ---------- 壁纸 ----------
-          this.sectionTitle('壁纸')
-          SettingRow({ label: '颜色主题', sub: '全局背景渐变色' }) {
-            Select(WALLPAPER_LABELS.map((s: string): SelectOption => {
-              const opt: SelectOption = { value: s };
-              return opt;
-            }))
-              .selected(WALLPAPERS.indexOf(this.settings.wallpaper))
-              .value(WALLPAPER_LABELS[WALLPAPERS.indexOf(this.settings.wallpaper)] ?? '默认（白）')
-              .width(140)
-              .fontColor('#FFFFFF')
-              .onSelect((idx: number) => {
-                this.settings.wallpaper = WALLPAPERS[idx];
-                this.settings.save();
-              })
-          }
-          Row() {
-            Text('壁纸图片').fontSize(15)
-              .fontColor('#FFFFFF')
-            Text(this.wallpaperUri !== '' ? this.wallpaperUri : '未设置')
-              .fontSize(13).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-              .fontColor('#FFFFFF')
-              .layoutWeight(1).margin({ left: 12 })
-            Text('↻')
-              .fontSize(22)
-              .fontColor('#FFFFFF')
-              .margin({ left: 8 })
-              .hitTestBehavior(HitTestMode.Block)
-              .onClick(() => { this.refreshWallpaper(); })
-          }
-          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 14 })
-          .onClick(() => {
-            this.dialogTarget = 'wallpaper';
-            this.dialogUrl = this.wallpaperUri;
-            this.showUrlDialog = true;
-          })
-
-          // 内置背景选择
-          Flex({ wrap: FlexWrap.Wrap }) {
-            ForEach(BUILTIN_BGS, (bg: BuiltinBg, idx: number) => {
-              Column() {
-                Image(bg.res)
-                  .width(72).height(48).borderRadius(8)
-                  .border(this.selectedBg === idx ? { width: 2, color: '#007AFF' } : { width: 0 })
-                Text(bg.name)
-                  .fontSize(11).margin({ top: 4 })
-                  .fontColor(this.selectedBg === idx ? '#007AFF' : '#FFFFFF')
-              }
-              .margin({ right: 12, bottom: 12 })
-              .onClick(() => {
-                this.selectedBg = idx;
-                this.settings.wallpaperUri = '';
-                this.settings.save();
-              })
-            })
-          }
-          .width('100%').padding({ left: 16, right: 16 })
-
-          // ---------- 播放设置 ----------
-          this.sectionTitle('播放设置')
-          SettingRow({ label: '播放倍速', sub: '进入播放页时的默认倍速' }) {
-            Select(SPEED_OPTIONS.map((s: number): SelectOption => {
-              const opt: SelectOption = { value: s + 'x' };
-              return opt;
-            }))
-              .selected(SPEED_OPTIONS.indexOf(this.settings.playSpeed))
-              .value(this.settings.playSpeed + 'x')
-              .width(110)
-              .fontColor('#FFFFFF')
-              .onSelect((idx: number) => {
-                this.settings.playSpeed = SPEED_OPTIONS[idx];
-                this.settings.save();
-              })
-          }
-          SettingRow({ label: '长按倍速', sub: '播放中长按屏幕临时加速，松开恢复' }) {
-            Select(LONG_PRESS_OPTIONS.map((s: number): SelectOption => {
-              const opt: SelectOption = { value: s === 0 ? '关闭' : s + 'x' };
-              return opt;
-            }))
-              .selected(LONG_PRESS_OPTIONS.indexOf(this.settings.longPressSpeed))
-              .value(this.settings.longPressSpeed === 0 ? '关闭' : this.settings.longPressSpeed + 'x')
-              .width(110)
-              .fontColor('#FFFFFF')
-              .onSelect((idx: number) => {
-                this.settings.longPressSpeed = LONG_PRESS_OPTIONS[idx];
-                this.settings.save();
-              })
-          }
-          SettingRow({ label: 'AI去广告', sub: '过滤 HLS 播放列表里的插播广告分块与「广告/推广」集（对 m3u8 源生效）' }) {
-            Toggle({ type: ToggleType.Switch, isOn: this.settings.aiAdFilter })
-              .onChange((v: boolean) => { this.settings.aiAdFilter = v; this.settings.save(); })
-          }
-          SettingRow({ label: '内置下载', sub: '在详情页和播放页显示下载按钮，可离线缓存影片' }) {
-            Toggle({ type: ToggleType.Switch, isOn: this.settings.builtinDownload })
-              .onChange((v: boolean) => { this.settings.builtinDownload = v; this.settings.save(); })
-          }
-
-          // ---------- 个性设置 ----------
-          this.sectionTitle('个性设置')
-          SettingRow({ label: '图片尺寸', sub: '首页海报密度（列数）' }) {
-            Select(PIC_LABELS.map((s: string): SelectOption => {
-              const opt: SelectOption = { value: s };
-              return opt;
-            }))
-              .selected(PIC_SIZES.indexOf(this.settings.picSize))
-              .value(PIC_LABELS[PIC_SIZES.indexOf(this.settings.picSize)] ?? '标准（3列）')
-              .width(140)
-              .fontColor('#FFFFFF')
-              .onSelect((idx: number) => {
-                this.settings.picSize = PIC_SIZES[idx];
-                this.settings.save();
-              })
-          }
-          SettingRow({ label: '显示站源', sub: '搜索结果卡片角标展示来源站名' }) {
-            Toggle({ type: ToggleType.Switch, isOn: this.settings.showSite })
-              .onChange((v: boolean) => { this.settings.showSite = v; this.settings.save(); })
-          }
-          SettingRow({ label: '聚合搜索', sub: '一次并发搜索全部采集站（CMS/XML）并合并结果' }) {
-            Toggle({ type: ToggleType.Switch, isOn: this.settings.aggSearch })
-              .onChange((v: boolean) => { this.settings.aggSearch = v; this.settings.save(); })
-          }
-          SettingRow({ label: '站源搜索', sub: '搜索结果顶部按站点筛选（聚合结果就绪后展示）' }) {
-            Toggle({ type: ToggleType.Switch, isOn: this.settings.siteFilter })
-              .onChange((v: boolean) => { this.settings.siteFilter = v; this.settings.save(); })
-          }
-          SettingRow({ label: '自动跳过失效源', sub: '开启后加载失败或无内容的源自动切换并隐藏；关闭后原地提示，可手动换源' }) {
-            Toggle({ type: ToggleType.Switch, isOn: this.settings.autoSkipDead })
-              .onChange((v: boolean) => { this.settings.autoSkipDead = v; this.settings.save(); })
-          }
-
-          SettingRow({ label: '无痕模式', sub: '不保留搜索记录，搜索栏不展示历史标签' }) {
-            Toggle({ type: ToggleType.Switch, isOn: this.settings.incognito })
-              .onChange((v: boolean) => { this.settings.incognito = v; this.settings.save(); })
-          }
-          SettingRow({ label: '搜索历史', sub: this.searchHistoryCount > 0 ? `${this.searchHistoryCount} 条记录` : '暂无记录' }) {
-            Button('清除')
-              .height(36)
-              .backgroundColor('#3A3A3C')
-              .fontColor('#C62828')
-              .enabled(this.searchHistoryCount > 0)
-              .onClick(() => {
-                SearchHistory.instance.clear();
-                this.searchHistoryCount = 0;
-              })
-          }
-
           // ---------- 备份恢复 ----------
-          this.sectionTitle('备份恢复')
-          SettingRow({ label: '配置备份', sub: '导出订阅与个性化设置' }) {
+          SettingRow({ label: '配置备份', sub: '导出订阅与个性化设置，可分享给其他设备' }) {
             Button('导出')
               .height(36)
               .backgroundColor('#3A3A3C')
               .fontColor('#FFFFFF')
               .onClick(() => { this.exportBackup(); })
+            Button('分享')
+              .height(36)
+              .backgroundColor('#3A3A3C')
+              .fontColor('#FFFFFF')
+              .margin({ left: 8 })
+              .onClick(() => { this.shareBackup(); })
           }
           SettingRow({ label: '配置恢复', sub: '从备份文件导入配置' }) {
             Button('导入')
@@ -522,18 +418,7 @@ export struct SettingsPage {
               .onClick(() => { this.importBackup(); })
           }
 
-          // ---------- DoH ----------
-          this.sectionTitle('DoH')
-          SettingRow({ label: 'DoH 地址', sub: '未设置（使用系统 DNS）' }) {
-            Button('编辑')
-              .height(36)
-              .backgroundColor('#3A3A3C')
-              .fontColor('#FFFFFF')
-              .onClick(() => {})
-          }
-
           // ---------- 缓存 ----------
-          this.sectionTitle('缓存')
           SettingRow({ label: '缓存占用', sub: this.fmtSize(this.cacheBytes) + '（图片等运行缓存）' }) {
             Button('清理')
               .height(36)
@@ -542,21 +427,10 @@ export struct SettingsPage {
           }
 
           // ---------- 版本 ----------
-          this.sectionTitle('版本')
-          SettingRow({ label: '当前版本', sub: 'v1.0.0' }) {
-            Text('检查更新')
-              .fontSize(14)
-              .fontColor('#FFFFFF')
-              .onClick(() => {})
-          }
+          SettingRow({ label: '当前版本', sub: 'v1.0.0' })
 
           // ---------- 关于 ----------
-          this.sectionTitle('关于')
           SettingRow({ label: '关于应用', sub: '点播 / 直播聚合播放器' }) {
-            Text('>')
-              .fontSize(16)
-              .fontColor('#FFFFFF')
-              .onClick(() => {})
           }
 
           Text('清除订阅不影响个性化设置；个性化设置与订阅分开存储。')
@@ -565,13 +439,10 @@ export struct SettingsPage {
         }
         .width('100%')
         .alignItems(HorizontalAlign.Center)
+        .padding({ left: 16, right: 16, bottom: 76 })
       }
       .width('100%').height('100%')
       .scrollBar(BarState.Auto)
-      .linearGradient({ angle: 160, colors: this.wallpaperColors })
-      .backgroundImage(this.settings.bgImage())
-      .backgroundImageSize(ImageSize.Cover)
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
 
       // ---------- URL 编辑弹窗 ----------
@@ -678,11 +549,20 @@ export struct SettingsPage {
         .justifyContent(FlexAlign.Center)
       }
       }
-      .width('100%').height('100%')
+      .width('100%')
+      .layoutWeight(1)
       .alignContent(Alignment.Center)
+
+      // 底部导航栏（TV 不渲染）
+      MainTabBar({ active: 'settings' })
+      }
+      .width('100%').height('100%')
+      .linearGradient({ angle: 160, colors: this.wallpaperColors })
+      .backgroundImage(this.settings.bgImage())
+      .backgroundImageSize(ImageSize.Cover)
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
-    .hideTitleBar(false)
-    .title('设置')
+    .hideTitleBar(true)
     .onBackPressed(() => { return false; })
   }
 
