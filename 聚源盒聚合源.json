@@ -916,17 +916,6 @@
       "header": {}
     },
     {
-      "key": "sub_apiheiapicc",
-      "name": "嘿嘿 | 采集",
-      "type": 1,
-      "api": "https://api.heiapi.cc/api.php/provide/vod/",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "proxy",
-      "header": {}
-    },
-    {
       "key": "sub_img2gelonghu",
       "name": "🎧┃明星┃MV",
       "type": 1,
