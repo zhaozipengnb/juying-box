@@ -1,7 +1,7 @@
 // 详情页 —— FongMi 风格布局：顶部片名（☰ 展开影片信息），左侧来源站竖排胶囊，
 // 右侧剧集海报卡网格：红色徽标标线路、绿色徽标标备注、片名叠印海报底部。
 // 点卡片进播放页；长按卡片可下载（内置下载开启时）。
-// 跨源搜索：以片名搜全部采集站（CMS/XML 并发，drpy 串行），每站取首条匹配并加载详情。
+// 跨源搜索：以片名搜全部采集站（CMS/XML 并发，drpy 按 Worker 池有限并发），每站取首条匹配并加载详情。
 import { Nav, PlayerParam } from '../nav/Nav';
 import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
@@ -18,6 +18,12 @@ interface SourceResult {
   detail: MovieDetail | null;
 }
 
+// 会话级搜索/详情缓存：详情页反复进出同一片名免重搜（键 = 站key|片名[|vodId]；
+// 换源包整体失效，超容量整表清空。detail 可为 null——失败的详情同样缓存，免去重复等待）
+const searchCache = new Map<string, PageResult>();
+const detailCache = new Map<string, MovieDetail | null>();
+const CACHE_MAX = 80;
+
 @ComponentV2
 export struct DetailPage {
   app: AppState = AppState.instance;
@@ -32,7 +38,11 @@ export struct DetailPage {
   @Local errMsg: string = '';
   @Local descExpanded: boolean = false;  // 简介展开/收起
   @Local searchName: string = '';        // 顶栏可编辑搜索词
+  @Local searchedDone: number = 0;       // 聚合进度：已完成的站数（加载文案展示 x/N）
+  @Local searchedTotal: number = 0;
   private movie: Movie | null = null;
+  private originSiteKey: string = '';    // 点进本页的来源站（排队列最首）
+  private cacheCfgRef: Object | null = null;  // 缓存有效性标记：配置对象身份变化即清缓存
 
   aboutToAppear(): void {}
 
@@ -90,7 +100,7 @@ export struct DetailPage {
     .hideTitleBar(true)
     .onReady((ctx: NavDestinationContext) => {
       const m = ctx.pathInfo.param as Movie;
-      if (m !== null && m !== undefined) { this.movie = m; this.searchName = m.name; this.search(); }
+      if (m !== null && m !== undefined) { this.movie = m; this.searchName = m.name; this.originSiteKey = m.siteKey ?? ''; this.search(); }
     })
   }
 
@@ -247,7 +257,7 @@ export struct DetailPage {
         .width('100%')
         .layoutWeight(1)
       } else if (this.loading) {
-        Text('搜索片源中…').fontSize(13).fontColor('#FFFFFF').margin({ top: 40 })
+        Text('搜索片源中… ' + this.searchedDone + '/' + this.searchedTotal + ' 站').fontSize(13).fontColor('#FFFFFF').margin({ top: 40 })
       } else if (this.errMsg !== '') {
         Column({ space: 8 }) {
           Text(this.errMsg).fontSize(13).fontColor('#E53935')
@@ -259,12 +269,18 @@ export struct DetailPage {
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
   }
 
-  // 跨源搜索 + 逐站加载详情：CMS/XML 并发，drpy 串行（单 Web 容器互斥）
-  // 渐进式：每站搜到+详情就绪后立即推入 sources，页面实时显示，不等全部搜完
+  // 跨源搜索 + 逐站加载详情：CMS/XML 并发，drpy 4 路并发（Worker 池按站隔离）
+  // 渐进式：每站搜到+详情就绪后立即推入 sources，页面实时显示，不等全部搜完。
+  // 来源站（点进本页的站）排队列最首最先出结果；搜索/详情走会话级缓存，反复进出免重搜
   private async search(): Promise<void> {
     const cfg = this.app.config;
     const m = this.movie;
     if (cfg === null || m === null) { return; }
+    if (this.cacheCfgRef !== cfg) {   // 换源包后缓存整体失效
+      searchCache.clear();
+      detailCache.clear();
+      this.cacheCfgRef = cfg;
+    }
     this.loading = true;
     this.errMsg = '';
     this.sources = [];
@@ -275,29 +291,50 @@ export struct DetailPage {
       const handleSite = async (s: SiteConfig): Promise<void> => {
         const driver: SiteDriver | null = this.app.makeDriverFor(s);
         if (driver === null) { return; }
-        const pr: PageResult = await driver.searchContent(m.name, false);
+        const ck = s.key + '|' + m.name;
+        let pr: PageResult | undefined = searchCache.get(ck);
+        if (pr === undefined) {
+          pr = await driver.searchContent(m.name, false);
+          if (searchCache.size >= CACHE_MAX) { searchCache.clear(); }
+          searchCache.set(ck, pr);
+        }
         if (pr.items.length === 0) { return; }
-        let detail: MovieDetail | null = null;
-        try {
-          detail = await driver.detailContent([pr.items[0].vodId]);
-        } catch (e) { /* 详情加载失败，仍推入该站 */ }
+        const dk = ck + '|' + pr.items[0].vodId;
+        let detail: MovieDetail | null | undefined = detailCache.get(dk);
+        if (detail === undefined) {
+          detail = null;
+          try { detail = await driver.detailContent([pr.items[0].vodId]); } catch (e) { /* 详情加载失败，仍推入该站 */ }
+          if (detailCache.size >= CACHE_MAX) { detailCache.clear(); }
+          detailCache.set(dk, detail);
+        }
         this.sources = [...this.sources, { siteKey: s.key, siteName: s.name, movie: pr.items[0], detail }];
       };
+
+      // 站序：来源站置顶，其余保持配置序
+      const ordered = (arr: SiteConfig[]): SiteConfig[] => {
+        const head: SiteConfig[] = this.originSiteKey === ''
+          ? [] : arr.filter((s: SiteConfig): boolean => s.key === this.originSiteKey);
+        const rest: SiteConfig[] = arr.filter((s: SiteConfig): boolean => s.key !== this.originSiteKey);
+        return [...head, ...rest];
+      };
+
+      const supported: SiteConfig[] = ordered(cfg.sites.filter((s: SiteConfig): boolean =>
+        isSiteSupported(s) && !this.settings.isSiteDisabled(s.key)));
+      this.searchedTotal = supported.length;
+      this.searchedDone = 0;
 
       // 1. CMS/XML 并发
       const tasks: Promise<void>[] = [];
       const drpySites: SiteConfig[] = [];
-      for (const s of cfg.sites) {
-        if (!isSiteSupported(s)) { continue; }
+      for (const s of supported) {
         if (siteEngine(s) === 'js') { drpySites.push(s); continue; }
-        tasks.push(handleSite(s).catch((_e: Object): void => { /* 单站失败跳过 */ }));
+        tasks.push(handleSite(s).catch((_e: Object): void => { /* 单站失败跳过 */ }).finally(() => { this.searchedDone++; }));
       }
       await Promise.all(tasks);
 
-      // 2. drpy 串行（单 Web 容器互斥）
-      for (const s of drpySites) {
-        try { await handleSite(s); } catch (_e) { /* 单站失败跳过 */ }
-      }
+      // 2. drpy 有限并发：桥侧 Worker 池每站一个 Worker（LRU 上限 6），跨站真并行；
+      //    这里再以 4 路 lane 控制同时拉起的站数，避免瞬时 CPU/内存尖峰
+      await this.runPool(drpySites, 4, handleSite);
 
       // 3. 全部搜完仍无结果
       if (this.sources.length === 0) {
@@ -308,5 +345,21 @@ export struct DetailPage {
     } finally {
       this.loading = false;
     }
+  }
+
+  // 有限并发池：items 按序分给 limit 条 lane，单站失败跳过，完成计数驱动加载进度文案
+  private async runPool(items: SiteConfig[], limit: number, fn: (s: SiteConfig) => Promise<void>): Promise<void> {
+    let next = 0;
+    const lane = async (): Promise<void> => {
+      while (next < items.length) {
+        const s = items[next];
+        next++;
+        try { await fn(s); } catch (_e) { /* 单站失败跳过 */ }
+        this.searchedDone++;
+      }
+    };
+    const lanes: Promise<void>[] = [];
+    for (let k = 0; k < limit && k < items.length; k++) { lanes.push(lane()); }
+    await Promise.all(lanes);
   }
 }
