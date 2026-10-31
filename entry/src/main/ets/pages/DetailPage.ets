@@ -34,6 +34,7 @@ export struct DetailPage {
   ph: PlayHistory = PlayHistory.instance;
   favs: Favorites = Favorites.instance;
   @Local showInfo: boolean = false;      // ☰ 展开影片信息面板
+  @Local gridView: boolean = false;      // 聚合结果视图:false=列表(模板默认) true=海报网格
   @Local loading: boolean = false;
   @Local errMsg: string = '';
   @Local descExpanded: boolean = false;  // 简介展开/收起
@@ -121,6 +122,10 @@ export struct DetailPage {
             if (this.movie !== null) { this.movie.name = this.searchName.trim(); }
             this.search();
           })
+        Text('▦')
+          .fontSize(18).fontColor('#FFFFFF')
+          .padding({ left: 6, right: 6 })
+          .onClick(() => { this.gridView = !this.gridView; })
         Text(this.sources.length + '源')
           .fontSize(13)
           .fontColor('#FFFFFF')
@@ -213,46 +218,67 @@ export struct DetailPage {
           .height('100%')
           .padding({ left: 12 })
 
-          // 右侧：所有来源站海报网格，一行两个
-          Grid() {
-            ForEach(this.displaySources, (src: SourceResult, idx: number) => {
-              GridItem() {
-                Column() {
-                  Stack({ alignContent: Alignment.BottomStart }) {
+          // 右侧：聚合结果——列表(模板默认)/海报网格，▦ 切换
+          if (this.gridView) {
+            Grid() {
+              ForEach(this.displaySources, (src: SourceResult, idx: number) => {
+                GridItem() {
+                  Column() {
+                    Stack({ alignContent: Alignment.BottomStart }) {
+                      Image(src.movie.pic === '' ? $r('app.media.startIcon') : src.movie.pic)
+                        .width('100%').aspectRatio(0.667)
+                        .objectFit(ImageFit.Cover).borderRadius(8)
+                        .alt($r('app.media.startIcon'))
+                      Text(src.siteName).fontSize(10).fontColor('#FFFFFF').maxLines(1)
+                        .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+                        .backgroundColor('#99000000').borderRadius(4)
+                        .position({ x: 6, y: 6 })
+                      Text(src.movie.name).fontSize(11).fontColor('#FFFFFF').maxLines(1)
+                        .padding({ left: 6, right: 6, bottom: 4, top: 4 })
+                        .width('100%').backgroundColor('#80000000')
+                        .borderRadius({ bottomLeft: 8, bottomRight: 8 })
+                    }
+                  }
+                  .onClick(() => { this.openSource(src); })
+                }
+              }, (src: SourceResult, idx: number) => `${src.siteKey}-${idx}`)
+            }
+            .columnsTemplate('1fr 1fr')
+            .columnsGap(12).rowsGap(12)
+            .width('100%').layoutWeight(1).height('100%')
+            .padding({ left: 12, right: 16, top: 4 })
+            .scrollBar(BarState.Off)
+          } else {
+            List({ space: 10 }) {
+              ForEach(this.displaySources, (src: SourceResult, idx: number) => {
+                ListItem() {
+                  Row({ space: 12 }) {
                     Image(src.movie.pic === '' ? $r('app.media.startIcon') : src.movie.pic)
-                      .width('100%').aspectRatio(0.667)
+                      .width(92).height(122)
                       .objectFit(ImageFit.Cover).borderRadius(8)
                       .alt($r('app.media.startIcon'))
-                    // 左上角源名徽标
-                    Text(src.siteName).fontSize(10).fontColor('#FFFFFF').maxLines(1)
-                      .padding({ left: 5, right: 5, top: 2, bottom: 2 })
-                      .backgroundColor('#99000000').borderRadius(4)
-                      .position({ x: 6, y: 6 })
-                    // 底部片名
-                    Text(src.movie.name).fontSize(11).fontColor('#FFFFFF').maxLines(1)
-                      .padding({ left: 6, right: 6, bottom: 4, top: 4 })
-                      .width('100%').backgroundColor('#80000000')
-                      .borderRadius({ bottomLeft: 8, bottomRight: 8 })
+                    Column({ space: 6 }) {
+                      Text(src.movie.name).fontSize(15).fontColor('#FFFFFF')
+                        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                      Text(src.movie.remark === '' ? src.siteName : src.movie.remark)
+                        .fontSize(12).fontColor('#B3FFFFFF')
+                        .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                    }
+                    .alignItems(HorizontalAlign.Start)
+                    .layoutWeight(1)
                   }
+                  .width('100%')
+                  .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+                  .backgroundColor('#66888888')
+                  .borderRadius(10)
+                  .onClick(() => { this.openSource(src); })
                 }
-                .onClick(() => {
-                  const d = src.detail;
-                  if (d === null || d.lines.length === 0) { return; }
-                  const ep = d.lines[0].episodes[0];
-                  const param: PlayerParam = {
-                    ep: ep, siteKey: src.siteKey, siteName: src.siteName,
-                    movieName: src.movie.name, detail: d, lines: d.lines, lineIdx: 0, epIdx: 0
-                  };
-                  Nav.stack.pushPathByName('Player', param);
-                })
-              }
-            }, (src: SourceResult, idx: number) => `${src.siteKey}-${idx}`)
+              }, (src: SourceResult, idx: number) => `${src.siteKey}-${idx}`)
+            }
+            .width('100%').layoutWeight(1).height('100%')
+            .padding({ left: 16, right: 16, top: 4 })
+            .scrollBar(BarState.Off)
           }
-          .columnsTemplate('1fr 1fr')
-          .columnsGap(12).rowsGap(12)
-          .width('100%').layoutWeight(1).height('100%')
-          .padding({ left: 12, right: 16, top: 4 })
-          .scrollBar(BarState.Off)
         }
         .width('100%')
         .layoutWeight(1)
@@ -267,6 +293,18 @@ export struct DetailPage {
         Text('无可用播放线路').fontSize(14).fontColor('#FFFFFF').margin({ top: 40 })
       }
     }.width('100%').height('100%').alignItems(HorizontalAlign.Start)
+  }
+
+  // 点聚合结果卡：带整源线路进播放页
+  private openSource(src: SourceResult): void {
+    const d = src.detail;
+    if (d === null || d.lines.length === 0) { return; }
+    const ep = d.lines[0].episodes[0];
+    const param: PlayerParam = {
+      ep: ep, siteKey: src.siteKey, siteName: src.siteName,
+      movieName: src.movie.name, detail: d, lines: d.lines, lineIdx: 0, epIdx: 0
+    };
+    Nav.stack.pushPathByName('Player', param);
   }
 
   // 跨源搜索 + 逐站加载详情：CMS/XML 并发，drpy 4 路并发（Worker 池按站隔离）

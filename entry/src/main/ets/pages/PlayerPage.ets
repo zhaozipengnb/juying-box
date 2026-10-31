@@ -41,7 +41,9 @@ export struct PlayerPage {
   @Local boost: number = 0;            // 长按加速中的倍速（0 = 未加速）
   @Local picker: PickerSpec | null = null;   // 居中选择弹层
   @Local channelLine: number = 0;      // 直播多线路当前线路（0 基）
+  @Local loopPlay: boolean = false;    // 单集循环
   private channelUrls: string[] = [];  // 直播多线路地址表（来自 PlayerParam）
+  private epScroller: Scroller = new Scroller();  // 选集横滑定位当前集
   private videoFitEnum(): ImageFit {
     if (this.settings.videoFit === 'cover') { return ImageFit.Cover; }
     if (this.settings.videoFit === 'fill') { return ImageFit.Fill; }
@@ -177,6 +179,7 @@ export struct PlayerPage {
     this.lineIdx = li;
     this.epIdx = ei;
     this.ep = eps[ei];
+    this.epScroller.scrollToIndex(ei);
     this.playUrl = '';
     this.errMsg = '';
     this.useWeb = false;
@@ -375,6 +378,7 @@ export struct PlayerPage {
           .width('100%').height('100%')
           .autoPlay(true)
           .controls(false)
+          .loop(this.loopPlay)
           .objectFit(this.videoFitEnum())
           .onPrepared((ev) => {
             this.dur = ev.duration;
@@ -515,6 +519,59 @@ export struct PlayerPage {
         .position({ x: 0, y: '100%' })
         .markAnchor({ x: 0, y: '100%' })
         .padding({ left: 12, right: 12, bottom: 8 })
+
+        // 影院模式底部设置行(对齐模板:倍速/线路/选集/刷新/循环;内核项不适用未放)
+        if (this.isTheater) {
+          Row({ space: 22 }) {
+            Text(this.curSpeed === 1.0 ? '1.00' : this.curSpeed + 'x')
+              .fontSize(12).fontColor('#FFFFFF')
+              .onClick(() => {
+                this.picker = {
+                  title: '播放倍速',
+                  options: SPEED_OPTIONS.map((s: number): string => s + 'x'),
+                  index: SPEED_OPTIONS.indexOf(this.curSpeed),
+                  onPick: (idx: number): void => {
+                    this.curSpeed = SPEED_OPTIONS[idx];
+                    this.settings.playSpeed = this.curSpeed;
+                    this.settings.save();
+                  }
+                };
+              })
+            if (this.lines.length > 1) {
+              Text(`线路${this.lineIdx + 1}`)
+                .fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  this.picker = {
+                    title: '切换线路',
+                    options: this.lines.map((l: PlayLine): string => l.from),
+                    index: this.lineIdx,
+                    onPick: (idx: number): void => { this.switchTo(idx, this.epIdx); }
+                  };
+                })
+            }
+            Text('选集')
+              .fontSize(12).fontColor('#FFFFFF')
+              .onClick(() => {
+                if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
+                this.picker = {
+                  title: '选集',
+                  options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
+                  index: this.epIdx,
+                  onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
+                };
+              })
+            Text('刷新')
+              .fontSize(12).fontColor('#FFFFFF')
+              .onClick(() => { this.playUrl = ''; this.prepare(); })
+            Text(this.loopPlay ? '循环开' : '循环关')
+              .fontSize(12).fontColor('#FFFFFF')
+              .onClick(() => { this.loopPlay = !this.loopPlay; })
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          .position({ x: 0, y: '100%' }).markAnchor({ x: 0, y: '100%' })
+          .padding({ bottom: 34 })
+        }
       }
 
       // 长按加速提示
@@ -660,30 +717,29 @@ export struct PlayerPage {
           }.width('100%').padding({ left: 16, right: 16, bottom: 10 })
         }
 
-        // 8. 选集
+        // 8. 选集（横滑 chips，当前集黄色高亮并自动定位）
         if (this.lines.length > 0 && this.lines[this.lineIdx] !== undefined) {
           Column({ space: 8 }) {
             Text('选集').fontSize(13).fontColor('#FFFFFF')
-            Grid() {
+            List({ space: 8, scroller: this.epScroller }) {
               ForEach(this.lines[this.lineIdx].episodes, (e: Episode, ei: number) => {
-                GridItem() {
+                ListItem() {
                   Text(e.name)
                     .fontSize(12)
-                    .fontColor(this.epIdx === ei ? '#FFFFFF' : '#DDDDDD')
+                    .fontColor(this.epIdx === ei ? '#FFEB3B' : '#DDDDDD')
                     .backgroundColor('#4D888888')
-                    .borderRadius(4)
-                    .width('100%').height(32)
-                    .textAlign(TextAlign.Center)
+                    .borderRadius(18)
+                    .padding({ left: 14, right: 14, top: 7, bottom: 7 })
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 }
                 .onClick(() => { this.switchTo(this.lineIdx, ei); })
               }, (e: Episode, ei: number) => ei + e.name)
             }
-            .columnsTemplate('1fr 1fr 1fr 1fr')
-            .rowsGap(8).columnsGap(8)
+            .listDirection(Axis.Horizontal)
+            .scrollBar(BarState.Off)
             .width('100%')
-            .height(Math.ceil(this.lines[this.lineIdx].episodes.length / 4) * 40)
-          }.width('100%').padding({ left: 16, right: 16, bottom: 10 })
+            .height(40)
+        }.width('100%').padding({ left: 16, right: 16, bottom: 10 })
         }
 
         // 9. 简介
