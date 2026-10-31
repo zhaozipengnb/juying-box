@@ -64,9 +64,39 @@ export struct PlayerPage {
     if (this.settings.videoFit === 'fill') { return ImageFit.Fill; }
     return ImageFit.Contain;
   }
+
+  // XComponent 显示尺寸:按视频真实宽高比在容器内缩放(contain/cover),fill 铺满
+  // (竖屏片不再被强制拉伸到全屏;Stack 默认居中负责定位)
+  private xcW(): Length {
+    const w = this.xcDims()[0];
+    return w > 0 ? w : '100%' as Length;
+  }
+
+  private xcH(): Length {
+    const h = this.xcDims()[1];
+    return h > 0 ? h : '100%' as Length;
+  }
+
+  private xcDims(): number[] {
+    if (this.vidW <= 0 || this.vidH <= 0 || this.areaW <= 0 || this.areaH <= 0) { return [0, 0]; }
+    if (this.settings.videoFit === 'fill') { return [0, 0]; }
+    const den = this.density > 0 ? this.density : 1;
+    const vw = this.vidW / den;
+    const vh = this.vidH / den;
+    if (vw <= 0 || vh <= 0) { return [0, 0]; }
+    const sx = this.areaW / vw;
+    const sy = this.areaH / vh;
+    const s = this.settings.videoFit === 'cover' ? Math.max(sx, sy) : Math.min(sx, sy);
+    return [Math.floor(vw * s), Math.floor(vh * s)];
+  }
   @Local isFav: boolean = false;
   @Local isTheater: boolean = false;   // 影院模式：横屏全屏、隐藏下方详情
   @Local videoH: number = 0;           // 非影院模式视频区高度（vp）＝容器宽/1.78，onAreaChange 修正
+  @Local vidW: number = 0;             // 视频原始宽（px，videoSizeChange 回调）
+  @Local vidH: number = 0;             // 视频原始高（px）
+  @Local areaW: number = 0;            // 视频容器宽（vp，onAreaChange）
+  @Local areaH: number = 0;            // 视频容器高（vp）
+  private density: number = 1;         // 屏幕像素密度（px→vp 换算）
   @Local curTime: number = 0;          // 当前播放进度（秒），onUpdate 驱动
   @Local dur: number = 0;              // 视频总时长（秒），onPrepared 回调取得
   ph: PlayHistory = PlayHistory.instance;
@@ -342,8 +372,12 @@ export struct PlayerPage {
     // 视频区初始高度按屏宽/1.78 预置，避免首帧 0 高；onAreaChange 随实际容器宽度修正
     try {
       const d = display.getDefaultDisplaySync();
-      this.videoH = d.width / (d.densityPixels > 0 ? d.densityPixels : 1) / 1.78;
+      this.density = d.densityPixels > 0 ? d.densityPixels : 1;
+      this.videoH = d.width / this.density / 1.78;
     } catch (e) { }
+    this.engine.onVideoSize = (w: number, h: number): void => {
+      this.vidW = w; this.vidH = h;
+    };
     // AVPlayer 回调:进度/状态/错误;倍速与循环由设置驱动
     this.engine.speed = speedEnum(this.settings.playSpeed);
     this.engine.onTime = (sec: number): void => {
@@ -385,6 +419,10 @@ export struct PlayerPage {
           .width('100%')
           .height(this.isTheater ? '100%' : this.videoH)
           .backgroundColor('#000000')
+          .onAreaChange((_o: Area, n: Area) => {
+            this.areaW = n.width as number;
+            this.areaH = n.height as number;
+          })
           .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
         if (!this.isTheater) {
           this.detailArea()
@@ -502,7 +540,7 @@ export struct PlayerPage {
         }.width('100%').height('100%').justifyContent(FlexAlign.Center)
       } else {
         XComponent({ id: 'playerSurface', type: 'surface', controller: this.xcController })
-          .width('100%').height('100%')
+          .width(this.xcW()).height(this.xcH())
           .onLoad(() => {
             // surface 就绪:注入引擎(AVPlayer 用 surfaceId 渲染)
             this.engine.setSurface(this.xcController.getXComponentSurfaceId());
