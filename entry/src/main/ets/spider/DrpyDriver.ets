@@ -12,7 +12,7 @@ import { DrpyWebBridge } from './DrpyWebBridge';
 // 桥的最小接口：DrpyDriver 仅依赖这两个方法（DrpyWebBridge 结构兼容即可赋值，单测注入 fake 覆盖默认）
 export interface IDrpyBridge {
   ensureReady(cfg: SiteConfig): Promise<void>;
-  call(method: string, args: string[]): Promise<string>;
+  call(method: string, args: string[], skey: string): Promise<string>;
 }
 
 // Record<string, Object> 索引取值后归一为 toStr/toInt 可接受的类型（与 CmsJsonApi 同款）
@@ -61,11 +61,12 @@ export class DrpyDriver implements SiteDriver {
     return this.bridge;
   }
 
-  // 统一调用：每个接口方法前先 ensureReady（同 skey 幂等），再 call 拿 JSON 字符串解析
+  // 统一调用：每个接口方法前先 ensureReady（同站幂等），再 call 拿 JSON 字符串解析。
+  // skey 显式随调用传递：桥是全 app 单例，多站并发时靠它路由到对应 Worker
   private async callJson(method: string, args: string[]): Promise<Record<string, Object>> {
     const bridge = this.getBridge();
     await bridge.ensureReady(this.site);
-    const text = await bridge.call(method, args);
+    const text = await bridge.call(method, args, this.site.key);
     return JSON.parse(text) as Record<string, Object>;
   }
 

@@ -26,7 +26,7 @@ class FakeBridge implements IDrpyBridge {
     this.readyCount++;
   }
 
-  async call(method: string, args: string[]): Promise<string> {
+  async call(method: string, args: string[], skey: string): Promise<string> {
     this.lastMethod = method;
     this.lastArgs = args;
     return this.responses[method] ?? '{}';

@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <!--
-  drpy 壳页面 v3：Worker 宿主（内联 Worker 源 + Blob 降级）
-  架构：ArkTS 注入 drpy2/ext 代码文本 → 本页转发给 Worker → Worker 内同步 XHR 网络栈原生执行 drpy2
-  （drpy2 的宿主 req 为同步语义，仅 Worker 线程合法；主线程禁同步 XHR，故运行时必须置于 Worker）
+  drpy 壳页面 v3：Worker 宿主（内联 Worker 源 + Blob 降级，按站 Worker 池）
+  架构：ArkTS 注入 drpy2/ext 代码文本 → 本页按站创建 Worker → Worker 内同步 XHR 网络栈原生执行 drpy2
+  （drpy2 的宿主 req 为同步语义，仅 Worker 线程合法；主线程禁同步 XHR，故运行时必须置于 Worker）。
+  多站并发：每站一个 Worker（workerMap 按 skey 注册），跨站调用互不阻塞；页面对 ArkTS 的求值
+  （runJavaScriptExt）由桥侧互斥锁串行——并发求值会拿到损坏的序列化结果。
   关键点：resource://rawfile 页面为不透明 origin（null），Worker 构造器拒绝相对/绝对 resource 脚本
   （SecurityError: cannot be accessed from origin 'null'）。故将 Worker 源内联于本页
   （type="text/plain" 不执行），经 Blob URL 创建——blob 继承页面 origin，构造不再跨源。
   协议：
-    ArkTS → 本页 → Worker：__workerInit(cfgJson)（drpy2/ext 代码先经 window.__drpy2Code/__extCode 注入）
-                        __workerCall(id, method, argsJson)
+    ArkTS → 本页 → Worker：__workerInit(skey, cfgJson, drpy2Code, extCode)（libs/proxyBase 经 window 共享注入）
+                        __workerCall(skey, id?无——id 本页生成, method, argsJson)
     Worker → 本页 → ArkTS：onmessage {type:'result', id, value} 写入 __callResults[id]；ArkTS 轮询 __drpyResult(id)
+    init 完成标志/失败原因：__drpyInitDone(skey) / __drpyInitError(skey)（按站）；__workerEvict(skey) 淘汰
 -->
 <html>
 <head><meta charset="utf-8"><title>drpy-shell</title></head>
@@ -357,17 +360,23 @@ self.onmessage = function (ev) {
 </script>
 <script>
   var __callResults = {};
-  var __initDone = false;
-  var worker = null;
+  var workerMap = {};    // skey → Worker（Worker 池：每站一个，跨调用复用，互不阻塞）
+  var workerMeta = {};   // skey → { done: bool, err: string }（init 完成标志/失败原因，按站查询）
 
-  function __wireWorker(w) {
+  function __wireWorker(w, skey) {
     w.onmessage = function (ev) {
       var m = ev.data;
       if (m.type === 'log') { console.info('OKV-WORKER: ' + m.msg); return; }
       if (m.type === 'result') {
         console.info('OKV-DBG result id=' + m.id + ' vtype=' + typeof m.value + ' v=' + String(m.value).substring(0, 60));
         __callResults[m.id] = m.value;
-        if (m.id === '__init__' && m.value.indexOf('__error') < 0) { __initDone = true; }
+        if (m.id === '__init__') {
+          var meta = workerMeta[skey];
+          if (meta) {
+            if (String(m.value).indexOf('__error') >= 0) { meta.err = String(m.value); }
+            else { meta.done = true; }
+          }
+        }
       }
     };
     w.onerror = function (e) { console.error('OKV-WORKER-ERR: ' + (e.message || 'unknown')); };
@@ -394,24 +403,26 @@ self.onmessage = function (ev) {
     }
   }
 
-  // ArkTS 调用：注入代码文本后转发 init（libs 为 drpy2 的 ES module 依赖文本，见 worker init）
-  window.__workerInit = function (cfgJson) {
-    __initDone = false;
-    delete __callResults['__init__'];
-    // 每次 init 重建 Worker：drpy2 引导含 Object.defineProperty(Object.prototype,…) 等非幂等全局注入，
-    // 跨 skey 复用同一 Worker 二次 eval 必报 Cannot redefine；重建即天然作用域隔离
-    if (worker !== null) { try { worker.terminate(); } catch (e0) { /* 终止失败忽略 */ } }
-    worker = __makeWorker();
-    if (worker === null) { return; }
-    __wireWorker(worker);
-    worker.postMessage({ type: 'init', drpy2Code: window.__drpy2Code || '', extCode: window.__extCode || '', libs: window.__drpyLibs || {}, cfgJson: cfgJson, proxyBase: window.__drpyProxyBase || '', callId: '__init__' });
+  // ArkTS 调用：注册/重建指定站的 Worker（drpy2 引导含非幂等全局注入，同站重初始化须重建）。
+  // drpy2Code/extCode 经参数传入——各站规则不同，并发 init 不能走共享 window 变量（会互踩）；
+  // libs/proxyBase 全站相同，仍走共享注入。调用方（ArkTS）保证对页面的求值串行。
+  window.__workerInit = function (skey, cfgJson, drpyCode, extCode) {
+    workerMeta[skey] = { done: false, err: '' };
+    var old = workerMap[skey];
+    if (old) { try { old.terminate(); } catch (e0) { /* 终止失败忽略 */ } }
+    var w = __makeWorker();
+    if (w === null) { workerMeta[skey].err = 'worker 创建失败'; return; }
+    workerMap[skey] = w;
+    __wireWorker(w, skey);
+    w.postMessage({ type: 'init', drpy2Code: drpyCode || '', extCode: extCode || '', libs: window.__drpyLibs || {}, cfgJson: cfgJson, proxyBase: window.__drpyProxyBase || '', callId: '__init__' });
   };
-  // ArkTS 调用：同步发起 call（返回 id），结果经 Worker 异步回写
-  window.__workerCall = function (method, argsJson) {
-    if (worker === null) { return 'noworker'; }
+  // ArkTS 调用：向指定站的 Worker 同步发起 call（返回 id），结果经 Worker 异步回写
+  window.__workerCall = function (skey, method, argsJson) {
+    var w = workerMap[skey];
+    if (!w) { return 'noworker'; }
     var id = 'c' + Math.random().toString(36).slice(2);
     var args = JSON.parse(argsJson);
-    worker.postMessage({ type: 'call', method: method, args: args, id: id });
+    w.postMessage({ type: 'call', method: method, args: args, id: id });
     return id;
   };
   // ArkTS 轮询：'' = 未完成；强制字符串化（Worker postMessage 的 value 若为对象会让 getString 抛类型错）
@@ -422,10 +433,22 @@ self.onmessage = function (ev) {
     console.info('OKV-WARN: call result was ' + typeof v + ', stringified');
     return JSON.stringify(v);
   };
-// 返回 '1'/'0' 而非 '1'/''：ArkWeb getString 以 JSON 形式回传字符串（'' → '""'），空串判据会假阳性
-window.__drpyInitDone = function () { return __initDone ? '1' : '0'; };
-// init 失败时返回具体错误字符串（ArkTS 轮询遇到非 '0'/'1' 的值会直接抛出）
-window.__drpyInitError = function () { return __initError || ''; };
+  // init 完成标志按站查询（多 Worker 并发 init，全局单一标志会互踩）
+  window.__drpyInitDone = function (skey) {
+    var meta = workerMeta[skey];
+    return (meta && meta.done) ? '1' : '0';
+  };
+  // init 失败原因按站查询（非 '0'/'1' 的值会被 ArkTS 轮询直接抛出）
+  window.__drpyInitError = function (skey) {
+    var meta = workerMeta[skey];
+    return (meta && meta.err) ? meta.err : '';
+  };
+  // Worker 池淘汰：终止并移除指定站的 Worker（其未完成调用的轮询将走到超时，由调用方重试）
+  window.__workerEvict = function (skey) {
+    var w = workerMap[skey];
+    if (w) { try { w.terminate(); } catch (e) { /* 终止失败忽略 */ } delete workerMap[skey]; }
+    delete workerMeta[skey];
+  };
 
   console.info('OKV shell v3 ready');
 </script>
