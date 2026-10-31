@@ -1917,28 +1917,6 @@
       "header": {}
     },
     {
-      "key": "sub_wwwgsjtlxyto",
-      "name": "🍉┃西瓜┃v3",
-      "type": 4,
-      "api": "https://www.gsjtlxy.top/xgapp.php/v3/",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "https://www.gsjtlxy.top/xgapp.php/v3/",
-      "header": {}
-    },
-    {
-      "key": "sub_xiutanshiyif",
-      "name": "💡┃亮亮┃APP",
-      "type": 4,
-      "api": "http://xiutan.shiyifacai.com/zuoan/api.php/app/",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "http://xiutan.shiyifacai.com/zuoan/api.php/app/",
-      "header": {}
-    },
-    {
       "key": "sub_taopianapico",
       "name": "🕹️淘片┃采集",
       "type": 1,
@@ -2247,94 +2225,6 @@
       "header": {}
     },
     {
-      "key": "sub_soyinpaixyz",
-      "name": "夸克┃网盘搜索",
-      "type": 4,
-      "api": "https://so.yinpai.xyz/api.php?type=quark",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "\"\"",
-      "header": {}
-    },
-    {
-      "key": "sub_soyinpaixyzx",
-      "name": "百度┃网盘搜索",
-      "type": 4,
-      "api": "https://so.yinpai.xyz/api.php?type=baidu",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "\"\"",
-      "header": {}
-    },
-    {
-      "key": "sub_soyinpaixyzxx",
-      "name": "UC┃网盘搜索",
-      "type": 4,
-      "api": "https://so.yinpai.xyz/api.php?type=uc",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "\"\"",
-      "header": {}
-    },
-    {
-      "key": "sub_soyinpaixyzxxx",
-      "name": "天翼┃网盘推送",
-      "type": 4,
-      "api": "https://so.yinpai.xyz/api.php?type=tianyi",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "\"\"",
-      "header": {}
-    },
-    {
-      "key": "sub_soyinpaixyzxxxx",
-      "name": "阿里┃网盘搜索",
-      "type": 4,
-      "api": "https://so.yinpai.xyz/api.php?type=aliyun",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "\"\"",
-      "header": {}
-    },
-    {
-      "key": "sub_soyinpaixyzxxxxx",
-      "name": "123┃网盘搜索",
-      "type": 4,
-      "api": "https://so.yinpai.xyz/api.php?type=123",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "\"\"",
-      "header": {}
-    },
-    {
-      "key": "sub_soyinpaixyzxxxxxx",
-      "name": "移动┃网盘搜索",
-      "type": 4,
-      "api": "https://so.yinpai.xyz/api.php?type=mobile",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "\"\"",
-      "header": {}
-    },
-    {
-      "key": "sub_soyinpaixyzxxxxxxx",
-      "name": "迅雷┃网盘搜索",
-      "type": 4,
-      "api": "https://so.yinpai.xyz/api.php?type=xunlei",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "\"\"",
-      "header": {}
-    },
-    {
       "key": "sub_12422321431x",
       "name": "接口已经更新【api.starlink.fan】",
       "type": 3,
@@ -2346,102 +2236,14 @@
       "header": {}
     },
     {
-      "key": "sub_cik07cos7moo",
-      "name": "哔哩┃哔哩",
-      "type": 1,
-      "api": "https://cik07-cos.7moor-fs2.com/im/4d2c3f00-7d4c-11e5-af15-41bf63ae4ea0/50e4430df0b5644f/bilibil.json",
-      "searchable": 1,
-      "quickSearch": 0,
-      "filterable": 0,
-      "ext": "{\"json\": \"https://cik07-cos.7moor-fs2.com/im/4d2c3f00-7d4c-11e5-af15-41bf63ae4ea0/50e4430df0b5644f/bilibil.json\", \"cookie\": \"\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_mobile125112",
-      "name": "葫芦┃1080P",
-      "type": 1,
-      "api": "https://mobile-1251126973.cos.ap-guangzhou.myqcloud.com/maccos_config.txt|8R33VQSxzmCaHpEX|V122|okhttp/3.10.0",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "https://mobile-1251126973.cos.ap-guangzhou.myqcloud.com/maccos_config.txt|8R33VQSxzmCaHpEX|V122|okhttp/3.10.0",
-      "header": {}
-    },
-    {
-      "key": "sub_yun131644280",
-      "name": "标清┃1080P",
-      "type": 1,
-      "api": "https://yun-1316442804.cos.ap-guangzhou.myqcloud.com/601.txt|FTgP4Gq8zPiqbt7M|V122|okhttp/3.10.0",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "https://yun-1316442804.cos.ap-guangzhou.myqcloud.com/601.txt|FTgP4Gq8zPiqbt7M|V122|okhttp/3.10.0",
-      "header": {}
-    },
-    {
-      "key": "sub_yzysaposscnh",
-      "name": "幸运┃1080P",
-      "type": 1,
-      "api": "https://yzysap.oss-cn-hangzhou.aliyuncs.com/sss.txt|wNCwbXzr0Bm6cS2C|V122|okhttp/3.10.0",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "https://yzysap.oss-cn-hangzhou.aliyuncs.com/sss.txt|wNCwbXzr0Bm6cS2C|V122|okhttp/3.10.0",
-      "header": {}
-    },
-    {
-      "key": "sub_aysapptoossc",
-      "name": "爱影┃1080P",
-      "type": 1,
-      "api": "https://aysappto.oss-cn-chengdu.aliyuncs.com/q23.txt|nzEqOgYk3QzHuEP8|V122|okhttp/3.10.0",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "https://aysappto.oss-cn-chengdu.aliyuncs.com/q23.txt|nzEqOgYk3QzHuEP8|V122|okhttp/3.10.0",
-      "header": {}
-    },
-    {
       "key": "sub_duoduozhuiju",
-      "name": "大鹅┃1080P",
+      "name": "多多影视",
       "type": 1,
-      "api": "https://duoduozhuiju.com",
+      "api": "https://323433ssdfd.top/",
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 0,
-      "ext": "https://duoduozhuiju.com",
-      "header": {}
-    },
-    {
-      "key": "sub_172247227203",
-      "name": "麦田┃1080P",
-      "type": 1,
-      "api": "http://172.247.227.203:25321/mtys.php",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "http://172.247.227.203:25321/mtys.php",
-      "header": {}
-    },
-    {
-      "key": "sub_1034513222",
-      "name": "咕噜┃1080P",
-      "type": 1,
-      "api": "http://103.45.132.22:19987/app/bn",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "{\"host\": \"http://103.45.132.22:19987/app/bn\", \"LoginPath\": \"/app/log\", \"appkey\": \"d1f0c269eab74d93821fffc9befdbbba\", \"versionName\": \"1.9.5\", \"name\": \"咕噜咕噜\", \"package\": \"com.bd.tool.gulu\", \"buildNumber\": \"2001\", \"buildSignature\": \"B07C8F6DBEBD3ABEE6A4A4DE2BFBBF29A0AC3F984D532A39448EC3BF5DD36311\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_api12321appc",
-      "name": "欣欣┃1080P",
-      "type": 1,
-      "api": "https://api.12321app.com/api",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "{\"host\": \"https://api.12321app.com/api\", \"LoginPath\": \"/app/log\", \"version\": \"0b4328287a5d953e\", \"appkey\": \"a0a18659a9977a47e53442cd084b536c\", \"versionName\": \"2.8.1\", \"name\": \"听心视频\", \"package\": \"com.iksp.adsys.jjsp\", \"buildNumber\": \"2001\", \"buildSignature\": \"03DD38CE4C3D62D0F0DEFACC06768D14EB382C7BD77A05B2EBF4D66E154A0D47\"}",
+      "ext": "https://323433ssdfd.top/",
       "header": {}
     },
     {
