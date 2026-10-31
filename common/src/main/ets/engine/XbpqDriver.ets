@@ -269,6 +269,20 @@ export class XbpqDriver implements SiteDriver {
       throw new Error('该站搜索规则残缺(无关键词占位)');
     }
     const url = absUrl(this.base, fillTemplate(tpl, '', 1, encodeURIComponent(key)));
+    let result = await this.searchOnce(url);
+    // 标题带品牌尾缀(如「XXX-国产电影精选」)时全名常搜不到,去尾缀用主干名重搜一次
+    if (result.items.length === 0 && key.lastIndexOf('-') > 0) {
+      const base = key.substring(0, key.lastIndexOf('-'));
+      if (base !== '') {
+        const retryUrl = absUrl(this.base, fillTemplate(tpl, '', 1, encodeURIComponent(base)));
+        const retry = await this.searchOnce(retryUrl);
+        if (retry.items.length > 0) { result = retry; }
+      }
+    }
+    return result;
+  }
+
+  private async searchOnce(url: string): Promise<PageResult> {
     const html = await this.getPage(url);
     const arrRule = this.arrRule('搜索数组', html, LIST_CANDIDATES);
     if (arrRule === '') { throw new Error('搜索解析为空'); }
