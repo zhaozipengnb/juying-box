@@ -5,6 +5,7 @@ import { AppState } from '../state/AppState';
 import { AppSettings, PicSize } from '../state/AppSettings';
 import { SearchHistory } from '../state/SearchHistory';
 import { DrpyWebContainer } from '../spider/DrpyWebBridge';
+import { WebFetchContainer } from '../net/WebFetchBridge';
 import { Nav } from '../nav/Nav';
 import { MovieGrid } from '../components/MovieGrid';
 import { MainTabBar, isTvDevice } from '../components/MainTabBar';
@@ -287,6 +288,7 @@ export struct HomePage {
     Column() {
     // drpy JS 插件运行环境（1x1 不可见；Home 是栈底 NavDestination，常驻存活覆盖 Detail/Player 调用期）
     DrpyWebContainer()
+    WebFetchContainer()
       // 顶栏：站点切换 + 搜索入口
       Row({ space: 8 }) {
         // 不支持的源已在 refreshSites 中过滤，此处仅展示可用源

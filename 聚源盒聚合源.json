@@ -848,17 +848,6 @@
       "header": {}
     },
     {
-      "key": "sub_wwwfmcffun",
-      "name": "蜡笔 • 4K",
-      "type": 1,
-      "api": "https://www.fmcf.fun",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "{\"site\": [\"https://www.fmcf.fun\", \"https://www.mmpanpan.site\", \"http://tvpanpan.site\", \"http://www.tvpanpan.site\"]}",
-      "header": {}
-    },
-    {
       "key": "sub_tvyydsystop",
       "name": "多多 • 4K",
       "type": 1,
@@ -867,28 +856,6 @@
       "quickSearch": 1,
       "filterable": 1,
       "ext": "{\"site\": [\"https://tv.yydsys.top\", \"https://tv.yydsys.cc\", \"https://tv.214521.xyz\"]}",
-      "header": {}
-    },
-    {
-      "key": "sub_woognxogeuor",
-      "name": "八零 • 4K",
-      "type": 1,
-      "api": "https://woog.nxog.eu.org",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "{\"site\": [\"https://woog.nxog.eu.org\", \"https://ogkk.nxog.eu.org\", \"https://woog.430520.xyz\"]}",
-      "header": {}
-    },
-    {
-      "key": "sub_xhbanxyz",
-      "name": "虎斑 • 4K",
-      "type": 1,
-      "api": "http://xhban.xyz",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "{\"site\": [\"http://xhban.xyz\", \"http://38.76.197.172:16969\"]}",
       "header": {}
     },
     {

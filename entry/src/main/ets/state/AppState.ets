@@ -2,6 +2,7 @@
 import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, AppYsApi, XmlCmsDriver, ProxyDriver, FetchText, decodeConfigContent,
   siteEngine, isSiteSupported, resolveSiteUrls, LiveGroupConfig, XbpqDriver, isXbpqSite } from 'common';
 import { httpFetch } from '../net/HttpClient';
+import { WebFetchBridge, isCfChallenge } from '../net/WebFetchBridge';
 import { AppSettings } from './AppSettings';
 import { ConfigStore, serializeConfig } from './ConfigStore';
 import { DrpyDriver } from '../spider/DrpyDriver';
@@ -36,8 +37,20 @@ export class AppState {
   makeFetchText(): FetchText {
     if (this.testFetchText !== undefined) { return this.testFetchText; }
     return async (url: string, headers?: Record<string, string>): Promise<string> => {
-      const r = await httpFetch(url, { headers: headers });
-      return r.text();
+      const bridge = WebFetchBridge.instance;
+      // fast-path:该 host 已过 CF 盾 → 带 webview 导出的 cookie + 配对 UA 直连
+      let reqHeaders: Record<string, string> = {};
+      if (headers !== undefined) { for (const k of Object.keys(headers)) { reqHeaders[k] = headers[k]; } }
+      const cookie = bridge.cookieFor(url);
+      if (cookie !== '' && bridge.uaValue() !== '') {
+        reqHeaders['Cookie'] = cookie;
+        reqHeaders['User-Agent'] = bridge.uaValue();
+      }
+      const r = await httpFetch(url, { headers: reqHeaders });
+      const text = r.text();
+      if (!isCfChallenge(text)) { return text; }
+      // Cloudflare 挑战页 → webview 真内核过盾抓渲染 HTML(成功后回填 cookie 缓存)
+      return bridge.fetchHtml(url);
     };
   }
 
