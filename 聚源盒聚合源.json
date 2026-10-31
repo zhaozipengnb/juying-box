@@ -1539,7 +1539,7 @@
       "searchable": 1,
       "quickSearch": 0,
       "filterable": 0,
-      "ext": "{\"数组\": \"card&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"src=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://y2s52n7.com/vod/show/id/{cateId}\", \"分类\": \"电影$1#电视剧$2#综艺$3#动漫$4#短剧$88\", \"搜索url\": \"https://y2s52n7.com/vod/search/{wd}\"}",
+      "ext": "{\"数组\": \"movie-card&&</a\", \"标题\": \"alt=\\\"&&\\\"\", \"图片\": \"src=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://y2s52n7.com/vod/show/id/{cateId}\", \"分类\": \"电影$1#电视剧$2#综艺$3#动漫$4#短剧$88\", \"搜索url\": \"https://y2s52n7.com/vod/search/{wd}\"}",
       "header": {}
     },
     {
