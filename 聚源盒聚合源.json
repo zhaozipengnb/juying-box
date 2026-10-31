@@ -4559,17 +4559,6 @@
       "header": {}
     },
     {
-      "key": "sub_w55xycom",
-      "name": "555电影",
-      "type": 1,
-      "api": "https://w55xy.com/",
-      "searchable": 0,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "https://w55xy.com/",
-      "header": {}
-    },
-    {
       "key": "sub_wwwlibvioapp",
       "name": "立播影视",
       "type": 1,
