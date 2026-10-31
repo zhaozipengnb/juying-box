@@ -1473,7 +1473,7 @@
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 0,
-      "ext": "{\"数组\": \"video-card&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"src=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://wn4k.com/vodtype/{cateId}/{catePg}/\", \"分类\": \"电影$1#连续剧$2#综艺$3#动漫$4\", \"搜索url\": \"https://wn4k.com/vodsearch/{wd}-------------/\"}",
+      "ext": "{\"数组\": \"video-card&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"src=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://wn4k.com/vodtype/{cateId}/\", \"分类\": \"电影$1#连续剧$2#综艺$3#动漫$4\", \"搜索url\": \"https://wn4k.com/vodsearch/{wd}-------------/\"}",
       "header": {}
     },
     {
