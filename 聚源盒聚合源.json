@@ -1488,17 +1488,6 @@
       "header": {}
     },
     {
-      "key": "sub_homejundieto",
-      "name": "在线之家(XBiu)",
-      "type": 1,
-      "api": "http://home.jundie.top:666/json/XBiu/zxzj.json",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "http://home.jundie.top:666/json/XBiu/zxzj.json",
-      "header": {}
-    },
-    {
       "key": "sub_homejundietox",
       "name": "AUETE(XBiu)",
       "type": 1,
@@ -3541,7 +3530,7 @@
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 0,
-      "ext": "{\"site\": [\"https://woggpan.888484.xyz\", \"https://www.wogg.net\", \"https://www.wogg.live\", \"https://woggpan.xxooo.cf\", \"https://wogg.xxooo.cf\"]}",
+      "ext": "{\"site\": [\"https://woggpan.888484.xyz\", \"https://www.wogg.net\", \"https://woggpan.888484.xyz\", \"https://woggpan.xxooo.cf\", \"https://wogg.xxooo.cf\"]}",
       "header": {}
     },
     {
