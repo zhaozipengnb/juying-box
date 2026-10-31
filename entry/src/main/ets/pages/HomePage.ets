@@ -288,7 +288,7 @@ export struct HomePage {
     Column() {
     // drpy JS 插件运行环境（1x1 不可见；Home 是栈底 NavDestination，常驻存活覆盖 Detail/Player 调用期）
     DrpyWebContainer()
-    WebFetchContainer()
+    WebFetchContainer().position({ x: 0, y: 0 })   // 绝对定位:全屏抓取面但不占布局空间,渲染在内容之下
       // 顶栏：站点切换 + 搜索入口
       Row({ space: 8 }) {
         // 不支持的源已在 refreshSites 中过滤，此处仅展示可用源
