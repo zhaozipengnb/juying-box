@@ -1,5 +1,5 @@
 // 底部主导航栏：首页/直播/设置 三页共享（手机/平板）。
-// TV 不渲染（build 直接空），三个页面维持顶栏图标布局——布局分叉只在这一处。
+// 对齐 OK影视 模板：纯图标、无文字，当前项白色胶囊高亮；TV 不渲染（build 空）。
 // 直播/设置仍走 Nav 路由栈：回首页清栈到栈底，返回键行为与 tab 直觉一致。
 import { Nav } from '../nav/Nav';
 import { deviceInfo } from '@kit.BasicServicesKit';
@@ -15,34 +15,30 @@ export struct MainTabBar {
 
   build() {
     if (!isTvDevice()) {
-      Row() {
-        this.tabItem('home', $r('app.media.ic_home'), '首页')
-        this.tabItem('live', $r('app.media.ic_live'), '直播')
-        this.tabItem('settings', $r('app.media.ic_settings'), '设置')
+      Row({ space: 30 }) {
+        this.tabItem('home', $r('app.media.ic_home'))
+        this.tabItem('live', $r('app.media.ic_live'))
+        this.tabItem('settings', $r('app.media.ic_settings'))
       }
       .width('100%')
-      .height(48)
-      // 透明：直接透出页面壁纸背景；下沉到系统底部安全区内，图标更贴近屏底
+      .height(56)
+      // 透明：直接透出页面壁纸背景；下沉到系统底部安全区内
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       .alignItems(VerticalAlign.Center)
+      .justifyContent(FlexAlign.Center)
     }
   }
 
   @Builder
-  tabItem(key: string, icon: Resource, label: string) {
-    Column({ space: 2 }) {
+  tabItem(key: string, icon: Resource) {
+    Column() {
       Image(icon)
         .width(24).height(24)
-        .fillColor(this.active === key ? '#FFFFFF' : '#99FFFFFF')
-      Text(label)
-        .fontSize(10)
-        .fontColor(this.active === key ? '#FFFFFF' : '#99FFFFFF')
-        .fontWeight(this.active === key ? FontWeight.Medium : FontWeight.Normal)
+        .fillColor(this.active === key ? '#007DFF' : '#B3FFFFFF')
     }
-    .layoutWeight(1)
-    .height('100%')
-    .justifyContent(FlexAlign.End)
-    .padding({ bottom: 2 })
+    .padding({ left: 18, right: 18, top: 9, bottom: 9 })
+    .backgroundColor(this.active === key ? '#FFFFFF' : Color.Transparent)
+    .borderRadius(20)
     .onClick(() => {
       if (this.active === key) { return; }
       if (key === 'home') {
