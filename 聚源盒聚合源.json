@@ -441,17 +441,6 @@
       "header": {}
     },
     {
-      "key": "sub_wwwxb6vcom",
-      "name": "New6V｜磁力",
-      "type": 1,
-      "api": "https://www.xb6v.com",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "https://www.xb6v.com",
-      "header": {}
-    },
-    {
       "key": "sub_wwwddzwcn",
       "name": "9️⃣九月┃影视",
       "type": 1,
@@ -757,17 +746,6 @@
       "quickSearch": 1,
       "filterable": 0,
       "ext": "{\"请求头\": \"User-Agent$MOBILE_UA\", \"编码\": \"UTF-8\", \"主页url\": \"https://dora.xiaoxinbk.com/\", \"数组\": \"class=\\\"card-img-bili\\\"&&</a>\", \"标题\": \"alt=\\\"&&\\\"\", \"图片\": \"data-url=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"线路标题\": \"mt-0\\\">&&</h3>\", \"播放数组\": \"class=\\\"card-body button-list\\\"&&</div>\", \"播放列表\": \"<a&&a>\", \"播放链接\": \"href=\\\"&&\\\"\", \"播放标题\": \">&&</\", \"分类url\": \"https://www.dora-video.cn/search/sy/?niandai={year}&cat={class}&tag={cateId}&gaojijiansuo=1&zhuangtai={by}\", \"分类\": \"全部$0#动画$20#剧场版$21#MV$22#预告片$23#直播$27#同人$25#民间$26#目录$28#中篇$30\", \"剧情\": \"哆啦A梦新番$1#新哆啦A梦 台湾配音$2#哆啦A梦剧场版$3#最新预告片$6#剧场版集合$7#哆啦A梦MV$4#哆啦A梦七小子集合$11#生日特别篇$19#哆啦A梦生日特别篇$12#哆啦美生日特别篇$14#大雄生日特别篇$13#静香生日特别篇$15#胖虎生日特别篇$16#小夫生日特别篇$17#24小时直播$24#哆啦A梦中篇附映$29#哆啦A梦大山版 - 哆啦a梦1979版国语旧版 - 旧版$31#哆啦A梦大山修复&补档区$32#藤子·F·不二雄【其它动画】$33\", \"排序\": \"全部$0#完结$2#连载$1#待定$-1\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_xunlei8me",
-      "name": "迅雷吧 • 磁力",
-      "type": 1,
-      "api": "https://xunlei8.me",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "https://xunlei8.me",
       "header": {}
     },
     {
@@ -2497,17 +2475,6 @@
       "quickSearch": 0,
       "filterable": 0,
       "ext": "https://ghproxy.net/https://raw.githubusercontent.com/fantaiying7/EXT/refs/heads/main/虎牙.js",
-      "header": {}
-    },
-    {
-      "key": "sub_www6vdyorg",
-      "name": "💕6V电影网(磁力)",
-      "type": 1,
-      "api": "https://www.6vdy.org/",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "https://www.6vdy.org/",
       "header": {}
     },
     {
