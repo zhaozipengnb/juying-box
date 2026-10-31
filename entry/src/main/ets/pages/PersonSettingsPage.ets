@@ -1,5 +1,5 @@
 // 个性设置二级页：FongMi 模板格式——标签在左、当前值在右的单行卡，点行弹 ActionSheet 选择，
-// 布尔项点行直接切换；壁纸内置背景为可视化色板（保留点选交互）。
+// 布尔项点行直接切换；壁纸已定版（默认渐变 + 设置页壁纸卡），此处不再提供背景选择。
 // 显示值一律读 @Local 镜像（V2 保证即时重渲染），改动同步回 AppSettings 单例持久化（实测教训，勿改回）。
 import { Nav } from '../nav/Nav';
 import { AppState } from '../state/AppState';
@@ -13,22 +13,12 @@ import { OptionPicker, PickerSpec } from '../components/OptionPicker';
 
 const PIC_SIZES: PicSize[] = ['small', 'normal', 'large'];
 const PIC_LABELS: string[] = ['小（4列）', '标准（3列）', '大（2列）'];
-interface BuiltinBg { name: string; res: Resource; }
-const BUILTIN_BGS: BuiltinBg[] = [
-  { name: '丁香粉', res: $r('app.media.player_bg_landscape_01_lilac_pink') },
-  { name: '薄荷青', res: $r('app.media.player_bg_landscape_02_mint_teal') },
-  { name: '莫兰灰', res: $r('app.media.player_bg_landscape_03_morandi_gray') },
-  { name: '天际蓝', res: $r('app.media.player_bg_portrait_01_sky_blue') },
-  { name: '薰衣草', res: $r('app.media.player_bg_portrait_02_lavender_blue') },
-  { name: '蜜桃暮', res: $r('app.media.player_bg_portrait_03_peach_sunset') },
-];
 
 @ComponentV2
 export struct PersonSettingsPage {
   app: AppState = AppState.instance;
   settings: AppSettings = AppSettings.instance;
   @Local wallpaper: WallpaperKind = AppSettings.instance.wallpaper;
-  @Local selectedBg: number = -1;
   @Local picSize: PicSize = AppSettings.instance.picSize;
   @Local showSite: boolean = AppSettings.instance.showSite;
   @Local aggSearch: boolean = AppSettings.instance.aggSearch;
@@ -100,7 +90,6 @@ export struct PersonSettingsPage {
     this.autoSkipDead = this.settings.autoSkipDead;
     this.incognito = this.settings.incognito;
     this.searchHistoryCount = 0;
-    this.selectedBg = -1;
   }
 
   private picLabel(): string {
@@ -117,27 +106,6 @@ export struct PersonSettingsPage {
 
         Scroll() {
           Column() {
-            // 内置背景选择（可视化色板）
-            Flex({ wrap: FlexWrap.Wrap }) {
-              ForEach(BUILTIN_BGS, (bg: BuiltinBg, idx: number) => {
-                Column() {
-                  Image(bg.res)
-                    .width(72).height(48).borderRadius(8)
-                    .border(this.selectedBg === idx ? { width: 2, color: '#007AFF' } : { width: 0 })
-                  Text(bg.name)
-                    .fontSize(11).margin({ top: 4 })
-                    .fontColor(this.selectedBg === idx ? '#007AFF' : '#FFFFFF')
-                }
-                .margin({ right: 12, bottom: 12 })
-                .onClick(() => {
-                  this.selectedBg = idx;
-                  this.settings.wallpaperUri = '';
-                  this.settings.save();
-                })
-              })
-            }
-            .width('100%').padding({ top: 8, bottom: 4 })
-
             SettingRow({ label: '图片尺寸', value: this.picLabel(),
               onTap: (): void => { this.pickPicSize(); } })
             SettingRow({ label: '显示站源', value: this.showSite ? '开启' : '关闭',
