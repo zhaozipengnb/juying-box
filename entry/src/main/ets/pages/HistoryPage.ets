@@ -5,7 +5,7 @@ import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
 import { PlayHistory, PlayRecord } from '../state/PlayHistory';
 import { Favorites, FavoriteItem } from '../state/Favorites';
-import { Episode, PlayLine, MovieDetail, Movie } from 'common';
+import { Episode, PlayLine, MovieDetail, Movie, SiteConfig } from 'common';
 
 const TABS: string[] = ['历史', '收藏'];
 
@@ -100,28 +100,32 @@ export struct HistoryPage {
             Button('返回').fontSize(13).onClick(() => { Nav.stack.pop(); })
           }
         } else {
-          List({ space: 0 }) {
+          WaterFlow() {
             if (this.tab === 0) {
               ForEach(this.ph.records, (r: PlayRecord) => {
-                ListItem() {
-                  this.recordRow(r.movieName, r.pic, r.epName, '继续观看',
+                FlowItem() {
+                  this.recordCard(r.movieName, r.pic, '上次看到' + (r.epName === '' ? '播放' : r.epName),
+                    this.siteNameOf(r.siteKey),
                     (): void => { this.resume(r); },
                     (): void => { this.ph.remove(r.siteKey, r.vodId); })
                 }
               }, (r: PlayRecord) => r.vodId + r.epUrl + String(r.updatedAt))
             } else {
               ForEach(this.favs.items, (it: FavoriteItem) => {
-                ListItem() {
-                  this.recordRow(it.name, it.pic, it.remark === '' ? it.typeName : it.remark, '查看详情',
+                FlowItem() {
+                  this.recordCard(it.name, it.pic, it.remark === '' ? (it.typeName === '' ? '收藏' : it.typeName) : it.remark,
+                    this.siteNameOf(it.siteKey),
                     (): void => { this.openFav(it); },
                     (): void => { this.favs.remove(it.siteKey, it.vodId); })
                 }
               }, (it: FavoriteItem) => it.vodId + String(it.addedAt))
             }
           }
+          .columnsTemplate('1fr 1fr 1fr')
+          .columnsGap(12).rowsGap(14)
           .width('100%')
+          .padding({ left: 16, right: 16, top: 8 })
           .layoutWeight(1)
-          .divider({ strokeWidth: 0.5, color: this.isDarkWallpaper ? '#22FFFFFF' : '#11000000', startMargin: 100 })
         }
       }
       .width('100%').height('100%')
@@ -138,36 +142,44 @@ export struct HistoryPage {
     })
   }
 
+  // 源名解析(徽标用):siteKey → 站点名
+  private siteNameOf(siteKey: string): string {
+    const cfg = this.app.config;
+    if (cfg === null) { return siteKey; }
+    const s = cfg.sites.find((x: SiteConfig): boolean => x.key === siteKey);
+    return s === undefined ? siteKey : s.name;
+  }
+
+  // 模板样式卡:海报 + 左上源徽标 + 绿色续播带 + 片名;长按删除
   @Builder
-  recordRow(name: string, pic: string, sub: string, action: string, onTap: () => void, onDel: () => void) {
-    Row({ space: 12 }) {
-      Image(pic === '' ? $r('app.media.startIcon') : pic)
-        .width(72).height(100).objectFit(ImageFit.Cover).borderRadius(8).alt($r('app.media.startIcon'))
-      Column({ space: 6 }) {
-        Text(name)
-          .fontSize(15).fontWeight(FontWeight.Bold)
-          .fontColor('#FFFFFF')
-          .maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(sub)
-          .fontSize(12).fontColor('#FFFFFF')
-          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(action)
-          .fontSize(12).fontColor('#FFFFFF')
+  recordCard(name: string, pic: string, band: string, siteName: string, onTap: () => void, onDel: () => void) {
+    Column({ space: 5 }) {
+      Stack({ alignContent: Alignment.Bottom }) {
+        Image(pic === '' ? $r('app.media.startIcon') : pic)
+          .width('100%').aspectRatio(0.67)
+          .objectFit(ImageFit.Cover).borderRadius(8)
+          .alt($r('app.media.startIcon'))
+        Text(siteName).fontSize(10).fontColor('#FFFFFF').maxLines(1)
+          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+          .backgroundColor('#99000000').borderRadius(4)
+          .position({ x: 6, y: 6 })
+        Text(band).fontSize(11).fontColor('#FFFFFF').maxLines(1)
+          .textAlign(TextAlign.Center)
+          .width('100%')
+          .padding({ left: 6, right: 6, top: 5, bottom: 5 })
+          .backgroundColor('#B32E7D32')
+          .borderRadius({ bottomLeft: 8, bottomRight: 8 })
       }
-      .alignItems(HorizontalAlign.Start)
-      .layoutWeight(1)
-      Column({ space: 4 }) {
-        Text('>')
-          .fontSize(16).fontColor('#FFFFFF')
-        Text('⨯')
-          .fontSize(15).fontColor(this.isDarkWallpaper ? '#88999999' : '#CC999999')
-          .padding({ top: 6 })
+      .onClick(() => { onTap(); })
+      Row() {
+        Text(name).fontSize(13).fontColor('#FFFFFF')
+          .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+        Blank()
+        Text('⨯').fontSize(13).fontColor(this.isDarkWallpaper ? '#88999999' : '#CC999999')
           .onClick(() => { onDel(); })
       }
+      .width('100%')
     }
     .width('100%')
-    .padding({ left: 16, right: 16, top: 10, bottom: 10 })
-    .backgroundColor(Color.Transparent)
-    .onClick(() => { onTap(); })
   }
 }
