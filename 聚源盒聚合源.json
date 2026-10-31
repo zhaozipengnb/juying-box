@@ -1081,39 +1081,6 @@
       "header": {}
     },
     {
-      "key": "sub_supportchatr",
-      "name": "🅱‍哔哩┃合集🅱‍",
-      "type": 1,
-      "api": "https://support-chat.rongcloud.cn/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBYkE9IiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--47a8ff0e68559a89a9a75b37d09a2b0854dc5a8a/bili001.txt",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "{\"json\": \"https://support-chat.rongcloud.cn/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBYkE9IiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--47a8ff0e68559a89a9a75b37d09a2b0854dc5a8a/bili001.txt\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_storage7x24c",
-      "name": "🅱‍哔哩┃戏曲🅱‍",
-      "type": 1,
-      "api": "https://storage.7x24cc.com/storage-server/presigned/ss1/a6-online-fileupload/newMediaImage/183E562_773_xiqu_20251130182006749newMediaImage.txt",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "{\"json\": \"https://storage.7x24cc.com/storage-server/presigned/ss1/a6-online-fileupload/newMediaImage/183E562_773_xiqu_20251130182006749newMediaImage.txt\"}",
-      "header": {}
-    },
-    {
-      "key": "sub_supportchatrx",
-      "name": "🅱‍哔哩┃歌曲🅱‍",
-      "type": 1,
-      "api": "https://support-chat.rongcloud.cn/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBYkU9IiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--3083f43a14e6b59f4bfe248478a3a8765b34bfdd/bilisong.txt",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "ext": "{\"json\": \"https://support-chat.rongcloud.cn/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsibWVzc2FnZSI6IkJBaHBBYkU9IiwiZXhwIjpudWxsLCJwdXIiOiJibG9iX2lkIn19--3083f43a14e6b59f4bfe248478a3a8765b34bfdd/bilisong.txt\"}",
-      "header": {}
-    },
-    {
       "key": "sub_apiztcgicom",
       "name": "🍂┃荐片┃1080P",
       "type": 1,
@@ -1155,17 +1122,6 @@
       "quickSearch": 0,
       "filterable": 0,
       "ext": "https://z.qiqiv.cn/666/json/MTV.json",
-      "header": {}
-    },
-    {
-      "key": "sub_zqiqivcnxxxx",
-      "name": "🅱┃️哔哩┃大全",
-      "type": 1,
-      "api": "https://z.qiqiv.cn/666/json/Bili.json",
-      "searchable": 0,
-      "quickSearch": 0,
-      "filterable": 0,
-      "ext": "https://z.qiqiv.cn/666/json/Bili.json",
       "header": {}
     },
     {
@@ -1774,17 +1730,6 @@
       "header": {}
     },
     {
-      "key": "sub_nosneteasecoxxxxxxx",
-      "name": "📺哔哩┃番剧",
-      "type": 1,
-      "api": "https://nos.netease.com/youdata-netease/public-utilUpload-mLabnZG3ucMRjjDV4Hury6.json",
-      "searchable": 1,
-      "quickSearch": 0,
-      "filterable": 0,
-      "ext": "{\"json\": \"https://nos.netease.com/youdata-netease/public-utilUpload-mLabnZG3ucMRjjDV4Hury6.json\", \"cookie\": \"\", \"danmu\": true, \"danmu_api\": \"https://dm.211.li/nonay\"}",
-      "header": {}
-    },
-    {
       "key": "sub_oss137277988",
       "name": "🍊橘汁┃1080P",
       "type": 1,
@@ -1881,17 +1826,6 @@
       "quickSearch": 1,
       "filterable": 0,
       "ext": "\"\"",
-      "header": {}
-    },
-    {
-      "key": "sub_nn4688888xyz",
-      "name": "哔哩｜X",
-      "type": 3,
-      "api": "http://nn.4688888.xyz/js/drpy2.min.js",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "http://nn.4688888.xyz/js/哔哩视频.js",
       "header": {}
     },
     {
