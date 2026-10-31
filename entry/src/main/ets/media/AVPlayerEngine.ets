@@ -55,7 +55,10 @@ export class AVPlayerEngine {
       await this.player.reset();   // → idle
     }
     this.state = 'idle';
-    this.player.url = url;         // 触发异步 initialized → 见 wire
+    // 统一走带 UA 的 MediaSource:部分 CDN 按客户端 UA 拒绝媒体栈默认请求
+    // (实测 didibo2 对 curl 类 UA 回 403/空响应),显式 okhttp UA 即放行
+    const ms = media.createMediaSourceWithUrl(url, { 'User-Agent': 'okhttp/4.10.0' });
+    await this.player.setMediaSource(ms);   // 触发异步 initialized → 见 wire
     this.onState?.('idle');
   }
 
