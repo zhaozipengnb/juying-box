@@ -22,7 +22,7 @@ import { Favorites } from '../state/Favorites';
 @ComponentV2
 export struct PlayerPage {
   @Local ep: Episode | null = null;
-  @Local playUrl: string = '';
+  @Local playUrl: string = '';   // 变化即驱动 AVPlayer 引擎开关(@Monitor)
   @Local resolving: boolean = true;
   @Local errMsg: string = '';
   @Local useWeb: boolean = false;
@@ -67,6 +67,7 @@ export struct PlayerPage {
   private seekFrom: number = 0;        // 手势起点的基准进度
   private panSeeking: boolean = false; // 本次手势是否有效（起手条件不满足则整段忽略）
   engine: AVPlayerEngine = new AVPlayerEngine();   // AVPlayer 内核(真倍速/循环/精准 seek)
+  private xcController: XComponentController = new XComponentController();
   private webController: webview.WebviewController = new webview.WebviewController();
 
   // 播放页顶部为黑色视频区，状态栏图标用白色；离开时还原
@@ -229,6 +230,13 @@ export struct PlayerPage {
     this.armCtrlHide();
   }
 
+  // playUrl 变化 → 引擎开关:空地址停止,非空打开并自动播放
+  @Monitor('playUrl')
+  onPlayUrl(): void {
+    if (this.playUrl === '') { this.engine.stop(); return; }
+    this.engine.open(this.playUrl, this.isPlaying);
+  }
+
   private armCtrlHide(): void {
     if (this.ctrlTimer >= 0) { clearTimeout(this.ctrlTimer); this.ctrlTimer = -1; }
     if (!this.showCtrl || !this.isPlaying) { return; }
@@ -288,7 +296,8 @@ export struct PlayerPage {
       }
     };
     this.engine.onState = (st: EngineState): void => {
-      if (st === 'playing') { this.isPlaying = true; }
+      if (st === 'prepared') { this.dur = this.engine.durationSec; }
+      else if (st === 'playing') { this.isPlaying = true; }
       else if (st === 'paused') { this.isPlaying = false; }
       else if (st === 'error') {
         this.playUrl = '';
@@ -403,12 +412,11 @@ export struct PlayerPage {
           LoadingProgress().width(36).height(36).color('#FFFFFF')
         }.width('100%').height('100%').justifyContent(FlexAlign.Center)
       } else {
-        XComponent({ id: 'playerSurface', type: 'surface' })
+        XComponent({ id: 'playerSurface', type: 'surface', controller: this.xcController })
           .width('100%').height('100%')
-          .onLoad((_ctx?: object) => {
+          .onLoad(() => {
             // surface 就绪:注入引擎(AVPlayer 用 surfaceId 渲染)
-            const xc = _ctx as XComponentController;
-            this.engine.setSurface(xc.getXComponentSurfaceId());
+            this.engine.setSurface(this.xcController.getXComponentSurfaceId());
           })
       }
 

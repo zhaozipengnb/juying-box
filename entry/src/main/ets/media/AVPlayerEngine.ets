@@ -3,6 +3,8 @@
 // 本封装直接操作 AVPlayer:真倍速(setSpeed)、循环(loop)、精准 seek、状态机回调。
 // surface 经 XComponent(onLoad 回调取 surfaceId)注入;open 前未就绪则挂起待 surface。
 import { media } from '@kit.MediaKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+const ETAG = 'OKV-AVP';
 
 export type EngineState = 'idle' | 'prepared' | 'playing' | 'paused' | 'error';
 
@@ -33,11 +35,14 @@ export class AVPlayerEngine {
 
   // XComponent onLoad 时注入 surface;有挂起的打开请求则继续
   setSurface(id: string): void {
+    hilog.info(0x0000, ETAG, 'setSurface %{public}s pending=%{public}s', id, this.pendingUrl !== '' ? 'Y' : 'N');
     this.surfaceId = id;
-    if (this.player !== null && this.pendingUrl !== '') {
+    if (this.pendingUrl !== '') {
+      // surface 后到:续跑挂起的 open(此时 player 尚未创建,open 内部会 createAVPlayer)
       const url = this.pendingUrl;
+      const auto = this.pendingAutoPlay;
       this.pendingUrl = '';
-      this.open(url, this.pendingAutoPlay);
+      this.open(url, auto);
     }
   }
 
@@ -52,9 +57,11 @@ export class AVPlayerEngine {
       return;
     }
     if (this.player === null) {
+      hilog.info(0x0000, ETAG, 'createAVPlayer');
       this.player = await media.createAVPlayer();
       this.wire(this.player);
     } else {
+      hilog.info(0x0000, ETAG, 'reset existing');
       await this.player.reset();
     }
     const p = this.player;
@@ -62,10 +69,12 @@ export class AVPlayerEngine {
     p.loop = this.loop;
     p.surfaceId = this.surfaceId;
     p.setSpeed(this.speed);
+    hilog.info(0x0000, ETAG, 'open url=%{public}s surface=%{public}s speed=%{public}d', url.substring(0, 60), this.surfaceId, this.speed);
     this.onState?.('idle');
     await p.prepare();
+    hilog.info(0x0000, ETAG, 'prepared, dur=%{public}d', p.duration);
     this.onState?.('prepared');
-    if (autoPlay) { await p.play(); }
+    if (autoPlay) { await p.play(); hilog.info(0x0000, ETAG, 'play() done'); }
   }
 
   private wire(p: media.AVPlayer): void {
@@ -73,6 +82,7 @@ export class AVPlayerEngine {
       this.onTime?.(Math.floor(timeMs / 1000));
     });
     p.on('stateChange', (state: string, reason: media.StateChangeReason): void => {
+      hilog.info(0x0000, ETAG, 'state -> %{public}s', state);
       if (state === 'playing') { this.onState?.('playing'); }
       else if (state === 'paused') { this.onState?.('paused'); }
       else if (state === 'prepared') { this.onState?.('prepared'); }
@@ -82,9 +92,14 @@ export class AVPlayerEngine {
     });
     p.on('error', (err: Object): void => {
       const msg = err instanceof Error ? err.message : JSON.stringify(err);
+      hilog.error(0x0000, ETAG, 'AVP error %{public}s', msg);
       this.onState?.('error');
       this.onError?.(msg);
     });
+  }
+
+  get durationSec(): number {
+    return this.player === null ? 0 : this.player.duration / 1000;
   }
 
   play(): void {
