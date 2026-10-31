@@ -33,6 +33,7 @@ export class AppSettings {
   @Trace danmakuOn: boolean = true;          // 弹幕加载：进播放页时弹幕的默认状态
   @Trace lineAutoPlay: boolean = true;       // 线路播放：播放失败时自动切换下一条线路
   @Trace disabledSites: string[] = [];       // 站点管理：已禁用的站点 key（下拉/搜索/跳源全部隐藏）
+  @Trace detailGrid: boolean = false;          // 详情页聚合视图记忆：false=列表 true=海报网格（跨进出保留）
   @Trace wallpaper: WallpaperKind = 'default'; // 全局壁纸（颜色主题）
   @Trace wallpaperUri: string = '';            // 全局壁纸（自定义图片路径，非空时优先于颜色主题）
   @Trace liveUrl: string = '';                 // 直播源地址
@@ -92,6 +93,8 @@ export class AppSettings {
       if (typeof lap === 'boolean') { this.lineAutoPlay = lap; }
       const ds = obj['disabledSites'];
       if (Array.isArray(ds)) { this.disabledSites = ds.filter((x: Object): boolean => typeof x === 'string') as string[]; }
+      const dg = obj['detailGrid'];
+      if (typeof dg === 'boolean') { this.detailGrid = dg; }
       const wp = obj['wallpaper'];
       if (wp === 'default' || wp === 'dark' || wp === 'blue' || wp === 'green') { this.wallpaper = wp as WallpaperKind; }
       const wu = obj['wallpaperUri'];
@@ -118,6 +121,7 @@ export class AppSettings {
     this.videoFit = 'contain';
     this.danmakuOn = true;
     this.lineAutoPlay = true;
+    this.detailGrid = false;
     this.wallpaper = 'default';
     this.wallpaperUri = '';
     this.save();
@@ -140,6 +144,7 @@ export class AppSettings {
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
       'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload, 'autoSkipDead': this.autoSkipDead,
       'videoFit': this.videoFit, 'danmakuOn': this.danmakuOn, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites,
+      'detailGrid': this.detailGrid,
       'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl, 'proxyUrl': this.proxyUrl
     };
     return JSON.stringify(obj);
@@ -153,6 +158,7 @@ export class AppSettings {
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
       'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload, 'autoSkipDead': this.autoSkipDead,
       'videoFit': this.videoFit, 'danmakuOn': this.danmakuOn, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites,
+      'detailGrid': this.detailGrid,
       'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl,
       'proxyUrl': this.proxyUrl
     };

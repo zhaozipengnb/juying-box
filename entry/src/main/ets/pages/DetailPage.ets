@@ -34,7 +34,7 @@ export struct DetailPage {
   ph: PlayHistory = PlayHistory.instance;
   favs: Favorites = Favorites.instance;
   @Local showInfo: boolean = false;      // ☰ 展开影片信息面板
-  @Local gridView: boolean = false;      // 聚合结果视图:false=列表(模板默认) true=海报网格
+  @Local gridView: boolean = AppSettings.instance.detailGrid;   // 聚合结果视图:false=列表 true=海报网格(记忆到设置)
   @Local loading: boolean = false;
   @Local errMsg: string = '';
   @Local descExpanded: boolean = false;  // 简介展开/收起
@@ -133,9 +133,13 @@ export struct DetailPage {
           .onClick(() => { if (this.detail !== null) { this.showInfo = !this.showInfo; } })
         Image(this.gridView ? $r('app.media.ic_grid') : $r('app.media.ic_list'))
           .width(20).height(20)
-          .fillColor(this.gridView ? '#4D9EFF' : '#FFFFFF')
+          .fillColor('#FFFFFF')
           .padding({ left: 4, right: 4 })
-          .onClick(() => { this.gridView = !this.gridView; })
+          .onClick(() => {
+            this.gridView = !this.gridView;
+            this.settings.detailGrid = this.gridView;   // 视图记忆:下次进详情页沿用
+            this.settings.save();
+          })
       }
       .width('100%')
       .padding({ left: 16, right: 16, top: 14, bottom: 6 })
@@ -330,12 +334,21 @@ export struct DetailPage {
       const handleSiteOnce = async (s: SiteConfig): Promise<void> => {
         const driver: SiteDriver | null = this.app.makeDriverFor(s);
         if (driver === null) { return; }
+        const isOrigin: boolean = this.originSiteKey !== '' && s.key === this.originSiteKey;
         const ck = s.key + '|' + m.name;
-        let pr: PageResult | undefined = searchCache.get(ck);
+        // 来源站不读缓存（站点抖动时空结果曾被缓存会一直搜不到），其余站照常命中
+        let pr: PageResult | undefined = isOrigin ? undefined : searchCache.get(ck);
         if (pr === undefined) {
           pr = await driver.searchContent(m.name, false);
+          // 搜索词兜底：首页标题带站点品牌尾缀（如「一生一世（2014）-国产电影精选」）时，
+          // 多数站按全串精确匹配搜不到（含来源站自己），去掉尾缀用主干名重搜一次
+          if (pr.items.length === 0 && m.name.lastIndexOf('-') > 0) {
+            const base: string = m.name.substring(0, m.name.lastIndexOf('-'));
+            const pr2: PageResult = await driver.searchContent(base, false);
+            if (pr2.items.length > 0) { pr = pr2; }
+          }
           if (searchCache.size >= CACHE_MAX) { searchCache.clear(); }
-          searchCache.set(ck, pr);
+          if (pr.items.length > 0 || !isOrigin) { searchCache.set(ck, pr); }   // 来源站不缓存空结果
         }
         if (pr.items.length === 0) { return; }
         const dk = ck + '|' + pr.items[0].vodId;
@@ -380,11 +393,22 @@ export struct DetailPage {
       }
       await Promise.all(tasks);
 
-      // 2. drpy 有限并发：桥侧 Worker 池每站一个 Worker（LRU 上限 6），跨站真并行；
+      // 2. drpy 有限并发：桥侧 Worker 池每站一个 Worker（LRU 上限 8），跨站真并行；
       //    这里再以 4 路 lane 控制同时拉起的站数，避免瞬时 CPU/内存尖峰
       await this.runPool(drpySites, 4, handleSite);
 
-      // 3. 全部搜完仍无结果
+      // 3. 收尾兜底：来源站（用户点进本页的站）仍无结果时最后补搜一次——
+      //    来源站不读缓存，这次是真搜索，慢站偶发超时多一次机会
+      if (this.originSiteKey !== ''
+        && !this.sources.some((x: SourceResult): boolean => x.siteKey === this.originSiteKey)) {
+        const os: SiteConfig | undefined = supported.find((s: SiteConfig): boolean => s.key === this.originSiteKey);
+        if (os !== undefined) {
+          await new Promise<void>((res: (v: void | PromiseLike<void>) => void): void => { setTimeout(res, 800); });
+          try { await handleSiteOnce(os); } catch (_e) { /* 补搜失败到此为止 */ }
+        }
+      }
+
+      // 4. 全部搜完仍无结果
       if (this.sources.length === 0) {
         this.errMsg = '全部站点均无结果';
       }

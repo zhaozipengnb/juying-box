@@ -32,7 +32,8 @@ interface DrpyLibs {
   cryptojs: string; cheerio: string; template: string; gbk: string;
 }
 const REQ_TIMEOUT_MS = 15000;
-const MAX_WORKERS = 6;   // Worker 池上限：按站缓存运行环境，LRU 淘汰（每 Worker 约数 MB）
+const MAX_WORKERS = 8;   // Worker 池上限：按站缓存运行环境，LRU 淘汰（每 Worker 约数 MB）。
+// 取 8 = 内置站数：池小于站数时每轮聚合搜索都会把先搜的站（含来源站）驱逐，下轮/重试又得重初始化
 
 @ComponentV2
 export struct DrpyWebContainer {
