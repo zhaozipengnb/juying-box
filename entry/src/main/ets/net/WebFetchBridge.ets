@@ -14,7 +14,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 
 const TAG = 'OKV-WEBF';
 const NAV_TIMEOUT_MS = 20000;
-const CHALLENGE_TIMEOUT_MS = 12000;
+const CHALLENGE_TIMEOUT_MS = 18000;
 const POLL_MS = 600;
 
 @ComponentV2
