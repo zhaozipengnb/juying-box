@@ -1,6 +1,6 @@
 // 全局状态（V2）：配置 + 当前站点 + 引擎实例。测试可注入 testFetchText 替代真网络。
 import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, AppYsApi, XmlCmsDriver, ProxyDriver, FetchText, decodeConfigContent,
-  siteEngine, isSiteSupported, resolveSiteUrls, LiveGroupConfig } from 'common';
+  siteEngine, isSiteSupported, resolveSiteUrls, LiveGroupConfig, XbpqDriver, isXbpqSite } from 'common';
 import { httpFetch } from '../net/HttpClient';
 import { AppSettings } from './AppSettings';
 import { ConfigStore, serializeConfig } from './ConfigStore';
@@ -50,6 +50,9 @@ export class AppState {
     if (engine === 'js') {
       this.currentSite = site;
       this.driver = new DrpyDriver(site);
+    } else if (engine === 'cms' && isXbpqSite(site)) {
+      this.currentSite = site;
+      this.driver = new XbpqDriver(site, this.makeFetchText());
     } else if (engine === 'cms') {
       this.currentSite = site;
       this.driver = new CmsJsonApi(site, this.makeFetchText());
@@ -227,6 +230,7 @@ export class AppState {
   // 聚合搜索等需要并发访问多站的场景使用；js 引擎为单 Web 容器（跨 skey 互斥），聚合场景勿用。
   makeDriverFor(site: SiteConfig): SiteDriver | null {
     const engine = siteEngine(site);
+    if (engine === 'cms' && isXbpqSite(site)) { return new XbpqDriver(site, this.makeFetchText()); }
     if (engine === 'cms') { return new CmsJsonApi(site, this.makeFetchText()); }
     if (engine === 'appys') { return new AppYsApi(site, this.makeFetchText()); }
     if (engine === 'xml') { return new XmlCmsDriver(site, this.makeFetchText()); }
