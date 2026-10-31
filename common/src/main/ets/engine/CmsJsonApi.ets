@@ -43,7 +43,8 @@ function pickMovie(v: Record<string, Object>): Movie {
     name: toStr(field(v, 'vod_name'), ''),
     pic: toStr(field(v, 'vod_pic'), ''),
     remark: toStr(field(v, 'vod_remarks'), ''),
-    typeName: toStr(field(v, 'type_name'), '')
+    typeName: toStr(field(v, 'type_name'), ''),
+    score: toStr(field(v, 'vod_score'), '')
   };
 }
 

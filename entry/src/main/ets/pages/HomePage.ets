@@ -319,6 +319,12 @@ export struct HomePage {
             .margin({ right: 10 })
             .onClick(() => { Nav.stack.pushPathByName('Settings', ''); })
         }
+        // 收藏入口(历史页收藏 tab)
+        Image($r('app.media.ic_heart'))
+          .width(20).height(20)
+          .fillColor('#FFFFFF')
+          .margin({ right: 10 })
+          .onClick(() => { Nav.stack.pushPathByName('History', 'fav'); })
         // 历史/收藏入口
         Image($r('app.media.ic_history'))
           .width(20).height(20)

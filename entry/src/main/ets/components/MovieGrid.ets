@@ -40,8 +40,16 @@ export struct MovieGrid {
               .alt($r('app.media.startIcon'))
             // 底部渐变叠层：类型徽标 + 标题 + 备注（白色叠印在海报上）
             Column() {
-              if ((m.typeName !== '') || (this.siteLabels[idx] ?? '') !== '') {
+              if ((m.score ?? '') !== '' || (m.typeName !== '') || (this.siteLabels[idx] ?? '') !== '') {
                 Row({ space: 4 }) {
+                  if ((m.score ?? '') !== '') {
+                    Text(m.score)
+                      .fontSize(10).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+                      .maxLines(1)
+                      .backgroundColor('#2E7D32')
+                      .borderRadius(5)
+                      .padding({ left: 5, right: 5, top: 2, bottom: 2 })
+                  }
                   if (m.typeName !== '') {
                     Text(m.typeName)
                       .fontSize(10).fontColor('#FFFFFF')
