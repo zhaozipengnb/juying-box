@@ -384,14 +384,14 @@ export struct DetailPage {
         }
       };
 
-      // 1. CMS/XML 并发
-      const tasks: Promise<void>[] = [];
-      const drpySites: SiteConfig[] = [];
+      // 1. CMS/XML/AppYs 有限并发：runPool 懒启动 12 路 lane（合包后站点数可达数百，
+      //    无上限 Promise.all 会同时发起数百个 HTTP 请求），单站失败跳过
+      const cmsSites: SiteConfig[] = [];
       for (const s of supported) {
-        if (siteEngine(s) === 'js') { drpySites.push(s); continue; }
-        tasks.push(handleSite(s).catch((_e: Object): void => { /* 单站失败跳过 */ }).finally(() => { this.searchedDone++; }));
+        if (siteEngine(s) === 'js') { continue; }
+        cmsSites.push(s);
       }
-      await Promise.all(tasks);
+      await this.runPool(cmsSites, 12, handleSite);
 
       // 2. drpy 有限并发：桥侧 Worker 池每站一个 Worker（LRU 上限 8），跨站真并行；
       //    这里再以 4 路 lane 控制同时拉起的站数，避免瞬时 CPU/内存尖峰
