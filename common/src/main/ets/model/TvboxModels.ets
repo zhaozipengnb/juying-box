@@ -16,7 +16,7 @@ export interface TvboxConfig {
 }
 
 // 站点引擎形态分类：cms=type1 CMS JSON；xml=type0 MacCMS XML 采集（TVBox 约定 type 0 即 XML）；
-// js=type3 drpy JS 插件（api 为 http(s) URL）；
+// js=type3 drpy JS 插件（api 为 http(s) URL，.py 结尾的 Python 规则除外——JS 运行时跑不了，判 unknown）；
 // jar=type3 TVBox JAR spider（api 为 csp_* 类名等非 URL 形态，实体在配置 spider/jar 指向的 Android JAR 内，
 // JS 引擎无法执行）；unknown=其余类型。type3 判据是「api 是否为 http(s) URL」而非 csp_ 前缀。
 export type SiteEngine = 'cms' | 'xml' | 'js' | 'appys' | 'proxy' | 'jar' | 'unknown';
@@ -26,7 +26,11 @@ export function siteEngine(site: SiteConfig): SiteEngine {
   if (site.type === 1) { return 'cms'; }
   if (site.type === 3) {
     // builtin:// 为包内 drpy 源（运行时与规则在 rawfile/builtin，经桥本地加载）
-    if (/^https?:\/\/.+/i.test(site.api.trim()) || site.api.trim().startsWith('builtin://')) { return 'js'; }
+    if (/^https?:\/\/.+/i.test(site.api.trim()) || site.api.trim().startsWith('builtin://')) {
+      // api 指向 .py 的是 drpy Python 规则（import base.spider），js 运行时无法执行，按不支持处理
+      if (/\.py($|\?)/i.test(site.api.trim())) { return 'unknown'; }
+      return 'js';
+    }
     // csp_AppYs* 且 ext 含 HTTP URL → appys 引擎（tryConvertCspToCms 已将 api 改为 ext 中的 URL、type 改为 4）
     // 其余 csp_* 纯 JAR 爬虫 → proxy 引擎（需配置代理服务器执行 Java 爬虫）
     return 'proxy';

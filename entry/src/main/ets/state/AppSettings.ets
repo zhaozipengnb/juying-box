@@ -6,6 +6,7 @@ import { KVStore } from './ConfigStore';
 
 export type PicSize = 'small' | 'normal' | 'large';
 export type WallpaperKind = 'default' | 'dark' | 'blue' | 'green';
+export type VideoFit = 'contain' | 'cover' | 'fill';
 
 const KEY_SETTINGS = 'okvideo_settings_json';
 
@@ -28,6 +29,10 @@ export class AppSettings {
   @Trace aiAdFilter: boolean = false;        // AI去广告（预留：将作用于播放地址解析阶段）
   @Trace autoSkipDead: boolean = false;      // 自动跳过失效源：加载失败/无内容的源自动切下一个并隐藏
   @Trace builtinDownload: boolean = false;   // 内置下载：详情页/播放页显示下载按钮
+  @Trace videoFit: VideoFit = 'contain';     // 播放画面缩放：contain=适应 contain/cover=裁剪铺满/fill=拉伸
+  @Trace danmakuOn: boolean = true;          // 弹幕加载：进播放页时弹幕的默认状态
+  @Trace lineAutoPlay: boolean = true;       // 线路播放：播放失败时自动切换下一条线路
+  @Trace disabledSites: string[] = [];       // 站点管理：已禁用的站点 key（下拉/搜索/跳源全部隐藏）
   @Trace wallpaper: WallpaperKind = 'default'; // 全局壁纸（颜色主题）
   @Trace wallpaperUri: string = '';            // 全局壁纸（自定义图片路径，非空时优先于颜色主题）
   @Trace liveUrl: string = '';                 // 直播源地址
@@ -79,6 +84,14 @@ export class AppSettings {
       if (typeof ai === 'boolean') { this.aiAdFilter = ai; }
       const dl = obj['builtinDownload'];
       if (typeof dl === 'boolean') { this.builtinDownload = dl; }
+      const vf = obj['videoFit'];
+      if (vf === 'contain' || vf === 'cover' || vf === 'fill') { this.videoFit = vf as VideoFit; }
+      const dm = obj['danmakuOn'];
+      if (typeof dm === 'boolean') { this.danmakuOn = dm; }
+      const lap = obj['lineAutoPlay'];
+      if (typeof lap === 'boolean') { this.lineAutoPlay = lap; }
+      const ds = obj['disabledSites'];
+      if (Array.isArray(ds)) { this.disabledSites = ds.filter((x: Object): boolean => typeof x === 'string') as string[]; }
       const wp = obj['wallpaper'];
       if (wp === 'default' || wp === 'dark' || wp === 'blue' || wp === 'green') { this.wallpaper = wp as WallpaperKind; }
       const wu = obj['wallpaperUri'];
@@ -90,12 +103,43 @@ export class AppSettings {
     } catch (e) { /* 坏数据按默认值起步 */ }
   }
 
+  // 重置App：全部设置恢复默认值并落盘（配置/历史/收藏由调用方另行清理）
+  resetToDefaults(): void {
+    this.picSize = 'normal';
+    this.playSpeed = 1.0;
+    this.longPressSpeed = 3.0;
+    this.incognito = false;
+    this.aggSearch = false;
+    this.showSite = true;
+    this.siteFilter = false;
+    this.aiAdFilter = false;
+    this.autoSkipDead = false;
+    this.builtinDownload = false;
+    this.videoFit = 'contain';
+    this.danmakuOn = true;
+    this.lineAutoPlay = true;
+    this.wallpaper = 'default';
+    this.wallpaperUri = '';
+    this.save();
+  }
+
+  isSiteDisabled(key: string): boolean {
+    return this.disabledSites.indexOf(key) >= 0;
+  }
+
+  toggleSiteDisabled(key: string): void {
+    const idx = this.disabledSites.indexOf(key);
+    if (idx >= 0) { this.disabledSites.splice(idx, 1); } else { this.disabledSites.push(key); }
+    this.save();
+  }
+
   // 当前设置的 JSON 快照（备份导出用）
   toJson(): string {
     const obj: Record<string, Object> = {
       'picSize': this.picSize, 'playSpeed': this.playSpeed, 'longPressSpeed': this.longPressSpeed,
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
       'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload, 'autoSkipDead': this.autoSkipDead,
+      'videoFit': this.videoFit, 'danmakuOn': this.danmakuOn, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites,
       'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl, 'proxyUrl': this.proxyUrl
     };
     return JSON.stringify(obj);
@@ -108,6 +152,7 @@ export class AppSettings {
       'picSize': this.picSize, 'playSpeed': this.playSpeed, 'longPressSpeed': this.longPressSpeed,
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
       'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload, 'autoSkipDead': this.autoSkipDead,
+      'videoFit': this.videoFit, 'danmakuOn': this.danmakuOn, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites,
       'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl,
       'proxyUrl': this.proxyUrl
     };

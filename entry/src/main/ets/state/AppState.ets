@@ -70,14 +70,27 @@ export class AppState {
 
   // 首个受引擎支持的站点（订阅可能是纯 JAR 型，首站未必可用）
   private firstSupportedSite(config: TvboxConfig): SiteConfig | null {
-    // 优先非代理源（CMS/XML/JS），代理源仅在没有其他选择时才用
+    // 优先非代理源（CMS/XML/JS），代理源仅在没有其他选择时才用；禁用站点跳过
     for (const s of config.sites) {
-      if (siteEngine(s) !== 'proxy' && isSiteSupported(s) && this.canDrive(s)) { return s; }
+      if (siteEngine(s) !== 'proxy' && isSiteSupported(s) && this.canDrive(s) && !AppSettings.instance.isSiteDisabled(s.key)) { return s; }
     }
     for (const s of config.sites) {
-      if (isSiteSupported(s) && this.canDrive(s)) { return s; }
+      if (isSiteSupported(s) && this.canDrive(s) && !AppSettings.instance.isSiteDisabled(s.key)) { return s; }
     }
     return null;
+  }
+
+  // 站点管理排序：交换 config.sites 中两项并持久化当前配置快照（订阅与源包通用）
+  reorderSite(from: number, to: number): void {
+    const cfg = this.config;
+    if (cfg === null) { return; }
+    if (from < 0 || to < 0 || from >= cfg.sites.length || to >= cfg.sites.length || from === to) { return; }
+    const moved = cfg.sites[from];
+    cfg.sites.splice(from, 1);
+    cfg.sites.splice(to, 0, moved);
+    if (this.store !== null) {
+      this.store.save(this.subUrl, serializeConfig(this.subUrl, cfg));
+    }
   }
 
   // proxy 引擎需要 proxyUrl 配置才能驱动
@@ -92,7 +105,8 @@ export class AppState {
     const remembered: string = this.store?.loadCurrentSite() ?? '';
     if (remembered !== '') {
       for (const s of config.sites) {
-        if (s.key === remembered && isSiteSupported(s) && this.canDrive(s) && siteEngine(s) !== 'proxy') {
+        if (s.key === remembered && isSiteSupported(s) && this.canDrive(s) && siteEngine(s) !== 'proxy'
+          && !AppSettings.instance.isSiteDisabled(s.key)) {
           this.buildDriver(s);
           return;
         }
@@ -194,7 +208,7 @@ export class AppState {
     if (this.config === null) { return false; }
     for (const s of this.config.sites) {
       if (s.key === key) {
-        if (!isSiteSupported(s) || !this.canDrive(s)) { return false; }   // 不支持或未配置代理的源拒绝切换
+        if (!isSiteSupported(s) || !this.canDrive(s) || AppSettings.instance.isSiteDisabled(s.key)) { return false; }   // 不支持/未配置代理/已禁用的源拒绝切换
         this.buildDriver(s);
         if (this.store !== null) { this.store.saveCurrentSite(key); }   // 跨重启记忆选中源
         return true;

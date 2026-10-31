@@ -43,6 +43,10 @@ export default function modelTest() {
       expect(siteEngine(mkSite(3, 'https://a.example/drpy/x.js')) === 'js').assertTrue();
       expect(siteEngine(mkSite(3, 'http://a.example/x.js?token=1')) === 'js').assertTrue();
       expect(siteEngine(mkSite(3, 'HTTPS://a.example/X.JS')) === 'js').assertTrue();
+      // type 3 + api 指向 .py → drpy Python 规则，JS 运行时跑不了 → unknown（不受支持）
+      expect(siteEngine(mkSite(3, 'https://clun.top/js/ss/小黄书.py')) === 'unknown').assertTrue();
+      expect(siteEngine(mkSite(3, 'https://a.example/x.PY?token=1')) === 'unknown').assertTrue();
+      expect(isSiteSupported(mkSite(3, 'https://a.example/x.py'))).assertFalse();
       // type 3 + builtin:// → 包内 drpy 源
       expect(siteEngine(mkSite(3, 'builtin://drpy2.min.js')) === 'js').assertTrue();
       expect(isSiteSupported(mkSite(3, 'builtin://drpy2.min.js'))).assertTrue();

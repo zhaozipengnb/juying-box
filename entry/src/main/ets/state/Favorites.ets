@@ -57,6 +57,12 @@ export class Favorites {
     return !hit;   // 返回 toggle 后状态
   }
 
+  // 重置App：清空全部收藏并落盘
+  clear(): void {
+    this.items = [];
+    this.persist();
+  }
+
   remove(siteKey: string, vodId: string): void {
     this.items = this.items.filter((x: FavoriteItem): boolean => !(x.siteKey === siteKey && x.vodId === vodId));
     this.persist();
