@@ -138,7 +138,7 @@ export class DrpyDriver implements SiteDriver {
   // 返回 {url,parse,header}，MVP 取 url 承载为 Episode.url（parse/header 留待播放层接入时扩展）
   async playContent(flag: string, id: string): Promise<Episode> {
     const obj = await this.callJson('play', [flag, id]);
-    return { name: flag, url: toStr(field(obj, 'url'), '') };
+    return { name: flag, url: toStr(field(obj, 'url'), ''), parse: toStr(field(obj, 'parse'), '0') };
   }
 
   // 搜索：{list:[vod...]} → PageResult（与 CMS 搜索语义一致，页码固定 1/1）

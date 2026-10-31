@@ -44,7 +44,7 @@ export class AVPlayerEngine {
 
   // 打开地址:设 url → 状态机异步走到 initialized → 设 surface → prepare →
   // prepared → 设倍速/循环 → 按 pendingPlay 自动播放
-  async open(url: string, autoPlay: boolean): Promise<void> {
+  async open(url: string, autoPlay: boolean, headers?: Record<string, string>): Promise<void> {
     this.url = url;
     this.pendingPlay = autoPlay;
     if (this.player === null) {
@@ -55,7 +55,13 @@ export class AVPlayerEngine {
       await this.player.reset();   // → idle
     }
     this.state = 'idle';
-    this.player.url = url;         // 触发异步 initialized → 见 wire
+    if (headers !== undefined) {
+      // 带防盗链头:走 MediaSource(setUrlSource 同样异步跳 initialized)
+      const ms = media.createMediaSourceWithUrl(url, headers);
+      this.player.setUrlSource(ms);
+    } else {
+      this.player.url = url;       // 触发异步 initialized → 见 wire
+    }
     this.onState?.('idle');
   }
 

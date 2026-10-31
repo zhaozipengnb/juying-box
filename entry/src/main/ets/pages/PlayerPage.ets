@@ -7,6 +7,7 @@ import { Nav, PlayerParam } from '../nav/Nav';
 import { Episode, PlayLine, MovieDetail, SiteConfig, isDirectMedia, resolvePlayUrl, siteEngine, formatDuration } from 'common';
 import { OptionPicker, PickerSpec } from '../components/OptionPicker';
 import { AVPlayerEngine, EngineState, speedEnum } from '../media/AVPlayerEngine';
+import { media } from '@kit.MediaKit';
 import { SPEED_OPTIONS } from '../state/AppSettings';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
@@ -44,6 +45,11 @@ export struct PlayerPage {
   @Local loopPlay: boolean = false;    // 单集循环
   private channelUrls: string[] = [];  // 直播多线路地址表（来自 PlayerParam）
   private epScroller: Scroller = new Scroller();  // 选集横滑定位当前集
+  @Local sniffUrl: string = '';        // 嗅探中:正在加载的网页地址(非空 = 嗅探中)
+  @Local sniffing: boolean = false;
+  private sniffReferer: string = '';
+  private sniffController: webview.WebviewController = new webview.WebviewController();
+  private sniffTimer: number = -1;
   private videoFitEnum(): ImageFit {
     if (this.settings.videoFit === 'cover') { return ImageFit.Cover; }
     if (this.settings.videoFit === 'fill') { return ImageFit.Fill; }
@@ -101,13 +107,19 @@ export struct PlayerPage {
     if (ep === null) { return; }
     this.resolving = true;
     this.errMsg = '';
+    this.sniffClear();
     let target: string = ep.url;
     // drpy（js 引擎）源：起播前先经 ext 的 play() 换直链（API 型源必需）；
     // 字符串规则源无 lazy，play 原样返回播放页地址——仅当结果确为媒体直链才采纳，
     // 否则回落通用解析（拉播放页 HTML 抽 player_aaaa/m3u8）
-    const drpyUrl: string = await this.resolveViaDrpy(ep);
-    if (drpyUrl !== '' && isDirectMedia(drpyUrl)) {
-      target = drpyUrl;
+    const resolvedEp = await this.resolveViaDrpy(ep);
+    let needSniff = false;
+    if (resolvedEp !== null && isDirectMedia(resolvedEp.url)) {
+      target = resolvedEp.url;
+    } else if (resolvedEp !== null && resolvedEp.url !== '' && resolvedEp.parse === '1') {
+      // play 结果 parse=1:url 为网页地址,需嗅探真实流(FongMi 嗅探能力对齐)
+      target = resolvedEp.url;
+      needSniff = true;
     } else {
       try {
         target = await resolvePlayUrl(ep.url, AppState.instance.makeFetchText());
@@ -121,6 +133,8 @@ export struct PlayerPage {
         } catch (e) { }
       }
       this.playUrl = target;
+    } else if (needSniff && target !== '') {
+      this.startSniff(target);
     } else if (target !== '' && target !== ep.url) {
       this.playUrl = target;
     } else {
@@ -132,21 +146,52 @@ export struct PlayerPage {
     this.resolving = false;
   }
 
+  // 嗅探:隐藏 Web 加载播放页,监听网络请求抓媒体直链(对齐 FongMi 嗅探)
+  private startSniff(pageUrl: string): void {
+    this.sniffReferer = pageUrl;
+    this.sniffUrl = pageUrl;
+    this.sniffing = true;
+    this.sniffTimer = setTimeout((): void => { this.sniffFail(); }, 18000);
+  }
+
+  private sniffHit(mediaUrl: string): void {
+    if (this.sniffTimer >= 0) { clearTimeout(this.sniffTimer); this.sniffTimer = -1; }
+    this.sniffing = false;
+    this.sniffUrl = '';
+    // 直链可能带防盗链:以嗅探页 origin 为 referer 交给 AVPlayer(MediaSource)
+    let referer = this.sniffReferer;
+    const slash = referer.indexOf('/', 8);
+    if (slash > 0) { referer = referer.substring(0, slash); }
+    this.engine.open(mediaUrl, this.isPlaying, { referer: referer });
+  }
+
+  private sniffFail(): void {
+    this.sniffing = false;
+    this.sniffUrl = '';
+    this.sniffTimer = -1;
+    this.errMsg = '嗅探真实地址失败，可尝试网页播放';
+  }
+
+  private sniffClear(): void {
+    this.sniffing = false;
+    this.sniffUrl = '';
+    if (this.sniffTimer >= 0) { clearTimeout(this.sniffTimer); this.sniffTimer = -1; }
+  }
+
   // js 引擎站点经 DrpyDriver.playContent 解析直链；非 js 站点或解析失败返回 ''（回落通用解析）
-  private async resolveViaDrpy(ep: Episode): Promise<string> {
+  private async resolveViaDrpy(ep: Episode): Promise<Episode | null> {
     const app = AppState.instance;
     const cfg = app.config;
-    if (cfg === null) { return ''; }
+    if (cfg === null) { return null; }
     const site: SiteConfig | undefined = cfg.sites.find((s: SiteConfig): boolean => s.key === this.siteKey);
-    if (site === undefined || siteEngine(site) !== 'js') { return ''; }
+    if (site === undefined || siteEngine(site) !== 'js') { return null; }
     const drv = app.makeDriverFor(site);
-    if (!(drv instanceof DrpyDriver)) { return ''; }
+    if (!(drv instanceof DrpyDriver)) { return null; }
     try {
       const flag: string = this.lines.length > 0 ? this.lines[this.lineIdx].from : '';
-      const resolved: Episode = await drv.playContent(flag, ep.url);
-      return resolved.url;
+      return await drv.playContent(flag, ep.url);
     } catch (e) {
-      return '';
+      return null;
     }
   }
 
@@ -407,6 +452,11 @@ export struct PlayerPage {
         Web({ src: this.ep.url, controller: this.webController })
           .width('100%').height('100%')
           .javaScriptAccess(true).domStorageAccess(true).mediaPlayGestureAccess(true)
+      } else if (this.sniffing) {
+        Column({ space: 10 }) {
+          LoadingProgress().width(36).height(36).color('#FFFFFF')
+          Text('正在嗅探视频地址…').fontSize(13).fontColor('#FFFFFF')
+        }.width('100%').height('100%').justifyContent(FlexAlign.Center)
       } else if (this.resolving || this.playUrl === '') {
         Column() {
           LoadingProgress().width(36).height(36).color('#FFFFFF')
@@ -417,6 +467,20 @@ export struct PlayerPage {
           .onLoad(() => {
             // surface 就绪:注入引擎(AVPlayer 用 surfaceId 渲染)
             this.engine.setSurface(this.xcController.getXComponentSurfaceId());
+          })
+      }
+
+      // 嗅探:隐藏 Web 加载播放页(onInterceptRequest 抓媒体直链)
+      if (this.sniffUrl !== '') {
+        Web({ src: this.sniffUrl, controller: this.sniffController })
+          .width(1).height(1)
+          .javaScriptAccess(true)
+          .onInterceptRequest((event): WebResourceResponse | undefined => {
+            const reqUrl: string = (event as OnInterceptRequestEvent).request.getRequestUrl();
+            if (this.sniffing && /\.(m3u8|mp4|mkv|flv)(\?|&|#|$)/i.test(reqUrl)) {
+              this.sniffHit(reqUrl);
+            }
+            return undefined;
           })
       }
 
