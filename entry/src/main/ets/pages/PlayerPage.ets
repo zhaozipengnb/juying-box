@@ -466,6 +466,18 @@ export struct PlayerPage {
               this.armCtrlHide();
             })
           Text(formatDuration(this.dur)).fontSize(11).fontColor('#FFFFFF')
+          if (this.siteKey !== 'live' && this.lines.length > 1) {
+            Text(`线路${this.lineIdx + 1}`)
+              .fontSize(12).fontColor('#FFFFFF')
+              .onClick(() => {
+                this.picker = {
+                  title: '切换线路',
+                  options: this.lines.map((l: PlayLine): string => l.from),
+                  index: this.lineIdx,
+                  onPick: (idx: number): void => { this.switchTo(idx, this.epIdx); }
+                };
+              })
+          }
           if (this.channelUrls.length > 1) {
             Text(`线路${this.channelLine + 1}`)
               .fontSize(12).fontColor('#FFFFFF')
