@@ -7,6 +7,7 @@ import { SearchHistory } from '../state/SearchHistory';
 import { DrpyWebContainer } from '../spider/DrpyWebBridge';
 import { Nav } from '../nav/Nav';
 import { MovieGrid } from '../components/MovieGrid';
+import { MainTabBar, isTvDevice } from '../components/MainTabBar';
 import { common } from '@kit.AbilityKit';
 import { Category, HomeContent, Movie, PageResult, SiteDriver, SiteConfig, isSiteSupported, siteEngine } from 'common';
 
@@ -132,12 +133,13 @@ export struct HomePage {
     if (cfg === null) { return ''; }
     for (const s of cfg.sites) {
       if (isSiteSupported(s) && this.app.canDrive(s) && siteEngine(s) !== 'proxy'
+        && !this.settings.isSiteDisabled(s.key)
         && !this._autoSkipTried.includes(s.key) && !this._deadSites.includes(s.key)) {
         return s.key;
       }
     }
     for (const s of cfg.sites) {
-      if (isSiteSupported(s) && this.app.canDrive(s)
+      if (isSiteSupported(s) && this.app.canDrive(s) && !this.settings.isSiteDisabled(s.key)
         && !this._autoSkipTried.includes(s.key) && !this._deadSites.includes(s.key)) {
         return s.key;
       }
@@ -153,7 +155,7 @@ export struct HomePage {
     const keys: string[] = [];
     const enabled: boolean[] = [];
     for (const s of cfg.sites) {
-      if (!isSiteSupported(s) || !this.app.canDrive(s)) { continue; }   // 不支持或未配置代理的源不显示
+      if (!isSiteSupported(s) || !this.app.canDrive(s) || this.settings.isSiteDisabled(s.key)) { continue; }   // 不支持/未配置代理/已禁用的源不显示
       if (this._deadSites.includes(s.key)) { continue; }                // 已确认无影片的源本次会话不显示
       names.push(s.name);
       keys.push(s.key);
@@ -303,18 +305,26 @@ export struct HomePage {
             }
           })
         Blank()
-        // 订阅维护入口：无订阅也能用内置源，订阅随时在这里补配/更换
-        // 直播入口
-        Text('📺')
-          .fontSize(20)
-          .margin({ right: 6 })
-          .onClick(() => { Nav.stack.pushPathByName('Live', ''); })
+        // 直播/设置入口：TV 保持顶栏图标；手机/平板移至底部导航栏
+        if (isTvDevice()) {
+          Image($r('app.media.ic_live'))
+            .width(20).height(20)
+            .fillColor('#FFFFFF')
+            .margin({ right: 6 })
+            .onClick(() => { Nav.stack.pushPathByName('Live', ''); })
 
-        Image($r('app.media.ic_settings'))
+          Image($r('app.media.ic_settings'))
+            .width(20).height(20)
+            .fillColor('#FFFFFF')
+            .margin({ right: 10 })
+            .onClick(() => { Nav.stack.pushPathByName('Settings', ''); })
+        }
+        // 历史/收藏入口
+        Image($r('app.media.ic_history'))
           .width(20).height(20)
           .fillColor('#FFFFFF')
           .margin({ right: 10 })
-          .onClick(() => { Nav.stack.pushPathByName('Settings', ''); })
+          .onClick(() => { Nav.stack.pushPathByName('History', ''); })
         // 下载管理入口
         Image($r('app.media.ic_download'))
           .width(20).height(20)
@@ -355,6 +365,7 @@ export struct HomePage {
           .padding({ left: 16, right: 16 })
         }
         .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
         .width('100%')
         .padding({ top: 8, bottom: 8 })
       }
@@ -395,39 +406,47 @@ export struct HomePage {
           .padding({ left: 12, right: 12 })
         }
         .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
         .width('100%')
         .padding({ left: 12, right: 12 })
         .margin({ top: 8 })
       }
 
-      if (this.errMsg !== '') {
-        Column({ space: 8 }) {
-          Text('加载失败：' + this.errMsg).fontSize(13).fontColor('#E53935')
-          Button('重试').onClick(() => { this.retry(); })
-          Button('清除订阅').onClick(() => {
-            // 清除订阅回内置源起步（AppState 内重建 driver），原地刷新首页视图即可
-            this.app.clearConfig();
-            this.refreshSites();
-            this.lastConfigRef = this.app.config;
-            this.loadHome(true);
-          })
-        }
-        .width('100%')
-        .margin({ top: 60 })
-      } else if (this.loading && this.items.length === 0) {
-        LoadingProgress().width(44).height(44).margin({ top: 80 })
-      } else if (this.visibleItems().length === 0) {
-        Text('暂无内容').fontSize(14).fontColor('#FFFFFF').margin({ top: 80 })
-      } else {
-        MovieGrid({
+      // 主内容区（flex 占满，底部导航栏之外的全部空间）
+      Column() {
+        if (this.errMsg !== '') {
+          Column({ space: 8 }) {
+            Text('加载失败：' + this.errMsg).fontSize(13).fontColor('#E53935')
+            Button('重试').onClick(() => { this.retry(); })
+            Button('清除订阅').onClick(() => {
+              // 清除订阅回内置源起步（AppState 内重建 driver），原地刷新首页视图即可
+              this.app.clearConfig();
+              this.refreshSites();
+              this.lastConfigRef = this.app.config;
+              this.loadHome(true);
+            })
+          }
+          .width('100%')
+          .margin({ top: 60 })
+        } else if (this.loading && this.items.length === 0) {
+          LoadingProgress().width(44).height(44).margin({ top: 80 })
+        } else if (this.visibleItems().length === 0) {
+          Text('暂无内容').fontSize(14).fontColor('#FFFFFF').margin({ top: 80 })
+        } else {
+          MovieGrid({
           items: this.visibleItems(),
           siteLabels: this.siteLabels(),
           columns: this.gridColumns(),
           hasMore: this.page < this.pageCount && this.filterSite === '',
           loading: this.loading || this.searching,
-          onPick: (m: Movie, _idx: number) => {
+          onPick: (m: Movie, idx: number) => {
             // 统一跳转 DetailPage：以片名跨源搜索，左侧源列表 + 右侧剧集
-            Nav.stack.pushPathByName('Detail', m);
+            // 带来源站 key（搜索结果=命中站经 visibleIdxs 还原，首页=当前站），详情页将该站排队最首先出结果
+            const srcKey = this.kind === 'search'
+              ? (this.aggSiteKeys[this.visibleIdxs()[idx] ?? idx] ?? '')
+              : (this.app.currentSite?.key ?? '');
+            const withSite: Movie = { vodId: m.vodId, name: m.name, pic: m.pic, remark: m.remark, typeName: m.typeName, siteKey: srcKey };
+            Nav.stack.pushPathByName('Detail', withSite);
           },
           onLoadMore: () => {
             // 触底：仅分类模式有下一页（home/search 的 pageCount 固定 1，hasMore=false 不会进入）
@@ -435,7 +454,13 @@ export struct HomePage {
             this.loadCategory(tid, this.page + 1, false);
           }
         })
+        }
       }
+      .width('100%')
+      .layoutWeight(1)
+
+      // 底部导航栏（TV 不渲染）
+      MainTabBar({ active: 'home' })
     }
     .width('100%')
     .height('100%')
