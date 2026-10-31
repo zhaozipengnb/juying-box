@@ -13,12 +13,21 @@ import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
 import { display, window } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { util } from '@kit.ArkTS';
+
 import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
 import { DownloadManager } from '../state/DownloadManager';
 import { HlsAdFilterServer } from '../net/HlsAdFilterServer';
+import { SniffProxy } from '../net/SniffProxyServer';
 import { PlayHistory } from '../state/PlayHistory';
 import { Favorites } from '../state/Favorites';
+
+// URL → base64url(与 SniffProxyServer 的编码约定一致)
+function b64urlEncode(x: string): string {
+  const bytes: Uint8Array = new util.TextEncoder().encodeInto(x);
+  return new util.Base64Helper().encodeToStringSync(bytes).replace(/\+/g, '-').replace(/\//g, '_');
+}
 
 @ComponentV2
 export struct PlayerPage {
@@ -154,13 +163,26 @@ export struct PlayerPage {
     this.sniffTimer = setTimeout((): void => { this.sniffFail(); }, 18000);
   }
 
-  private sniffHit(mediaUrl: string): void {
+  private async sniffHit(mediaUrl: string): Promise<void> {
     if (this.sniffTimer >= 0) { clearTimeout(this.sniffTimer); this.sniffTimer = -1; }
     this.sniffing = false;
     this.sniffUrl = '';
-    // 直链可能带防盗链:SDK 的 AVPlayer 不支持自定义 headers,裸播失败会落回错误卡(网页播放兜底)
-    this.engine.open(mediaUrl, this.isPlaying);
+    // 直链带防盗链(referer/UA):经本地 SniffProxy 带 headers 回源,AVPlayer 播本地地址
+    try {
+      const base: string = await SniffProxy.ensureStarted();
+      if (base === '') { this.engine.open(mediaUrl, this.isPlaying); return; }
+      const headers: Record<string, string> = {
+        'referer': this.sniffReferer,
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'
+      };
+      const wrapped: string = base + '/h/' + b64urlEncode(JSON.stringify(headers)) + '/' + b64urlEncode(mediaUrl);
+      this.engine.open(wrapped, this.isPlaying);
+    } catch (e) {
+      this.engine.open(mediaUrl, this.isPlaying);
+    }
   }
+
+
 
   private sniffFail(): void {
     this.sniffing = false;
