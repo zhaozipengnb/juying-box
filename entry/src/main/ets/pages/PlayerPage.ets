@@ -343,7 +343,9 @@ export struct PlayerPage {
     this.isTheater = !this.isTheater;
     if (this.isTheater) {
       this.setImmersive(true);
-      this.setOrientation(window.Orientation.LANDSCAPE);
+      // 竖屏片保持竖屏全屏(画面满宽居中),横屏片才转横屏
+      this.setOrientation(this.vidH > this.vidW && this.vidW > 0
+        ? window.Orientation.PORTRAIT : window.Orientation.LANDSCAPE);
     } else {
       this.setImmersive(false);
       this.setOrientation(window.Orientation.UNSPECIFIED);
@@ -419,6 +421,7 @@ export struct PlayerPage {
           .width('100%')
           .height(this.isTheater ? '100%' : this.videoH)
           .backgroundColor('#000000')
+          .clip(true)
           .onAreaChange((_o: Area, n: Area) => {
             this.areaW = n.width as number;
             this.areaH = n.height as number;
