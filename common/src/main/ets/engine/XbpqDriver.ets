@@ -264,6 +264,10 @@ export class XbpqDriver implements SiteDriver {
   async searchContent(key: string, quick: boolean): Promise<PageResult> {
     const tpl = this.rule['搜索url'];
     if (tpl === undefined || tpl === '') { throw new Error('该站不支持搜索'); }
+    // 搜索url 没有 {wd} 占位符 = 规则残缺(搜索永远返回同一页),当不支持处理,避免污染聚合结果
+    if (tpl.indexOf('{wd}') < 0 && tpl.indexOf('%7Bwd%7D') < 0 && tpl.indexOf('%7bwd%7d') < 0) {
+      throw new Error('该站搜索规则残缺(无关键词占位)');
+    }
     const url = absUrl(this.base, fillTemplate(tpl, '', 1, encodeURIComponent(key)));
     const html = await this.getPage(url);
     const arrRule = this.arrRule('搜索数组', html, LIST_CANDIDATES);
