@@ -21,7 +21,8 @@ const POLL_MS = 600;
 export struct WebFetchContainer {
   build() {
     Web({ src: 'about:blank', controller: WebFetchBridge.instance.controller })
-      .width(1).height(1).opacity(0.01)
+      .width('100%').height('100%').opacity(0.01)
+      .hitTestBehavior(HitTestMode.None)   // 点击穿透,不挡 UI
       .javaScriptAccess(true)
       .onControllerAttached(() => { WebFetchBridge.instance.onAttached(); })
       .onPageEnd(() => { WebFetchBridge.instance.onPageEnd(); })
@@ -29,10 +30,12 @@ export struct WebFetchContainer {
 }
 
 // 挑战页特征(任一命中即视为未过盾):CF 标准挑战 + 自建"浏览器验证"门(如 libvio 的
-// 纯文本 403 Forbidden: browser verification required)
+// 纯文本 403 Forbidden: browser verification required)。
+// 注意:不能用 'challenge-platform' 做特征——CF 代理的站点在真实页面里也全程注入该脚本,
+// 会把已通过盾的真页面误判为挑战页导致永远"超时"。
 export function isCfChallenge(text: string): boolean {
-  if (text.indexOf('Just a moment') >= 0 || text.indexOf('cf_chl_opt') >= 0
-    || text.indexOf('challenge-platform') >= 0 || text.indexOf('_cf_chl') >= 0) { return true; }
+  if (text.indexOf('<title>Just a moment') >= 0 || text.indexOf('cf_chl_opt') >= 0
+    || text.indexOf('_cf_chl') >= 0) { return true; }
   const t = text.trim();
   return t.length < 500 && t.indexOf('browser verification required') >= 0;
 }
