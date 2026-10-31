@@ -2533,17 +2533,6 @@
       "header": {}
     },
     {
-      "key": "sub_fastlinkcokexx",
-      "name": "咕噜映画 | APP",
-      "type": 3,
-      "api": "https://fastlink.cokey.xyz/f/oPJvI9/Appfox.min.js",
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 0,
-      "ext": "{\"host\": \"http://www.yingsw.top\", \"timeout\": 8, \"key\": \"guluyinghua_123\", \"sign\": \"679543610991810f19698c187e5e106e\"}",
-      "header": {}
-    },
-    {
       "key": "sub_miget1313189",
       "name": "🐸mifun｜APP",
       "type": 1,
