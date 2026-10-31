@@ -221,6 +221,40 @@ export struct SettingsPage {
     }
   }
 
+  // 粘贴导入：剪贴板内容按优先级解析——本应用备份 → TVBox 配置 → 订阅 URL
+  private pasteImport(): void {
+    pasteboard.getSystemPasteboard().getData().then((pd: pasteboard.PasteData) => {
+      const text = pd.getPrimaryText().trim();
+      if (text === '') { this.localErr = '剪贴板为空'; return; }
+      try {
+        const wrapped = JSON.parse(text) as Record<string, Object>;
+        const inner = wrapped['settingsJson'];
+        if (typeof inner === 'string') {
+          if (this.settings.restore(inner)) { this.localOk = '已从剪贴板恢复个性化设置'; }
+          else { this.localErr = '剪贴板内容不是有效的备份'; }
+          return;
+        }
+      } catch (e) { /* 非 JSON,继续按配置/URL 处理 */ }
+      try {
+        const obj = JSON.parse(text) as Record<string, Object>;
+        if (obj['sites'] !== undefined) {
+          const n = this.app.loadFromPackText(text);
+          this.localOk = '已导入源包:' + n + ' 个站点';
+          return;
+        }
+      } catch (e) { /* 非配置 JSON */ }
+      if (/^https?:\/\//i.test(text)) {
+        this.app.loadFromUrl(text).then((ok: boolean): void => {
+          this.localOk = ok ? '已导入订阅' : '订阅导入失败:' + (this.app.errMsg || '');
+        });
+        return;
+      }
+      this.localErr = '剪贴板内容无法识别(需为备份/源包配置/订阅链接)';
+    }).catch((e: Object): void => {
+      this.localErr = '读取剪贴板失败:' + (e instanceof Error ? e.message : JSON.stringify(e));
+    });
+  }
+
   // 导入：系统文件选择器选备份 json → 读回 → AppSettings.restore
   private importBackup(): void {    this.localErr = '';
     this.localOk = '';
@@ -410,12 +444,18 @@ export struct SettingsPage {
               .margin({ left: 8 })
               .onClick(() => { this.shareBackup(); })
           }
-          SettingRow({ label: '配置恢复', sub: '从备份文件导入配置' }) {
+          SettingRow({ label: '配置恢复', sub: '从备份文件或剪贴板导入配置' }) {
             Button('导入')
               .height(36)
               .backgroundColor('#3A3A3C')
               .fontColor('#FFFFFF')
               .onClick(() => { this.importBackup(); })
+            Button('粘贴导入')
+              .height(36)
+              .backgroundColor('#3A3A3C')
+              .fontColor('#FFFFFF')
+              .margin({ left: 8 })
+              .onClick(() => { this.pasteImport(); })
           }
 
           // ---------- 缓存 ----------
