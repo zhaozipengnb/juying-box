@@ -100,10 +100,18 @@ export struct HistoryPage {
             Button('返回').fontSize(13).onClick(() => { Nav.stack.pop(); })
           }
         } else {
-          WaterFlow() {
+          if (this.tab === 0 && this.ph.records.length === 0) {
+            Text('暂无观看记录').fontSize(13).fontColor('#B3FFFFFF')
+              .width('100%').textAlign(TextAlign.Center).margin({ top: 80 })
+          }
+          if (this.tab === 1 && this.favs.items.length === 0) {
+            Text('暂无收藏').fontSize(13).fontColor('#B3FFFFFF')
+              .width('100%').textAlign(TextAlign.Center).margin({ top: 80 })
+          }
+          Grid() {
             if (this.tab === 0) {
               ForEach(this.ph.records, (r: PlayRecord) => {
-                FlowItem() {
+                GridItem() {
                   this.recordCard(r.movieName, r.pic, '上次看到' + (r.epName === '' ? '播放' : r.epName),
                     this.siteNameOf(r.siteKey),
                     (): void => { this.resume(r); },
@@ -112,7 +120,7 @@ export struct HistoryPage {
               }, (r: PlayRecord) => r.vodId + r.epUrl + String(r.updatedAt))
             } else {
               ForEach(this.favs.items, (it: FavoriteItem) => {
-                FlowItem() {
+                GridItem() {
                   this.recordCard(it.name, it.pic, it.remark === '' ? (it.typeName === '' ? '收藏' : it.typeName) : it.remark,
                     this.siteNameOf(it.siteKey),
                     (): void => { this.openFav(it); },
@@ -123,9 +131,8 @@ export struct HistoryPage {
           }
           .columnsTemplate('1fr 1fr 1fr')
           .columnsGap(12).rowsGap(14)
-          .width('100%')
+          .width('100%').height('100%')
           .padding({ left: 16, right: 16, top: 8 })
-          .layoutWeight(1)
         }
       }
       .width('100%').height('100%')
