@@ -122,10 +122,6 @@ export struct DetailPage {
             if (this.movie !== null) { this.movie.name = this.searchName.trim(); }
             this.search();
           })
-        Text('▦')
-          .fontSize(18).fontColor('#FFFFFF')
-          .padding({ left: 6, right: 6 })
-          .onClick(() => { this.gridView = !this.gridView; })
         Text(this.sources.length + '源')
           .fontSize(13)
           .fontColor('#FFFFFF')
@@ -142,6 +138,24 @@ export struct DetailPage {
       // 影片信息面板（☰ 展开）
       if (this.showInfo && this.detail !== null) {
         Column() {
+          // 视图偏好(从顶栏 ▦ 挪入):列表/网格
+          Row({ space: 8 }) {
+            Text('聚合视图').fontSize(12).fontColor('#B3FFFFFF')
+            Text('列表')
+              .fontSize(12).fontColor(this.gridView ? '#4D9EFF' : '#FFFFFF')
+              .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+              .backgroundColor(this.gridView ? '#1A4D9EFF' : '#33888888')
+              .borderRadius(6)
+              .onClick(() => { this.gridView = false; })
+            Text('网格')
+              .fontSize(12).fontColor(!this.gridView ? '#4D9EFF' : '#FFFFFF')
+              .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+              .backgroundColor(!this.gridView ? '#1A4D9EFF' : '#33888888')
+              .borderRadius(6)
+              .onClick(() => { this.gridView = true; })
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, bottom: 6 })
           Row({ space: 12 }) {
             Image(this.detail.movie.pic === '' ? $r('app.media.startIcon') : this.detail.movie.pic)
               .width(96).height(132).objectFit(ImageFit.Cover).borderRadius(8).alt($r('app.media.startIcon'))
