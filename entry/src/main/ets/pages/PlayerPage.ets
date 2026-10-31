@@ -912,6 +912,8 @@ export struct PlayerPage {
     }
     .scrollable(ScrollDirection.Vertical)
     .scrollBar(BarState.Off)
+    // Scroll 内容不足一屏时默认居中摆放子组件——必须顶对齐,详情才从播放器正下方开始
+    .align(Alignment.Top)
     .layoutWeight(1)
   }
 }
