@@ -13,7 +13,7 @@ import { DrpyCorsProxy } from '../net/DrpyCorsProxyServer';
 
 const TAG = 'OKV-WEB';
 
-const CALL_TIMEOUT_MS = 10000;
+const CALL_TIMEOUT_MS = 20000;   // 慢站冷连接( DNS+TLS+出数 )可超 10s,20s 兜底
 const INIT_TIMEOUT_MS = 20000;
 
 // drpy2 运行时 init 接收的站点配置（JSON 字符串化后传入）

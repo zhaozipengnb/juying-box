@@ -325,8 +325,8 @@ export struct DetailPage {
     this.srcIdx = -1;
     try {
       // 单站处理：搜 → 取首条 → 加载详情 → 推入 sources（渐进显示）
-      // 搜到结果即推入，即使详情加载失败也显示该站
-      const handleSite = async (s: SiteConfig): Promise<void> => {
+      // 搜到结果即推入，即使详情加载失败也显示该站；失败自动重试一次（慢站冷连接偶发超时）
+      const handleSiteOnce = async (s: SiteConfig): Promise<void> => {
         const driver: SiteDriver | null = this.app.makeDriverFor(s);
         if (driver === null) { return; }
         const ck = s.key + '|' + m.name;
@@ -360,6 +360,15 @@ export struct DetailPage {
         isSiteSupported(s) && !this.settings.isSiteDisabled(s.key)));
       this.searchedTotal = supported.length;
       this.searchedDone = 0;
+
+      const handleSite = async (s: SiteConfig): Promise<void> => {
+        try {
+          await handleSiteOnce(s);
+        } catch (e) {
+          await new Promise<void>((res: (v: void | PromiseLike<void>) => void): void => { setTimeout(res, 800); });
+          await handleSiteOnce(s);
+        }
+      };
 
       // 1. CMS/XML 并发
       const tasks: Promise<void>[] = [];
