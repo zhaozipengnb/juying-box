@@ -1308,7 +1308,7 @@
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 0,
-      "ext": "https://www.zxzjhd.com/",
+      "ext": "{\"数组\": \"stui-vodlist__box&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"data-original=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"播放数组\": \"stui-content__playlist&&</ul\", \"播放列表\": \"<a&&/a>\", \"播放标题\": \">&&</a\", \"播放链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://www.zxzjhd.com/vodtype/{cateId}-{catePg}.html\", \"分类\": \"电影$1#美剧$2#韩剧$3#日剧$4#泰剧$5#动漫$6\", \"搜索url\": \"https://www.zxzjhd.com/vodsearch/{wd}-------------.html\"}",
       "header": {}
     },
     {
@@ -1473,7 +1473,7 @@
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 0,
-      "ext": "{\"site\": \"https://wn4k.com/\"}",
+      "ext": "{\"数组\": \"video-card&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"src=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://wn4k.com/vodtype/{cateId}/{catePg}/\", \"分类\": \"电影$1#连续剧$2#综艺$3#动漫$4\", \"搜索url\": \"https://wn4k.com/vodsearch/{wd}-------------/\"}",
       "header": {}
     },
     {
@@ -2518,7 +2518,7 @@
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 0,
-      "ext": "{\"site\": [\"https://www.didahd.xyz/\"]}",
+      "ext": "{\"数组\": \"myui-vodlist__box&&</a\", \"标题\": \"title=\\\"&&\\\"\", \"图片\": \"data-original=\\\"&&\\\"\", \"链接\": \"href=\\\"&&\\\"\", \"分类url\": \"https://www.didahd.xyz/type/{cateId}-{catePg}.html\", \"分类\": \"电影$1#电视剧$2#纪录片$3#动漫$4#综艺$5\", \"搜索url\": \"https://www.didahd.xyz/search/{wd}-------------.html\"}",
       "header": {}
     },
     {
