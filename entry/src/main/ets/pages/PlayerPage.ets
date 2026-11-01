@@ -343,9 +343,17 @@ export struct PlayerPage {
     this.isTheater = !this.isTheater;
     if (this.isTheater) {
       this.setImmersive(true);
-      // 竖屏片保持竖屏全屏(画面满宽居中),横屏片才转横屏
-      this.setOrientation(this.vidH > this.vidW && this.vidW > 0
-        ? window.Orientation.PORTRAIT : window.Orientation.LANDSCAPE);
+      // 竖屏片保持竖屏全屏(画面满宽居中),横屏片才转横屏。
+      // 先按片源方向锁定落位(系统自动旋转关闭时也能强制转过去),落位后切传感器跟随——
+      // 全屏内手机翻转屏幕跟着转;AUTO_ROTATION_* 限制在同向半球,横屏片不会转到竖屏
+      const portraitVideo = this.vidH > this.vidW && this.vidW > 0;
+      this.setOrientation(portraitVideo ? window.Orientation.PORTRAIT : window.Orientation.LANDSCAPE);
+      setTimeout((): void => {
+        if (this.isTheater) {
+          this.setOrientation(portraitVideo
+            ? window.Orientation.AUTO_ROTATION_PORTRAIT : window.Orientation.AUTO_ROTATION_LANDSCAPE);
+        }
+      }, 600);
     } else {
       this.setImmersive(false);
       this.setOrientation(window.Orientation.UNSPECIFIED);
