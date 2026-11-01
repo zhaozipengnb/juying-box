@@ -115,6 +115,8 @@ export struct PlayerPage {
   @Local seekDelta: number = 0;        // 滑动偏移（秒，右正左负）
   private seekFrom: number = 0;        // 手势起点的基准进度
   private panSeeking: boolean = false; // 本次手势是否有效（起手条件不满足则整段忽略）
+  private uiSeeking: boolean = false;  // Slider 拖动中：屏蔽 onTime 回写，否则滑块被旧进度拽回(拖不动)
+  private seekPending: boolean = false;// seek 已发出：丢弃引擎seek前的首个进度回调，防滑块回跳
   @Local gestureTip: string = '';      // 左右半屏竖滑的音量/亮度提示气泡
   private vbVolumeSide: boolean = false; // 本次竖滑落在右半屏(音量)；false=左半屏(亮度)
   private volStart: number = 0;        // 手势起点媒体音量
@@ -332,6 +334,7 @@ export struct PlayerPage {
     this.engine.seek(target);
     this.curTime = target;
     this.lastPos = target;
+    this.seekPending = true;   // 丢弃 seek 完成前的旧进度回调，防滑块回跳
     this.armCtrlHide();
   }
 
@@ -465,6 +468,9 @@ export struct PlayerPage {
     // AVPlayer 回调:进度/状态/错误;倍速与循环由设置驱动
     this.engine.speed = speedEnum(this.settings.playSpeed);
     this.engine.onTime = (sec: number): void => {
+      // Slider 拖动中不回写(否则滑块被旧进度拽回)；seek 后的首个回调仍可能是旧位置，丢弃
+      if (this.uiSeeking) { return; }
+      if (this.seekPending) { this.seekPending = false; return; }
       this.curTime = sec;
       this.lastPos = sec;
       this.saveProgress(false);
@@ -634,6 +640,38 @@ export struct PlayerPage {
           })
       }
 
+      // 手势层：自绘播放时覆盖整个视频区,吃掉点按/横竖滑/长按。位于画面之上、各控制行之下——
+      // Slider/按钮等上层控件命中的触摸不再与全局手势竞争(进度条因此可拖可点)。
+      // 嗅探网页/网页播放/错误态不渲染此层,Web 与错误按钮直接接管触摸
+      if (this.playUrl !== '' && this.errMsg === '' && !this.resolving && !this.useWeb) {
+        Column()
+          .width('100%').height('100%')
+          .onClick(() => { this.toggleCtrl(); })
+          .gesture(PanGesture({ fingers: 1, direction: PanDirection.Horizontal, distance: 5 })
+            .onActionStart((_e: GestureEvent) => { this.panSeekStart(); })
+            .onActionUpdate((e: GestureEvent) => { this.panSeekMove(e.offsetX); })
+            .onActionEnd((_e: GestureEvent) => { this.panSeekEnd(); })
+            .onActionCancel(() => { this.panSeeking = false; this.seekPreview = false; }))
+          .gesture(PanGesture({ fingers: 1, direction: PanDirection.Vertical, distance: 5 })
+            .onActionStart((e: GestureEvent) => { this.vbStart(e); })
+            .onActionUpdate((e: GestureEvent) => { this.vbMove(e); })
+            .onActionEnd((_e: GestureEvent) => { this.vbEnd(); })
+            .onActionCancel((_e: GestureEvent) => { this.vbEnd(); }))
+          .gesture(LongPressGesture({ duration: 350, repeat: false })
+            .onAction((_e: GestureEvent) => {
+              if (this.settings.longPressSpeed > 0 && this.isPlaying && this.playUrl !== '') {
+                this.boost = this.settings.longPressSpeed;
+                this.engine.setSpeed(this.boost);
+              }
+            })
+            .onActionEnd((_e: GestureEvent) => {
+              if (this.boost > 0) { this.boost = 0; this.engine.setSpeed(this.curSpeed); }
+            })
+            .onActionCancel(() => {
+              if (this.boost > 0) { this.boost = 0; this.engine.setSpeed(this.curSpeed); }
+            }))
+      }
+
 
       // 左上角：剧名 + 正在播放第几集 + 分辨率 + 弹幕开关（随控制层显隐）
       if (this.showCtrl) {
@@ -695,10 +733,21 @@ export struct PlayerPage {
             .selectedColor('#007DFF')
             .trackColor('#66FFFFFF')
             .blockColor('#FFFFFF')
-            .onChange((value: number) => {
+            .onChange((value: number, mode: SliderChangeMode) => {
+              // 拖动/点按期间只更新显示(uiSeeking 屏蔽 onTime 旧进度回写)，松手(End)才真正 seek——
+              // 此前每帧 seek 会被引擎进度回调拽回，表现为进度条拖不动
+              if (mode === SliderChangeMode.Begin) {
+                this.uiSeeking = true;
+                this.seekPending = false;
+              }
               this.curTime = value;
-              this.engine.seek(value);
-              this.armCtrlHide();
+              if (mode === SliderChangeMode.End) {
+                this.uiSeeking = false;
+                this.seekPending = true;
+                this.engine.seek(value);
+                this.lastPos = value;
+                this.armCtrlHide();
+              }
             })
           Text(formatDuration(this.dur)).fontSize(11).fontColor('#FFFFFF')
           if (this.siteKey !== 'live' && this.lines.length > 1) {
@@ -751,6 +800,8 @@ export struct PlayerPage {
         .position({ x: 0, y: '100%' })
         .markAnchor({ x: 0, y: '100%' })
         .padding({ left: 12, right: 12, bottom: 8 })
+        // 吞掉控制行空白处的点击:不下穿手势层(否则点进度条附近会切走控制层),顺手续期保活
+        .onClick(() => { this.armCtrlHide(); })
 
         // 影院模式底部设置行(对齐模板:倍速/线路/选集/刷新/循环;内核项不适用未放)
         if (this.isTheater) {
@@ -807,6 +858,7 @@ export struct PlayerPage {
           .justifyContent(FlexAlign.Center)
           .position({ x: 0, y: '100%' }).markAnchor({ x: 0, y: '100%' })
           .padding({ bottom: 34 })
+          .onClick(() => { this.armCtrlHide(); })
         }
       }
 
@@ -846,34 +898,8 @@ export struct PlayerPage {
     // Stack 必须钉死为容器大小：底部控制层 position(y:'100%') 锚定 Stack 底边，
     // XComponent 按宽高比缩放后 Stack 若自适应子组件，锚点随之漂移(cover 时进度条被 clip 裁出容器)
     .width('100%').height('100%')
-    // 点视频任意处切换控制层（子控件自身的 onClick 消费掉的不冒泡）；
-    // 横向拖动（位移超 5vp）进滑动快进/快退，与点按互斥不冲突
-    .onClick(() => { this.toggleCtrl(); })
-    .gesture(PanGesture({ fingers: 1, direction: PanDirection.Horizontal, distance: 5 })
-      .onActionStart((_e: GestureEvent) => { this.panSeekStart(); })
-      .onActionUpdate((e: GestureEvent) => { this.panSeekMove(e.offsetX); })
-      .onActionEnd((_e: GestureEvent) => { this.panSeekEnd(); })
-      .onActionCancel(() => { this.panSeeking = false; this.seekPreview = false; }))
-    // 竖向拖动：左半屏调亮度、右半屏调音量（与横向快进按方向天然互斥）
-    .gesture(PanGesture({ fingers: 1, direction: PanDirection.Vertical, distance: 5 })
-      .onActionStart((e: GestureEvent) => { this.vbStart(e); })
-      .onActionUpdate((e: GestureEvent) => { this.vbMove(e); })
-      .onActionEnd((_e: GestureEvent) => { this.vbEnd(); })
-      .onActionCancel((_e: GestureEvent) => { this.vbEnd(); }))
-    // 长按临时加速（设置里长按倍速 >0 时生效），松开恢复起播倍速
-    .gesture(LongPressGesture({ duration: 350, repeat: false })
-      .onAction((_e: GestureEvent) => {
-        if (this.settings.longPressSpeed > 0 && this.isPlaying && this.playUrl !== '') {
-          this.boost = this.settings.longPressSpeed;
-          this.engine.setSpeed(this.boost);
-        }
-      })
-      .onActionEnd((_e: GestureEvent) => {
-        if (this.boost > 0) { this.boost = 0; this.engine.setSpeed(this.curSpeed); }
-      })
-      .onActionCancel(() => {
-        if (this.boost > 0) { this.boost = 0; this.engine.setSpeed(this.curSpeed); }
-      }))
+    // 点按/横竖滑/长按手势已移到上方专属手势层(见 videoInner 内注释)：
+    // 挂在 Stack 根上会和 Slider 等控制层子控件抢事件,导致进度条拖不动、点按被吞
 
   }
 
