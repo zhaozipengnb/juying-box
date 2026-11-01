@@ -9,6 +9,8 @@ import { OptionPicker, PickerSpec } from '../components/OptionPicker';
 import { AVPlayerEngine, EngineState, speedEnum } from '../media/AVPlayerEngine';
 import { media } from '@kit.MediaKit';
 import { audio } from '@kit.AudioKit';
+import { avSession as AVSessionManager } from '@kit.AVSessionKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { SPEED_OPTIONS } from '../state/AppSettings';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
@@ -125,6 +127,12 @@ export struct PlayerPage {
   private volLast: number = -1;        // 上次设置的音量档位（去重用）
   private tipTimer: number = -1;       // 提示气泡延时清除定时器
   engine: AVPlayerEngine = new AVPlayerEngine();   // AVPlayer 内核(真倍速/循环/精准 seek)
+  // 投屏(AVSession + 系统投播选择器):队列里放 TV 可直接拉流的公网直链(本机代理地址 TV 拉不到)
+  private avSession: AVSessionManager.AVSession | null = null;
+  private castHelper: AVSessionManager.AVCastPickerHelper | null = null;
+  private castUrl: string = '';        // 可投直链(代理包装前的地址);''=当前内容不可投(网页/未解析)
+  @Local casting: boolean = false;     // 输出设备处于投屏连接
+  @Local castDeviceName: string = '';
   private xcController: XComponentController = new XComponentController();
   private webController: webview.WebviewController = new webview.WebviewController();
 
@@ -160,6 +168,7 @@ export struct PlayerPage {
     this.resolving = true;
     this.errMsg = '';
     this.sniffClear();
+    this.castUrl = '';   // 换集先清可投直链,确认直链后再补
     let target: string = ep.url;
     // drpy（js 引擎）源：起播前先经 ext 的 play() 换直链（API 型源必需）；
     // 字符串规则源无 lazy，play 原样返回播放页地址——仅当结果确为媒体直链才采纳，
@@ -178,6 +187,7 @@ export struct PlayerPage {
       } catch (e) { }
     }
     if (isDirectMedia(target)) {
+      this.castUrl = target;   // 代理包装前记录:投屏队列放 TV 可直接拉流的原始直链
       if (this.settings.aiAdFilter && /\.m3u8($|\?)/i.test(target)) {
         try {
           const base: string = await HlsAdFilterServer.ensureStarted();
@@ -185,6 +195,7 @@ export struct PlayerPage {
         } catch (e) { }
       }
       this.playUrl = target;
+      this.updateCastSession(ep.name, this.castUrl);
     } else if (needSniff && target !== '') {
       this.startSniff(target);
     } else if (target !== '' && target !== ep.url) {
@@ -210,6 +221,7 @@ export struct PlayerPage {
     if (this.sniffTimer >= 0) { clearTimeout(this.sniffTimer); this.sniffTimer = -1; }
     this.sniffing = false;
     this.sniffUrl = '';
+    this.castUrl = mediaUrl;   // 嗅探到的原始直链可投(下方 SniffProxy 包装仅本机播放用)
     // 直链带防盗链(referer/UA):经本地 SniffProxy 带 headers 回源,AVPlayer 播本地地址
     try {
       const base: string = await SniffProxy.ensureStarted();
@@ -400,6 +412,51 @@ export struct PlayerPage {
     } catch (err) { }
   }
 
+  // 投屏:创建 AVSession(通知栏播放控制附带生效),跟随输出设备变化显示投屏状态
+  private async setupCastSession(): Promise<void> {
+    if (this.avSession !== null) { return; }
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      const s = await AVSessionManager.createAVSession(ctx, 'juying-play', 'video');
+      s.on('outputDeviceChange', (state: AVSessionManager.ConnectionState, device: AVSessionManager.OutputDeviceInfo): void => {
+        this.casting = state === AVSessionManager.ConnectionState.STATE_CONNECTED;
+        this.castDeviceName = this.casting ? (device.devices[0]?.deviceName ?? '') : '';
+      });
+      // 通知栏/系统媒体控制器的播放暂停指令
+      s.on('play', (): void => { this.engine.play(); this.isPlaying = true; });
+      s.on('pause', (): void => { this.engine.pause(); this.isPlaying = false; });
+      await s.activate();
+      this.avSession = s;
+    } catch (e) { }
+  }
+
+  // 当前集可投直链写入会话队列(投播设备直接拉这个地址;代理包装前的原始 URL)
+  private async updateCastSession(name: string, url: string): Promise<void> {
+    const s = this.avSession;
+    if (s === null || url === '') { return; }
+    try {
+      await s.setAVMetadata({ assetId: url, title: name });
+      await s.setAVQueueTitle(this.movieName);
+      await s.setAVQueueItems([{
+        itemId: 0,
+        description: { assetId: url, title: name, mediaType: 'video' }
+      }]);
+    } catch (e) { }
+  }
+
+  private async openCastPicker(): Promise<void> {
+    try {
+      if (this.castHelper === null) {
+        const ctx = getContext(this) as common.UIAbilityContext;
+        this.castHelper = new AVSessionManager.AVCastPickerHelper(ctx);
+      }
+      await this.castHelper.select();
+      hilog.info(0x0000, 'OKV-Player', 'cast picker select ok');
+    } catch (e) {
+      hilog.error(0x0000, 'OKV-Player', 'cast picker err: ' + (e instanceof Error ? e.message : JSON.stringify(e)));
+    }
+  }
+
   // playUrl 变化 → 引擎开关:空地址停止,非空打开并自动播放
   @Monitor('playUrl')
   onPlayUrl(): void {
@@ -462,6 +519,7 @@ export struct PlayerPage {
       this.videoH = d.width / this.density / 1.78;
     } catch (e) { }
     if (gBrightness >= 0) { this.brightCache = gBrightness; }   // 延续上次手势亮度
+    this.setupCastSession();
     this.engine.onVideoSize = (w: number, h: number): void => {
       this.vidW = w; this.vidH = h;
     };
@@ -582,6 +640,14 @@ export struct PlayerPage {
       // AVPlayer 不随页面销毁自动停止:退出播放页必须显式停掉并释放(否则声音继续)
       this.engine.stop();
       this.engine.release();
+      // 退出播放页销毁投屏会话(投播随之结束)
+      if (this.avSession !== null) {
+        this.avSession.destroy();
+        this.avSession = null;
+        this.castHelper = null;
+        this.casting = false;
+        this.castDeviceName = '';
+      }
       if (this.ctrlTimer >= 0) { clearTimeout(this.ctrlTimer); this.ctrlTimer = -1; }
       this.showCtrl = false;
       this.setImmersive(false);
@@ -836,6 +902,11 @@ export struct PlayerPage {
                   };
                 })
             }
+            if (this.castUrl !== '') {
+              Text('投屏')
+                .fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => { this.openCastPicker(); })
+            }
             Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x')
               .fontSize(12).fontColor('#FFFFFF')
               .onClick(() => {
@@ -873,6 +944,16 @@ export struct PlayerPage {
           .backgroundColor('#B3000000')
           .borderRadius(10)
           .position({ x: '50%', y: 60 }).markAnchor({ x: '50%' })
+      }
+
+      // 投屏状态提示(画面已到 TV,本机黑屏属正常)
+      if (this.casting) {
+        Text('正在投屏到 ' + this.castDeviceName)
+          .fontSize(13).fontColor('#FFFFFF')
+          .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+          .backgroundColor('#B3000000')
+          .borderRadius(10)
+          .position({ x: '50%', y: 110 }).markAnchor({ x: '50%' })
       }
 
       // 横向滑动快进/快退预览气泡（Stack 默认居中）
