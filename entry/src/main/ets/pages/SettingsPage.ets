@@ -34,6 +34,7 @@ export struct SettingsPage {
   @Local localErr: string = '';
   @Local localOk: string = '';
   @Local cacheBytes: number = -1;   // -1 = 未统计
+  @Local downloadsBytes: number = -1; // 离线影片占用
   @Local editingSub: boolean = false;
 
   aboutToAppear(): void {
@@ -133,6 +134,11 @@ export struct SettingsPage {
     return (getContext(this) as common.UIAbilityContext).cacheDir;
   }
 
+  // 离线影片目录:本应用真正的空间大头,与运行缓存分开展示
+  private downloadsDir(): string {
+    return (getContext(this) as common.UIAbilityContext).filesDir + '/downloads';
+  }
+
   private dirSize(path: string): number {
     let total = 0;
     let names: string[] = [];
@@ -150,6 +156,7 @@ export struct SettingsPage {
 
   private refreshCacheSize(): void {
     this.cacheBytes = this.dirSize(this.cacheDir());
+    this.downloadsBytes = this.dirSize(this.downloadsDir());   // 目录不存在时 dirSize 返回 0
   }
 
   private clearCache(): void {
@@ -458,12 +465,19 @@ export struct SettingsPage {
               .onClick(() => { this.pasteImport(); })
           }
 
-          // ---------- 缓存 ----------
-          SettingRow({ label: '缓存占用', sub: this.fmtSize(this.cacheBytes) + '（图片等运行缓存）' }) {
+          // ---------- 存储 ----------
+          SettingRow({ label: '缓存占用', sub: this.fmtSize(this.cacheBytes) + '（图片/网页运行缓存）' }) {
             Button('清理')
               .height(36)
               .backgroundColor('#F5F5F5').fontColor('#C62828')
               .onClick(() => { this.clearCache(); })
+          }
+
+          SettingRow({ label: '离线影片', sub: this.fmtSize(this.downloadsBytes) + '（点管理进入下载列表）' }) {
+            Button('管理')
+              .height(36)
+              .backgroundColor('#F5F5F5').fontColor('#1565C0')
+              .onClick(() => { Nav.stack.pushPathByName('Download', ''); })
           }
 
           // ---------- 版本 ----------
@@ -603,6 +617,7 @@ export struct SettingsPage {
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
     .hideTitleBar(true)
+    .onShown(() => { this.refreshCacheSize(); })   // 下载/清理后回到设置页,占用数字保持最新
     .onBackPressed(() => { return false; })
   }
 
