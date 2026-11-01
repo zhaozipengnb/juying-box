@@ -68,13 +68,28 @@ export class DownloadManager {
     return this.items.find((it: DownloadItem): boolean => it.id === id);
   }
 
+  // 按影片+集名查任务(下载面板标记各集状态用:选中时还未解析出直链,只能按名字匹配)
+  findByEp(movieName: string, epName: string): DownloadItem | undefined {
+    return this.items.find((it: DownloadItem): boolean => it.movieName === movieName && it.epName === epName);
+  }
+
   // 启动下载
   async startDownload(movieName: string, epName: string, url: string, siteKey: string): Promise<void> {
     if (!this.context) { return; }
     const id = this.makeId(url);
-    if (this.items.some((it: DownloadItem): boolean => it.id === id)) { return; } // 去重
+    const existIdx = this.items.findIndex((it: DownloadItem): boolean => it.id === id);
+    if (existIdx >= 0) {
+      if (this.items[existIdx].status !== 'failed') { return; }   // 在队列/已完成的不重复
+      this.items.splice(existIdx, 1);                             // 失败任务允许重建重下
+    }
 
     const dir = `${this.context.filesDir}/downloads`;
+    // 首次下载时目录不存在,request.agent 与 HLS 建文件都会失败
+    try {
+      fs.accessSync(dir);
+    } catch (e) {
+      try { fs.mkdirSync(dir, true); } catch (err) { }
+    }
     const isHls = /\.m3u8($|\?)/i.test(url);
     const fileName = `${this.safeName(movieName)}_${this.safeName(epName)}.${isHls ? 'ts' : 'mp4'}`;
     const localPath = `${dir}/${fileName}`;
@@ -88,8 +103,9 @@ export class DownloadManager {
 
     try {
       if (/\.m3u8($|\?)/i.test(url) || (!isDirectMedia(url) && url.startsWith('http'))) {
-        // HLS：拉播放列表 → 全部分段顺序拼接为 .ts（request.agent 只能下直链）
-        this.downloadHls(item);
+        // HLS：拉播放列表 → 全部分段顺序拼接为 .ts（request.agent 只能下直链）；
+        // 批量选集时多任务并发会互相抢带宽,限 2 路同时下载其余排队
+        this.scheduleHls(item);
         return;
       }
       const cfg: request.agent.Config = {
@@ -124,6 +140,24 @@ export class DownloadManager {
       this.updateStatus(id, 'failed');
       this.save();
     }
+  }
+
+  // HLS 并发闸:最多 2 路同时拼接,完成后从队列取下一个(HLS 是纯 ArkTS 循环,无并发闸会全量并发)
+  private activeHls: number = 0;
+  private readonly maxHls: number = 2;
+  private hlsWaiting: DownloadItem[] = [];
+
+  private scheduleHls(item: DownloadItem): void {
+    if (this.activeHls >= this.maxHls) {
+      this.hlsWaiting.push(item);
+      return;
+    }
+    this.activeHls++;
+    this.downloadHls(item).then((): void => {
+      this.activeHls--;
+      const next = this.hlsWaiting.shift();
+      if (next !== undefined) { this.scheduleHls(next); }
+    });
   }
 
   // HLS 下载：master 列表取首子列表；逐段拉取追加写入 .ts。进度按已下字节数估算。
@@ -220,13 +254,21 @@ export class DownloadManager {
       const arr = JSON.parse(raw) as Object[];
       this.items = arr.map((o: Object): DownloadItem => {
         const r = o as Record<string, Object>;
+        const st = r['status'] as DownloadStatus;
         return {
           id: r['id'] as string, movieName: r['movieName'] as string, epName: r['epName'] as string,
           url: r['url'] as string, localPath: r['localPath'] as string,
-          progress: r['progress'] as number, status: r['status'] as DownloadStatus,
+          progress: r['progress'] as number, status: st,
           totalSize: r['totalSize'] as number, downloadedSize: r['downloadedSize'] as number,
           siteKey: r['siteKey'] as string,
         };
+      });
+      // 进程重启后 taskMap 丢失:HLS 拼接循环无法续传,mp4 任务句柄也要重新关联——
+      // 统一把进行中/暂停的任务标为失败,可在面板或下载页重新发起
+      this.items.forEach((it: DownloadItem): void => {
+        if (it.status === 'downloading' || it.status === 'pending' || it.status === 'paused') {
+          it.status = 'failed';
+        }
       });
     } catch (e) { /* ignore corrupt data */ }
   }
