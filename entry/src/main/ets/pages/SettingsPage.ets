@@ -591,7 +591,7 @@ export struct SettingsPage {
       }
       .width('100%')
       .layoutWeight(1)
-      .alignContent(Alignment.Center)
+      .align(Alignment.Top)   // 内容不足一屏时从顶部开始排,不居中悬空(原 alignContent Center)
 
       // 底部导航栏（TV 不渲染）
       MainTabBar({ active: 'settings' })

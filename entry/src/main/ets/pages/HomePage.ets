@@ -389,6 +389,7 @@ export struct HomePage {
         }
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.Off)
+        .align(Alignment.Start)   // 分类少时从左侧起排,不水平居中
         .width('100%')
         .padding({ top: 8, bottom: 8 })
       }
@@ -430,6 +431,7 @@ export struct HomePage {
         }
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.Off)
+        .align(Alignment.Start)   // chips 少时从左侧起排,不水平居中
         .width('100%')
         .padding({ left: 12, right: 12 })
         .margin({ top: 8 })

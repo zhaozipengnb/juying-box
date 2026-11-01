@@ -135,6 +135,7 @@ export struct DownloadPage {
       }
       .width('100%').height('100%')
       .scrollBar(BarState.Auto)
+      .align(Alignment.Top)   // 内容不足一屏时从顶部开始排,不居中悬空
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
       .backgroundImage(this.settings.bgImage())
       .backgroundImageSize(ImageSize.Cover)

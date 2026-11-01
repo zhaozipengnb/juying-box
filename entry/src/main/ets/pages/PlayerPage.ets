@@ -1135,7 +1135,7 @@ export struct PlayerPage {
                 }, (line: PlayLine, li: number) => li + line.from)
               }
             }
-            .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).layoutWeight(1)
+            .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).align(Alignment.Start).layoutWeight(1)
             if (this.ep !== null && this.settings.builtinDownload && this.lines.length > 0) {
               Text('下载')
                 .fontSize(12).fontColor('#333333')
@@ -1232,7 +1232,7 @@ export struct PlayerPage {
               }, (l: PlayLine, li: number) => li + l.from)
             }
           }
-          .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
+          .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).align(Alignment.Start).width('100%')
         }
         Row({ space: 14 }) {
           Text('全选').fontSize(12).fontColor('#4D9EFF')
