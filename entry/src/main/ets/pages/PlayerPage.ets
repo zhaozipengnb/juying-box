@@ -724,89 +724,119 @@ export struct PlayerPage {
       }
 
       // 底部：进度条 + 时间 + 全屏（随控制层显隐；全屏直接切影院模式）
+      // 两行收进一个内容自适应高度的底部锚定 Column——此前各自独立全宽锚定,影院模式设置行的
+      // 透明盒子(带 34vp 底 padding)整个盖在收缩按钮上并把点击吞掉,全屏后退出按钮因此无反应
       // 锚定依赖「容器盒子=裁剪盒=子布局空间」三者重合——视频容器不可加 expandSafeArea(见上)
       if (this.playUrl !== '' && this.errMsg === '' && !this.resolving && !this.useWeb && this.showCtrl) {
-        Row({ space: 10 }) {
-          Text(formatDuration(this.curTime)).fontSize(11).fontColor('#FFFFFF')
-          Slider({ value: Math.min(this.curTime, this.dur > 0 ? this.dur : 1), min: 0, max: this.dur > 0 ? this.dur : 1 })
-            .layoutWeight(1)
-            .selectedColor('#007DFF')
-            .trackColor('#66FFFFFF')
-            .blockColor('#FFFFFF')
-            .onChange((value: number, mode: SliderChangeMode) => {
-              // 拖动/点按期间只更新显示(uiSeeking 屏蔽 onTime 旧进度回写)，松手(End)才真正 seek——
-              // 此前每帧 seek 会被引擎进度回调拽回，表现为进度条拖不动
-              if (mode === SliderChangeMode.Begin) {
-                this.uiSeeking = true;
-                this.seekPending = false;
+        Column() {
+          // 影院模式底部设置行(对齐模板:倍速/线路/选集/刷新/循环;内核项不适用未放)
+          if (this.isTheater) {
+            Row({ space: 22 }) {
+              Text(this.curSpeed === 1.0 ? '1.00' : this.curSpeed + 'x')
+                .fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  this.picker = {
+                    title: '播放倍速',
+                    options: SPEED_OPTIONS.map((s: number): string => s + 'x'),
+                    index: SPEED_OPTIONS.indexOf(this.curSpeed),
+                    onPick: (idx: number): void => {
+                      this.curSpeed = SPEED_OPTIONS[idx];
+                      this.settings.playSpeed = this.curSpeed;
+                      this.settings.save();
+                      this.engine.setSpeed(this.curSpeed);
+                    }
+                  };
+                })
+              if (this.lines.length > 1) {
+                Text(`线路${this.lineIdx + 1}`)
+                  .fontSize(12).fontColor('#FFFFFF')
+                  .onClick(() => {
+                    this.picker = {
+                      title: '切换线路',
+                      options: this.lines.map((l: PlayLine): string => l.from),
+                      index: this.lineIdx,
+                      onPick: (idx: number): void => { this.switchTo(idx, this.epIdx); }
+                    };
+                  })
               }
-              this.curTime = value;
-              if (mode === SliderChangeMode.End) {
-                this.uiSeeking = false;
-                this.seekPending = true;
-                this.engine.seek(value);
-                this.lastPos = value;
-                this.armCtrlHide();
-              }
-            })
-          Text(formatDuration(this.dur)).fontSize(11).fontColor('#FFFFFF')
-          if (this.siteKey !== 'live' && this.lines.length > 1) {
-            Text(`线路${this.lineIdx + 1}`)
-              .fontSize(12).fontColor('#FFFFFF')
-              .onClick(() => {
-                this.picker = {
-                  title: '切换线路',
-                  options: this.lines.map((l: PlayLine): string => l.from),
-                  index: this.lineIdx,
-                  onPick: (idx: number): void => { this.switchTo(idx, this.epIdx); }
-                };
-              })
+              Text('选集')
+                .fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
+                  this.picker = {
+                    title: '选集',
+                    options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
+                    index: this.epIdx,
+                    onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
+                  };
+                })
+              Text('刷新')
+                .fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => { this.playUrl = ''; this.prepare(); })
+              Text(this.loopPlay ? '循环开' : '循环关')
+                .fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  this.loopPlay = !this.loopPlay;
+                  this.engine.setLoop(this.loopPlay);
+                })
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.Center)
+            .padding({ left: 12, right: 12, bottom: 4 })
           }
-          if (this.channelUrls.length > 1) {
-            Text(`线路${this.channelLine + 1}`)
-              .fontSize(12).fontColor('#FFFFFF')
-              .onClick(() => {
-                this.picker = {
-                  title: '切换线路',
-                  options: this.channelUrls.map((_u: string, i: number): string => `线路${i + 1}`),
-                  index: this.channelLine,
-                  onPick: (idx: number): void => {
-                    this.channelLine = idx;
-                    this.playUrl = this.channelUrls[idx];
-                  }
-                };
-              })
-          }
-          Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x')
-            .fontSize(12).fontColor('#FFFFFF')
-            .onClick(() => {
-              this.picker = {
-                title: '播放倍速',
-                options: SPEED_OPTIONS.map((s: number): string => s + 'x'),
-                index: SPEED_OPTIONS.indexOf(this.curSpeed),
-                onPick: (idx: number): void => {
-                  this.curSpeed = SPEED_OPTIONS[idx];
-                  this.settings.playSpeed = this.curSpeed;
-                  this.settings.save();
-                  this.engine.setSpeed(this.curSpeed);
-                }
-              };
-            })
-          Image(this.isTheater ? $r('app.media.ic_shrink') : $r('app.media.ic_expand'))
-            .width(22).height(22).fillColor('#FFFFFF')
-            .onClick(() => { this.toggleTheater(); })
-        }
-        .width('100%')
-        .position({ x: 0, y: '100%' })
-        .markAnchor({ x: 0, y: '100%' })
-        .padding({ left: 12, right: 12, bottom: 8 })
-        // 吞掉控制行空白处的点击:不下穿手势层(否则点进度条附近会切走控制层),顺手续期保活
-        .onClick(() => { this.armCtrlHide(); })
 
-        // 影院模式底部设置行(对齐模板:倍速/线路/选集/刷新/循环;内核项不适用未放)
-        if (this.isTheater) {
-          Row({ space: 22 }) {
-            Text(this.curSpeed === 1.0 ? '1.00' : this.curSpeed + 'x')
+          Row({ space: 10 }) {
+            Text(formatDuration(this.curTime)).fontSize(11).fontColor('#FFFFFF')
+            Slider({ value: Math.min(this.curTime, this.dur > 0 ? this.dur : 1), min: 0, max: this.dur > 0 ? this.dur : 1 })
+              .layoutWeight(1)
+              .selectedColor('#007DFF')
+              .trackColor('#66FFFFFF')
+              .blockColor('#FFFFFF')
+              .onChange((value: number, mode: SliderChangeMode) => {
+                // 拖动/点按期间只更新显示(uiSeeking 屏蔽 onTime 旧进度回写)，松手(End)才真正 seek——
+                // 此前每帧 seek 会被引擎进度回调拽回，表现为进度条拖不动
+                if (mode === SliderChangeMode.Begin) {
+                  this.uiSeeking = true;
+                  this.seekPending = false;
+                }
+                this.curTime = value;
+                if (mode === SliderChangeMode.End) {
+                  this.uiSeeking = false;
+                  this.seekPending = true;
+                  this.engine.seek(value);
+                  this.lastPos = value;
+                  this.armCtrlHide();
+                }
+              })
+            Text(formatDuration(this.dur)).fontSize(11).fontColor('#FFFFFF')
+            if (this.siteKey !== 'live' && this.lines.length > 1) {
+              Text(`线路${this.lineIdx + 1}`)
+                .fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  this.picker = {
+                    title: '切换线路',
+                    options: this.lines.map((l: PlayLine): string => l.from),
+                    index: this.lineIdx,
+                    onPick: (idx: number): void => { this.switchTo(idx, this.epIdx); }
+                  };
+                })
+            }
+            if (this.channelUrls.length > 1) {
+              Text(`线路${this.channelLine + 1}`)
+                .fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  this.picker = {
+                    title: '切换线路',
+                    options: this.channelUrls.map((_u: string, i: number): string => `线路${i + 1}`),
+                    index: this.channelLine,
+                    onPick: (idx: number): void => {
+                      this.channelLine = idx;
+                      this.playUrl = this.channelUrls[idx];
+                    }
+                  };
+                })
+            }
+            Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x')
               .fontSize(12).fontColor('#FFFFFF')
               .onClick(() => {
                 this.picker = {
@@ -821,45 +851,18 @@ export struct PlayerPage {
                   }
                 };
               })
-            if (this.lines.length > 1) {
-              Text(`线路${this.lineIdx + 1}`)
-                .fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => {
-                  this.picker = {
-                    title: '切换线路',
-                    options: this.lines.map((l: PlayLine): string => l.from),
-                    index: this.lineIdx,
-                    onPick: (idx: number): void => { this.switchTo(idx, this.epIdx); }
-                  };
-                })
-            }
-            Text('选集')
-              .fontSize(12).fontColor('#FFFFFF')
-              .onClick(() => {
-                if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
-                this.picker = {
-                  title: '选集',
-                  options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
-                  index: this.epIdx,
-                  onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
-                };
-              })
-            Text('刷新')
-              .fontSize(12).fontColor('#FFFFFF')
-              .onClick(() => { this.playUrl = ''; this.prepare(); })
-            Text(this.loopPlay ? '循环开' : '循环关')
-              .fontSize(12).fontColor('#FFFFFF')
-              .onClick(() => {
-                this.loopPlay = !this.loopPlay;
-                this.engine.setLoop(this.loopPlay);
-              })
+            Image(this.isTheater ? $r('app.media.ic_shrink') : $r('app.media.ic_expand'))
+              .width(22).height(22).fillColor('#FFFFFF')
+              .onClick(() => { this.toggleTheater(); })
           }
           .width('100%')
-          .justifyContent(FlexAlign.Center)
-          .position({ x: 0, y: '100%' }).markAnchor({ x: 0, y: '100%' })
-          .padding({ bottom: 34 })
-          .onClick(() => { this.armCtrlHide(); })
+          .padding({ left: 12, right: 12, bottom: 8 })
         }
+        .width('100%')
+        .position({ x: 0, y: '100%' })
+        .markAnchor({ x: 0, y: '100%' })
+        // 吞掉底部控制块空白处的点击:不下穿手势层切走控制层,顺手续期保活
+        .onClick(() => { this.armCtrlHide(); })
       }
 
       // 长按加速提示
