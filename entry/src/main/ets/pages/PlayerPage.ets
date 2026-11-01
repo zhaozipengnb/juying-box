@@ -754,9 +754,14 @@ export struct PlayerPage {
         .alignItems(HorizontalAlign.Start)
       }
 
-      // 右上角：收藏（全屏按钮移至底部控制栏；随控制层显隐）
+      // 右上角：投屏 + 收藏（全屏按钮移至底部控制栏；随控制层显隐）
       if (this.showCtrl) {
         Row({ space: 18 }) {
+          if (this.castUrl !== '') {
+            Image($r('app.media.ic_cast')).width(20).height(20)
+              .fillColor('#FFFFFF')
+              .onClick(() => { this.openCastPicker(); })
+          }
           Image($r('app.media.ic_heart')).width(20).height(20)
             .fillColor(this.isFav ? '#E53935' : '#FFFFFF')
             .onClick(() => {
@@ -901,11 +906,6 @@ export struct PlayerPage {
                     }
                   };
                 })
-            }
-            if (this.castUrl !== '') {
-              Text('投屏')
-                .fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => { this.openCastPicker(); })
             }
             Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x')
               .fontSize(12).fontColor('#FFFFFF')
