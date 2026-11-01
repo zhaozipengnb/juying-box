@@ -599,7 +599,9 @@ export struct PlayerPage {
           Image(this.isPlaying ? $r('app.media.ic_pause') : $r('app.media.ic_play')).width(26).height(26).fillColor('#FFFFFF')
             .onClick(() => {
               this.isPlaying = !this.isPlaying;
-              if (this.isPlaying) { this.engine.pause(); } else { this.engine.play(); }
+              // 翻转后的新状态决定引擎动作:isPlaying=true 应 play——此前写成 pause 导致
+              // 干净状态下首次点击永远 no-op(播放中点暂停调了 play),表现为"按钮有时不生效"
+              if (this.isPlaying) { this.engine.play(); } else { this.engine.pause(); }
               this.armCtrlHide();
             })
           Image($r('app.media.ic_skip_forward')).width(22).height(22).fillColor('#FFFFFF')
