@@ -605,7 +605,8 @@ export struct SettingsPage {
       }
       .width('100%')
       .layoutWeight(1)
-      .align(Alignment.Top)   // 内容不足一屏时从顶部开始排,不居中悬空(原 alignContent Center)
+      // Stack 级对齐:订阅/壁纸等弹窗(遮罩+卡片)悬浮居中;页面内容的顶对齐由 Scroll 内容列自管
+      .alignContent(Alignment.Center)
 
       // 底部导航栏（TV 不渲染）
       MainTabBar({ active: 'settings' })
