@@ -18,6 +18,15 @@ export struct HistoryPage {
   @Local tab: number = 0;
   @Local loading: boolean = false;   // 续播拉详情中
   @Local errMsg: string = '';
+  // 单例镜像:本 SDK 下 @ComponentV2 经普通成员读 @ObservedV2 单例不建立响应依赖(坑#3 变体),
+  // 直接渲染 this.ph.records 会导致清空/删除后界面纹丝不动——镜像 + 每次可见/操作后同步
+  @Local histList: PlayRecord[] = [];
+  @Local favList: FavoriteItem[] = [];
+
+  private refreshLists(): void {
+    this.histList = this.ph.records.slice();
+    this.favList = this.favs.items.slice();
+  }
 
   @Computed get wallpaperColors(): Array<[ResourceColor, number]> {
     const w = this.settings.wallpaper;
@@ -84,11 +93,14 @@ export struct HistoryPage {
               .onClick(() => { this.tab = i; })
           }, (t: string) => t)
           Blank()
-          if (this.tab === 0 && this.ph.records.length > 0) {
+          if (this.tab === 0 && this.histList.length > 0) {
             Text('清空')
               .fontSize(13).fontColor('#E53935')
               .padding({ right: 16, top: 4 })
-              .onClick(() => { this.ph.clear(); })
+              .onClick(() => {
+                this.ph.clear();
+                this.refreshLists();
+              })
           }
         }.width('100%')
 
@@ -100,31 +112,37 @@ export struct HistoryPage {
             Button('返回').fontSize(13).onClick(() => { Nav.stack.pop(); })
           }
         } else {
-          if (this.tab === 0 && this.ph.records.length === 0) {
+          if (this.tab === 0 && this.histList.length === 0) {
             Text('暂无观看记录').fontSize(13).fontColor('#B3FFFFFF')
               .width('100%').textAlign(TextAlign.Center).margin({ top: 80 })
           }
-          if (this.tab === 1 && this.favs.items.length === 0) {
+          if (this.tab === 1 && this.favList.length === 0) {
             Text('暂无收藏').fontSize(13).fontColor('#B3FFFFFF')
               .width('100%').textAlign(TextAlign.Center).margin({ top: 80 })
           }
           Grid() {
             if (this.tab === 0) {
-              ForEach(this.ph.records, (r: PlayRecord) => {
+              ForEach(this.histList, (r: PlayRecord) => {
                 GridItem() {
                   this.recordCard(r.movieName, r.pic, '上次看到' + (r.epName === '' ? '播放' : r.epName),
                     this.siteNameOf(r.siteKey),
                     (): void => { this.resume(r); },
-                    (): void => { this.ph.remove(r.siteKey, r.vodId); })
+                    (): void => {
+                      this.ph.remove(r.siteKey, r.vodId);
+                      this.refreshLists();
+                    })
                 }
               }, (r: PlayRecord) => r.vodId + r.epUrl + String(r.updatedAt))
             } else {
-              ForEach(this.favs.items, (it: FavoriteItem) => {
+              ForEach(this.favList, (it: FavoriteItem) => {
                 GridItem() {
                   this.recordCard(it.name, it.pic, it.remark === '' ? (it.typeName === '' ? '收藏' : it.typeName) : it.remark,
                     this.siteNameOf(it.siteKey),
                     (): void => { this.openFav(it); },
-                    (): void => { this.favs.remove(it.siteKey, it.vodId); })
+                    (): void => {
+                      this.favs.remove(it.siteKey, it.vodId);
+                      this.refreshLists();
+                    })
                 }
               }, (it: FavoriteItem) => it.vodId + String(it.addedAt))
             }
@@ -143,6 +161,7 @@ export struct HistoryPage {
     }
     .hideTitleBar(false)
     .title(this.tab === 0 ? '观看历史' : '我的收藏')
+    .onShown(() => { this.refreshLists(); })   // 每次可见都同步单例(播放写入历史/收藏后回来也是最新)
     .onReady((ctx: NavDestinationContext) => {
       const arg = ctx.pathInfo.param as string;
       if (arg === 'fav') { this.tab = 1; }

@@ -8,6 +8,13 @@ import { Episode } from 'common';
 export struct DownloadPage {
   dl: DownloadManager = DownloadManager.instance;
   settings: AppSettings = AppSettings.instance;
+  // 单例镜像:本 SDK 下 @ComponentV2 经普通成员读 @ObservedV2 单例不建立响应依赖(坑#3 变体)
+  @Local dlList: DownloadItem[] = [];
+
+  // 任务增删后同步镜像;进度/状态是 @Trace 字段,镜像持同一实例即可实时刷新
+  private refreshDl(): void {
+    this.dlList = this.dl.items.slice();
+  }
 
   @Computed get isDarkWallpaper(): boolean {
     return true;   // 默认背景为青橙渐变图，文字统一白色
@@ -47,7 +54,19 @@ export struct DownloadPage {
     NavDestination() {
       Scroll() {
         Column() {
-          if (this.dl.items.length === 0) {
+          if (this.dlList.length > 0) {
+            Row() {
+              Blank()
+              Text('清空')
+                .fontSize(13).fontColor('#E53935')
+                .padding({ right: 4, top: 4, bottom: 4 })
+                .onClick(() => {
+                  this.dl.removeAll();
+                  this.refreshDl();
+                })
+            }.width('100%').padding({ left: 16, right: 20, top: 4 })
+          }
+          if (this.dlList.length === 0) {
             // 空态
             Column() {
               Image($r('app.media.ic_empty')).width(48).height(48).fillColor('#FFFFFF').margin({ bottom: 12 })
@@ -59,7 +78,7 @@ export struct DownloadPage {
             .width('100%').height('100%')
             .justifyContent(FlexAlign.Center)
           } else {
-            ForEach(this.dl.items, (it: DownloadItem) => {
+            ForEach(this.dlList, (it: DownloadItem) => {
               Row() {
                 // 左侧：标题 + 进度
                 Column() {
@@ -99,12 +118,12 @@ export struct DownloadPage {
                     Button('暂停').height(32).fontSize(12)
                       .backgroundColor('#3A3A3C')
                       .fontColor('#FFFFFF')
-                      .onClick(() => { this.dl.pause(it.id); })
+                      .onClick(() => { this.dl.pause(it.id).then((): void => this.refreshDl()); })
                   } else if (it.status === 'paused' || it.status === 'failed') {
                     Button('继续').height(32).fontSize(12)
                       .backgroundColor('#3A3A3C')
                       .fontColor('#FFFFFF')
-                      .onClick(() => { this.dl.resume(it.id); })
+                      .onClick(() => { this.dl.resume(it.id).then((): void => this.refreshDl()); })
                   }
                   if (it.status === 'completed') {
                     Button('播放').height(32).fontSize(12).margin({ left: 6 })
@@ -118,7 +137,7 @@ export struct DownloadPage {
                   Button('删除').height(32).fontSize(12).margin({ left: 6 })
                     .backgroundColor('#3A3A3C')
                     .fontColor('#E53935')
-                    .onClick(() => { this.dl.remove(it.id); })
+                    .onClick(() => { this.dl.remove(it.id).then((): void => this.refreshDl()); })
                 }
               }
               .width('100%')
@@ -144,6 +163,7 @@ export struct DownloadPage {
     }
     .hideTitleBar(false)
     .title('下载管理')
+    .onShown(() => { this.refreshDl(); })   // 每次可见都同步单例(新增/删除任务后回来也是最新)
     .onBackPressed(() => { return false; })
   }
 }

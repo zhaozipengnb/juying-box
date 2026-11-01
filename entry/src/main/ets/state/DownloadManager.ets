@@ -11,17 +11,19 @@ import { resolveUrl, isDirectMedia } from 'common';
 
 export type DownloadStatus = 'pending' | 'downloading' | 'paused' | 'completed' | 'failed';
 
-export interface DownloadItem {
-  id: string;             // 唯一 ID（URL 摘要）
-  movieName: string;      // 影片名
-  epName: string;         // 集名
-  url: string;            // 下载地址
-  localPath: string;      // 本地文件全路径
-  progress: number;       // 0–100
-  status: DownloadStatus;
-  totalSize: number;      // 总字节
-  downloadedSize: number; // 已下载字节
-  siteKey: string;        // 来源站点
+// 下载任务条目:进度/状态标 @Trace——页面镜像数组持同一实例即可实时刷新进度
+@ObservedV2
+export class DownloadItem {
+  id: string = '';             // 唯一 ID（URL 摘要）
+  movieName: string = '';      // 影片名
+  epName: string = '';         // 集名
+  url: string = '';            // 下载地址
+  localPath: string = '';      // 本地文件全路径
+  @Trace progress: number = 0; // 0–100
+  @Trace status: DownloadStatus = 'pending';
+  totalSize: number = 0;       // 总字节
+  downloadedSize: number = 0;  // 已下载字节
+  siteKey: string = '';        // 来源站点
 }
 
 const KEY_DOWNLOADS = 'okvideo_downloads_json';
@@ -94,10 +96,13 @@ export class DownloadManager {
     const fileName = `${this.safeName(movieName)}_${this.safeName(epName)}.${isHls ? 'ts' : 'mp4'}`;
     const localPath = `${dir}/${fileName}`;
 
-    const item: DownloadItem = {
-      id, movieName, epName, url, localPath,
-      progress: 0, status: 'pending', totalSize: 0, downloadedSize: 0, siteKey,
-    };
+    const item: DownloadItem = new DownloadItem();
+    item.id = id;
+    item.movieName = movieName;
+    item.epName = epName;
+    item.url = url;
+    item.localPath = localPath;
+    item.siteKey = siteKey;
     this.items.push(item);
     this.save();
 
@@ -182,6 +187,10 @@ export class DownloadManager {
       const f = fs.openSync(item.localPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
       let done = 0;
       for (let i = 0; i < segs.length; i++) {
+        if (this.items.indexOf(item) < 0) {   // 清空/删除后中止写入
+          fs.closeSync(f);
+          return;
+        }
         const seg = segs[i];
         const r = await httpFetch(seg, {});
         const bytes = new Uint8Array(r.body);
@@ -235,6 +244,17 @@ export class DownloadManager {
     this.save();
   }
 
+  // 清空全部:停 agent 任务、清 HLS 队列与进行中循环(循环内检测到条目被移除即中止)
+  removeAll(): void {
+    this.hlsWaiting = [];
+    this.taskMap.forEach((t: request.agent.Task): void => {
+      try { t.stop(); } catch (e) { /* ignore */ }
+    });
+    this.taskMap.clear();
+    this.items = [];
+    this.save();
+  }
+
   // 持久化
   private save(): void {
     if (!this.store) { return; }
@@ -254,14 +274,18 @@ export class DownloadManager {
       const arr = JSON.parse(raw) as Object[];
       this.items = arr.map((o: Object): DownloadItem => {
         const r = o as Record<string, Object>;
-        const st = r['status'] as DownloadStatus;
-        return {
-          id: r['id'] as string, movieName: r['movieName'] as string, epName: r['epName'] as string,
-          url: r['url'] as string, localPath: r['localPath'] as string,
-          progress: r['progress'] as number, status: st,
-          totalSize: r['totalSize'] as number, downloadedSize: r['downloadedSize'] as number,
-          siteKey: r['siteKey'] as string,
-        };
+        const it = new DownloadItem();
+        it.id = r['id'] as string;
+        it.movieName = r['movieName'] as string;
+        it.epName = r['epName'] as string;
+        it.url = r['url'] as string;
+        it.localPath = r['localPath'] as string;
+        it.progress = r['progress'] as number;
+        it.status = r['status'] as DownloadStatus;
+        it.totalSize = r['totalSize'] as number;
+        it.downloadedSize = r['downloadedSize'] as number;
+        it.siteKey = r['siteKey'] as string;
+        return it;
       });
       // 进程重启后 taskMap 丢失:HLS 拼接循环无法续传,mp4 任务句柄也要重新关联——
       // 统一把进行中/暂停的任务标为失败,可在面板或下载页重新发起
