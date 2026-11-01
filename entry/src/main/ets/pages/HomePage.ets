@@ -277,7 +277,7 @@ export struct HomePage {
   private retry(): void {
     if (this.kind === 'search') { this.doSearch(); return; }
     if (this.kind === 'category') {
-      const tid: string = this.catKeys[this.catIdx] ?? '';
+      const tid: string = this.catIdx > 0 ? (this.catKeys[this.catIdx - 1] ?? '') : '';
       if (tid !== '') { this.loadCategory(tid, 1, true); return; }
     }
     this.loadHome(true);
@@ -351,21 +351,36 @@ export struct HomePage {
       .width('100%')
       .padding({ left: 12, right: 12, top: 12 })
 
-      // 分类横滑胶囊（FongMi 风格：圆角药丸，选中实色）
+      // 分类横滑胶囊（FongMi 风格：圆角药丸，选中实色）。
+      // 首位是「首页」伪分类=源推荐流(catIdx 0)；真实分类从下标 1 起——
+      // 换源后 loadHome 显示推荐流时高亮「首页」，选中态与内容才一致
       if (this.cats.length > 0) {
         Scroll() {
           Row({ space: 10 }) {
+            Text('首页')
+              .fontSize(15)
+              .fontColor('#FFFFFF')
+              .fontWeight(this.catIdx === 0 ? FontWeight.Bold : FontWeight.Normal)
+              .backgroundColor(this.catIdx === 0 ? '#007DFF' : '#4D888888')
+              .borderRadius(20)
+              .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+              .onClick(() => {
+                if (this.loading || this.searching) { return; }
+                if (this.catIdx === 0) { return; }
+                this.catIdx = 0;
+                this.loadHome();
+              })
             ForEach(this.cats, (c: string, i: number) => {
               Text(c)
                 .fontSize(15)
                 .fontColor('#FFFFFF')
-                .fontWeight(this.catIdx === i ? FontWeight.Bold : FontWeight.Normal)
-                .backgroundColor(this.catIdx === i ? '#007DFF' : '#4D888888')
+                .fontWeight(this.catIdx === i + 1 ? FontWeight.Bold : FontWeight.Normal)
+                .backgroundColor(this.catIdx === i + 1 ? '#007DFF' : '#4D888888')
                 .borderRadius(20)
                 .padding({ left: 16, right: 16, top: 8, bottom: 8 })
                 .onClick(() => {
                   if (this.loading || this.searching) { return; }
-                  this.catIdx = i;
+                  this.catIdx = i + 1;
                   this.loadCategory(this.catKeys[i] ?? '', 1, true);
                 })
             }, (c: string, i: number) => c + '_' + i)
@@ -458,7 +473,8 @@ export struct HomePage {
           },
           onLoadMore: () => {
             // 触底：仅分类模式有下一页（home/search 的 pageCount 固定 1，hasMore=false 不会进入）
-            const tid: string = this.catKeys[this.catIdx] ?? '';
+            // 分类下标从 1 起（0=首页伪分类），取 tid 要减一
+            const tid: string = this.catIdx > 0 ? (this.catKeys[this.catIdx - 1] ?? '') : '';
             this.loadCategory(tid, this.page + 1, false);
           }
         })
