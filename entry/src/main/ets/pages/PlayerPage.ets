@@ -8,6 +8,7 @@ import { Episode, PlayLine, MovieDetail, SiteConfig, isDirectMedia, resolvePlayU
 import { OptionPicker, PickerSpec } from '../components/OptionPicker';
 import { AVPlayerEngine, EngineState, speedEnum } from '../media/AVPlayerEngine';
 import { media } from '@kit.MediaKit';
+import { audio } from '@kit.AudioKit';
 import { SPEED_OPTIONS } from '../state/AppSettings';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
@@ -28,6 +29,9 @@ function b64urlEncode(x: string): string {
   const bytes: Uint8Array = new util.TextEncoder().encodeInto(x);
   return new util.Base64Helper().encodeToStringSync(bytes).replace(/\+/g, '-').replace(/\//g, '_');
 }
+
+// 手势亮度跨播放页实例持久（窗口级 setWindowBrightness 无读取接口，只能自记）
+let gBrightness = -1;
 
 @ComponentV2
 export struct PlayerPage {
@@ -111,6 +115,13 @@ export struct PlayerPage {
   @Local seekDelta: number = 0;        // 滑动偏移（秒，右正左负）
   private seekFrom: number = 0;        // 手势起点的基准进度
   private panSeeking: boolean = false; // 本次手势是否有效（起手条件不满足则整段忽略）
+  @Local gestureTip: string = '';      // 左右半屏竖滑的音量/亮度提示气泡
+  private vbVolumeSide: boolean = false; // 本次竖滑落在右半屏(音量)；false=左半屏(亮度)
+  private volStart: number = 0;        // 手势起点媒体音量
+  private volMax: number = 0;          // 媒体最大音量(0=获取失败,本次音量手势不生效)
+  private brightCache: number = 0.5;   // 亮度缓存(0..1)，手势基准；上次手势设置值经 gBrightness 跨实例持久
+  private volLast: number = -1;        // 上次设置的音量档位（去重用）
+  private tipTimer: number = -1;       // 提示气泡延时清除定时器
   engine: AVPlayerEngine = new AVPlayerEngine();   // AVPlayer 内核(真倍速/循环/精准 seek)
   private xcController: XComponentController = new XComponentController();
   private webController: webview.WebviewController = new webview.WebviewController();
@@ -324,6 +335,68 @@ export struct PlayerPage {
     this.armCtrlHide();
   }
 
+  // 左右半屏竖滑：左=亮度、右=音量（对齐主流播放器习惯）。起手按触点 x 分流，
+  // 音量走 AudioManager(MEDIA 流)，亮度走窗口 setWindowBrightness；提示气泡居中显示，松手延时消退
+  private vbStart(e: GestureEvent): void {
+    if (this.useWeb || this.errMsg !== '' || this.playUrl === '') { return; }
+    if (this.tipTimer >= 0) { clearTimeout(this.tipTimer); this.tipTimer = -1; }
+    const fl = e.fingerList;
+    const x = fl.length > 0 ? fl[0].localX : 0;
+    this.vbVolumeSide = x > this.areaW / 2;
+    if (this.vbVolumeSide) {
+      this.readVolumes();
+    }
+  }
+
+  // 音量查询是 Promise API：异步读基准与上限，解析前 vbMove 因 volMax=0 空转
+  private async readVolumes(): Promise<void> {
+    try {
+      const am = audio.getAudioManager();
+      this.volMax = await am.getMaxVolume(audio.AudioVolumeType.MEDIA);
+      this.volStart = await am.getVolume(audio.AudioVolumeType.MEDIA);
+      this.volLast = -1;
+    } catch (err) {
+      this.volMax = 0;
+    }
+  }
+
+  private vbMove(e: GestureEvent): void {
+    if (this.useWeb || this.errMsg !== '' || this.playUrl === '') { return; }
+    const dy = e.offsetY;   // vp，上滑为负
+    if (this.vbVolumeSide && this.volMax > 0) {
+      let v = Math.round(this.volStart + this.volMax * (-dy / 300));
+      v = Math.max(0, Math.min(this.volMax, v));
+      if (v !== this.volLast) {   // 去重：拖动事件远密于音量档位，避免洪水式 setVolume
+        this.volLast = v;
+        try {
+          audio.getAudioManager().setVolume(audio.AudioVolumeType.MEDIA, v).catch((): void => { });
+        } catch (err) { }
+      }
+      this.gestureTip = '音量 ' + Math.round(v * 100 / this.volMax) + '%';
+    } else if (!this.vbVolumeSide) {
+      let b = this.brightCache + (-dy / 300);
+      b = Math.max(0.05, Math.min(1, b));
+      this.brightCache = b;
+      gBrightness = b;
+      this.applyBrightness(b);
+      this.gestureTip = '亮度 ' + Math.round(b * 100) + '%';
+    }
+  }
+
+  private vbEnd(): void {
+    if (this.tipTimer >= 0) { clearTimeout(this.tipTimer); }
+    this.tipTimer = setTimeout(() => { this.gestureTip = ''; this.tipTimer = -1; }, 700);
+  }
+
+  private applyBrightness(b: number): void {
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      window.getLastWindow(ctx).then((w: window.Window): void => {
+        w.setWindowBrightness(b);
+      }).catch((): void => { });
+    } catch (err) { }
+  }
+
   // playUrl 变化 → 引擎开关:空地址停止,非空打开并自动播放
   @Monitor('playUrl')
   onPlayUrl(): void {
@@ -385,6 +458,7 @@ export struct PlayerPage {
       this.density = d.densityPixels > 0 ? d.densityPixels : 1;
       this.videoH = d.width / this.density / 1.78;
     } catch (e) { }
+    if (gBrightness >= 0) { this.brightCache = gBrightness; }   // 延续上次手势亮度
     this.engine.onVideoSize = (w: number, h: number): void => {
       this.vidW = w; this.vidH = h;
     };
@@ -759,6 +833,15 @@ export struct PlayerPage {
         .backgroundColor('#B3000000')
         .borderRadius(12)
       }
+
+      // 左右半屏竖滑的音量/亮度提示（Stack 默认居中）
+      if (this.gestureTip !== '') {
+        Text(this.gestureTip)
+          .fontSize(14).fontColor('#FFFFFF').fontWeight(FontWeight.Medium)
+          .padding({ left: 16, right: 16, top: 10, bottom: 10 })
+          .backgroundColor('#B3000000')
+          .borderRadius(12)
+      }
     }
     // Stack 必须钉死为容器大小：底部控制层 position(y:'100%') 锚定 Stack 底边，
     // XComponent 按宽高比缩放后 Stack 若自适应子组件，锚点随之漂移(cover 时进度条被 clip 裁出容器)
@@ -771,6 +854,12 @@ export struct PlayerPage {
       .onActionUpdate((e: GestureEvent) => { this.panSeekMove(e.offsetX); })
       .onActionEnd((_e: GestureEvent) => { this.panSeekEnd(); })
       .onActionCancel(() => { this.panSeeking = false; this.seekPreview = false; }))
+    // 竖向拖动：左半屏调亮度、右半屏调音量（与横向快进按方向天然互斥）
+    .gesture(PanGesture({ fingers: 1, direction: PanDirection.Vertical, distance: 5 })
+      .onActionStart((e: GestureEvent) => { this.vbStart(e); })
+      .onActionUpdate((e: GestureEvent) => { this.vbMove(e); })
+      .onActionEnd((_e: GestureEvent) => { this.vbEnd(); })
+      .onActionCancel((_e: GestureEvent) => { this.vbEnd(); }))
     // 长按临时加速（设置里长按倍速 >0 时生效），松开恢复起播倍速
     .gesture(LongPressGesture({ duration: 350, repeat: false })
       .onAction((_e: GestureEvent) => {
