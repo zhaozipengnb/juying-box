@@ -596,8 +596,11 @@ export struct PlayerPage {
       if (!this.seekedResume && this.ep !== null) {
         this.seekedResume = true;
         const m = this.detail?.movie;
+        const nameForLookup = (m !== null && m !== undefined && m.name !== '') ? m.name : this.movieName;
+        // 先按本源精确断点;换源/换线路后键全变,再按片名+集号跨源回退
         const resume = (m !== null && m !== undefined)
-          ? this.ph.resumePosition(this.siteKey, m.vodId, this.ep.url) : 0;
+          ? (this.ph.resumePosition(this.siteKey, m.vodId, this.ep.url)
+            || this.ph.resumePositionByName(nameForLookup, this.ep.name, this.epIdx)) : 0;
         if (resume > 0) { this.engine.seek(resume); }
       }
     };

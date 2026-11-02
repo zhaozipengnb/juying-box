@@ -85,6 +85,30 @@ export class PlayHistory {
     return r.positionSec > 5 ? r.positionSec : 0;
   }
 
+  // 集名中的集号("第03集"/"EP3"→3;无名内数字返回 -1)
+  private epNumberOf(name: string): number {
+    const m = name.match(/\d+/);
+    return m === null ? -1 : parseInt(m[0]);
+  }
+
+  // 跨源断点:换源/换线路后 siteKey/vodId/epUrl 全变,resumePosition 必然落空——
+  // 按片名+集号(集名无数字则按集名/集序)在全部记录里找最近一条,让换源也能续播
+  resumePositionByName(movieName: string, epName: string, epIdx: number): number {
+    const num = this.epNumberOf(epName);
+    let best: PlayRecord | undefined = undefined;
+    for (const r of this.records) {
+      if (r.movieName !== movieName) { continue; }
+      const hit = num >= 0
+        ? this.epNumberOf(r.epName) === num
+        : (r.epName === epName || r.epIdx === epIdx);
+      if (!hit) { continue; }
+      if (best === undefined || r.updatedAt > best.updatedAt) { best = r; }
+    }
+    if (best === undefined) { return 0; }
+    if (best.durationSec > 0 && best.positionSec >= best.durationSec - 10) { return 0; }  // 已看完
+    return best.positionSec > 5 ? best.positionSec : 0;
+  }
+
   // 详情页提示：上次看到第几集（无记录返回 ''）
   lastWatchLabel(siteKey: string, vodId: string): string {
     const r = this.records.find((x: PlayRecord): boolean => x.siteKey === siteKey && x.vodId === vodId);
