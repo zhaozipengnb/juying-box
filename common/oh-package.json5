@@ -1,6 +1,6 @@
 {
   "name": "common",
   "version": "1.0.0",
-  "description": "OK影视 TVBox 协议模型与纯逻辑",
+  "description": " 聚合源协议模型与纯逻辑",
   "main": "Index.ets"
 }

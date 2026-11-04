@@ -1,5 +1,5 @@
 #!/bin/bash
-# TVBox JAR 爬虫代理服务器 启动脚本
+# 外部 JAR 爬虫代理服务器 启动脚本
 # 用法: ./run.sh <configUrl> [port]
 # 示例: ./run.sh https://700sjro44343.vicp.fun/eggp/0211/tv.json 9978
 

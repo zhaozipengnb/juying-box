@@ -1,4 +1,4 @@
-// 个性化设置：独立于订阅持久化（okvideo_settings 偏好文件），SettingsPage 修改后调用 save() 落盘。
+// 个性化设置：独立于订阅持久化（juying_settings 偏好文件），SettingsPage 修改后调用 save() 落盘。
 // 消费点：播放倍速/长按倍速（PlayerPage）、图片尺寸（MovieGrid 列数）、聚合搜索/显示站源/站源筛选
 // （HomePage 搜索链路）、无痕（搜索词不保留）、壁纸（首页背景）、缓存清理（设置页）。
 // AI去广告为预留开关（生效点后续接入，UI 已标注）。内置下载已接入 DownloadManager。
@@ -8,7 +8,7 @@ export type PicSize = 'small' | 'normal' | 'large';
 export type WallpaperKind = 'default' | 'dark' | 'blue' | 'green';
 export type VideoFit = 'contain' | 'cover' | 'fill';
 
-const KEY_SETTINGS = 'okvideo_settings_json';
+const KEY_SETTINGS = 'juying_settings_json';
 
 // 播放倍速档位（起播默认与长按共用取值域）
 export const SPEED_OPTIONS: number[] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];

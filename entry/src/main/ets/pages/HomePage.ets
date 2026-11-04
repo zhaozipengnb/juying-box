@@ -351,7 +351,7 @@ export struct HomePage {
       .width('100%')
       .padding({ left: 12, right: 12, top: 12 })
 
-      // 分类横滑胶囊（FongMi 风格：圆角药丸，选中实色）。
+      // 分类横滑胶囊（主流影视App风格：圆角药丸，选中实色）。
       // 首位是「首页」伪分类=源推荐流(catIdx 0)；真实分类从下标 1 起——
       // 换源后 loadHome 显示推荐流时高亮「首页」，选中态与内容才一致
       if (this.cats.length > 0) {

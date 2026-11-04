@@ -1,7 +1,7 @@
 // URL 历史：基于 KVStore 持久化，按类型（vod/live/wallpaper）分别存储。
 import { KVStore } from './ConfigStore';
 
-const KEY_URL_HISTORY = 'okvideo_url_history';
+const KEY_URL_HISTORY = 'juying_url_history';
 const MAX_HISTORY = 10;
 
 interface UrlHistoryData {

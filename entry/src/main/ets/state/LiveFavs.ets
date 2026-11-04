@@ -1,7 +1,7 @@
 // 直播频道收藏（KVStore 持久化），LivePage 星标与收藏分组共用。
 import { KVStore } from './ConfigStore';
 
-const KEY = 'okvideo_live_favs';
+const KEY = 'juying_live_favs';
 
 @ObservedV2
 export class LiveFavs {

@@ -14,8 +14,9 @@
 **/.hvigor
 **/.cxx
 .DS_Store
-/OKVideo
+/.claude/
 /.codegenie
 /.final_state.jpeg
 /.claude/settings.local.json
 /v.log
+**/.preview

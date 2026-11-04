@@ -1,4 +1,4 @@
-package com.okvideo.proxy;
+package com.juying.proxy;
 
 import org.json.*;
 import java.io.*;
@@ -45,7 +45,7 @@ public class SpiderLoader {
     static void downloadAndLoad(String jarUrl, String name) throws Exception {
         System.out.println("[Spider] 下载 JAR: " + jarUrl);
         byte[] jarData = httpGetBytes(jarUrl);
-        Path tmpDir = Paths.get(System.getProperty("java.io.tmpdir"), "okvideo_proxy");
+        Path tmpDir = Paths.get(System.getProperty("java.io.tmpdir"), "juying_proxy");
         Files.createDirectories(tmpDir);
 
         // 保存原始 JAR (含 classes.dex)
@@ -244,7 +244,7 @@ public class SpiderLoader {
     }
 
     static byte[] httpGetBytes(String url) throws Exception {
-        // TVBox 生态 jar 引用常带 ;md5;xxx 校验后缀与 ./ 相对路径：剥后缀、对配置 URL 绝对化
+        // 聚合协议生态 jar 引用常带 ;md5;xxx 校验后缀与 ./ 相对路径：剥后缀、对配置 URL 绝对化
         String u = url;
         int semi = u.indexOf(';');
         if (semi > 0) { u = u.substring(0, semi); }

@@ -59,7 +59,7 @@ package android.content;
 import java.io.File;
 public class Context {
     public File getCacheDir() { return new File(System.getProperty("java.io.tmpdir")); }
-    public File getFilesDir() { return new File(System.getProperty("user.home"), "okvideo_files"); }
+    public File getFilesDir() { return new File(System.getProperty("user.home"), "juying_files"); }
     public ClassLoader getClassLoader() { return Context.class.getClassLoader(); }
     public String getPackageName() { return "com.github.tvbox.osc"; }
     public SharedPreferences getSharedPreferences(String name, int mode) { return new SharedPreferences(); }

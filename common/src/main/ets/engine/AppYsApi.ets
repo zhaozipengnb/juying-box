@@ -7,7 +7,7 @@
  *   搜索   GET {api}/index.php/api/v2/home/search?key={key}&page=1  → { list:[vod...] }
  *   播放串 vod_play_from / vod_play_url 以 $$$ 分线路、# 分集、名称$地址（与 MacCMS 一致）
  */
-import { SiteConfig } from '../model/TvboxModels';
+import { SiteConfig } from '../model/AggModels';
 import { HomeContent, PageResult, MovieDetail, Movie, Category, Episode, PlayLine } from '../model/VideoModels';
 import { FetchText, SiteDriver } from './SiteDriver';
 import { toStr, toInt } from '../util/TypeUtil';

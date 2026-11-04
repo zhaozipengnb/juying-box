@@ -1,7 +1,7 @@
-# TVBox JAR 爬虫代理服务器
+# 外部 JAR 爬虫代理服务器
 
 ## 用途
-执行 TVBox 订阅中的 `csp_*` Java JAR 爬虫，为鸿蒙 App 提供代理服务。
+执行 外部订阅中的 `csp_*` Java JAR 爬虫，为鸿蒙 App 提供代理服务。
 
 ## 前置条件
 - JDK 17+

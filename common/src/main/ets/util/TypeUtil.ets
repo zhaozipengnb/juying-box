@@ -1,4 +1,4 @@
-// 类型归一工具：TVBox/CMS 响应字段宽松取值（string/number/boolean/undefined → 强类型）。
+// 类型归一工具：聚合源/CMS 响应字段宽松取值（string/number/boolean/undefined → 强类型）。
 // 注：首参为 Object|undefined 而非 string|number|boolean|undefined，
 // 因 Record<string, Object> 的索引访问返回 Object，原联合类型无法直接接收（ArkTS 严格模式）；
 // 放宽后对所有调用方向后兼容，运行时行为与计划一致。

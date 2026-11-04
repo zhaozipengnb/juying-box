@@ -2,7 +2,7 @@
 import { describe, it, expect } from '@ohos/hypium';
 import { AppState } from '../main/ets/state/AppState';
 import { ConfigStore, KVStore, serializeConfig } from '../main/ets/state/ConfigStore';
-import { decodeConfigContent, TvboxConfig, SiteConfig, CmsJsonApi, ProxyDriver } from 'common';
+import { decodeConfigContent, AggConfig, SiteConfig, CmsJsonApi, ProxyDriver } from 'common';
 import { DrpyDriver } from '../main/ets/spider/DrpyDriver';
 import { AppSettings } from '../main/ets/state/AppSettings';
 
@@ -39,7 +39,7 @@ export default function appStateTest() {
       expect(ok).assertTrue();
       expect(app.phase === 'home').assertTrue();
       expect(app.config !== null).assertTrue();
-      expect((app.config as TvboxConfig).sites.length === 2).assertTrue();
+      expect((app.config as AggConfig).sites.length === 2).assertTrue();
       expect(app.currentSite?.key === 'a').assertTrue();
       expect(app.driver !== null).assertTrue();
     });
@@ -222,7 +222,7 @@ export default function appStateTest() {
       responses.set('https://sub.example/conf', stale);
       app.testFetchText = makeFakeFetch(responses);
       expect(await app.loadFromUrl('https://sub.example/conf')).assertTrue();
-      const keys = (app.config as TvboxConfig).sites.map((s: SiteConfig): string => s.key);
+      const keys = (app.config as AggConfig).sites.map((s: SiteConfig): string => s.key);
       expect(keys.indexOf('builtin_old') < 0).assertTrue();         // 旧规则引用被剥除
       expect(keys.indexOf('keep_runtime') >= 0).assertTrue();
       expect(keys.indexOf('keep_data') >= 0).assertTrue();

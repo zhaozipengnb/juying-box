@@ -9,7 +9,7 @@
  *   播放串    <dl><dd flag="线路"><![CDATA[名称$地址#名称$地址]]></dd></dl>
  * api 可能自带 query（如 …/at/xml/?ac=list），拼参数前剥掉；尾 '/' 有无皆可。
  */
-import { SiteConfig } from '../model/TvboxModels';
+import { SiteConfig } from '../model/AggModels';
 import { HomeContent, PageResult, MovieDetail, Movie, Category, Episode, PlayLine } from '../model/VideoModels';
 import { FetchText, SiteDriver } from './SiteDriver';
 import { CmsJsonApi } from './CmsJsonApi';

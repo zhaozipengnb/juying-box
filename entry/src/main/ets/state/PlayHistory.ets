@@ -19,7 +19,7 @@ export interface PlayRecord {
   updatedAt: number;
 }
 
-const KEY = 'okvideo_play_history';
+const KEY = 'juying_play_history';
 const MAX = 100;
 
 @ObservedV2

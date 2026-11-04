@@ -1,5 +1,5 @@
 // 配置持久化：preferences 依赖以 KVStore 接口注入，纯序列化逻辑可本地单测
-import { TvboxConfig } from 'common';
+import { AggConfig } from 'common';
 
 export interface KVStore {
   getSync(k: string): string | undefined;
@@ -12,10 +12,10 @@ export interface StoredConfig {
   configJson: string;
 }
 
-const KEY_CONFIG = 'okvideo_stored_config';
-const KEY_CURRENT_SITE = 'okvideo_current_site';
+const KEY_CONFIG = 'juying_stored_config';
+const KEY_CURRENT_SITE = 'juying_current_site';
 
-export function serializeConfig(url: string, config: TvboxConfig): string {
+export function serializeConfig(url: string, config: AggConfig): string {
   const stored: StoredConfig = { url: url, configJson: JSON.stringify(config) };
   return JSON.stringify(stored);
 }

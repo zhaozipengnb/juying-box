@@ -1,4 +1,4 @@
-package com.okvideo.proxy;
+package com.juying.proxy;
 
 import org.json.*;
 import java.io.*;
@@ -7,7 +7,7 @@ import java.nio.file.*;
 import java.util.*;
 
 /**
- * 加载 TVBox JSON 配置，提取 spider JAR URL 和站点列表。
+ * 加载聚合源 JSON 配置，提取 spider JAR URL 和站点列表。
  */
 public class ConfigLoader {
     static String spiderUrl = "";

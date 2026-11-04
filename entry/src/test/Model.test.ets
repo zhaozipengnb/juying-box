@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { toInt, parseTvboxConfig, siteEngine, isSiteSupported, resolveUrl, resolveSiteUrls, decodeDataUrl,
-  SiteConfig, TvboxConfig, tryConvertCspToCms } from 'common';
+import { toInt, parseAggConfig, siteEngine, isSiteSupported, resolveUrl, resolveSiteUrls, decodeDataUrl,
+  SiteConfig, AggConfig, tryConvertCspToCms } from 'common';
 
 // 便捷构造站点（仅填分类函数关注的字段，其余给默认值）
 function mkSite(type: number, api: string): SiteConfig {
@@ -19,7 +19,7 @@ export default function modelTest() {
       expect(toInt(2, 9)).assertEqual(2);
       expect(toInt(undefined, 9)).assertEqual(9);
     });
-    it('parseTvbox_norm', 0, () => {
+    it('parseAgg_norm', 0, () => {
       // ArkTS 严格模式禁用未类型化嵌套字面量，fixture 用 JSON 字符串构造
       const raw = JSON.parse('{'
         + '"spider":"http://a/b.jpg;md5;abc",'
@@ -27,7 +27,7 @@ export default function modelTest() {
         + '"lives":[{"name":"直播1","type":0,"url":"http://x.m3u"}],'
         + '"parses":[{"name":"p","type":0,"url":"http://p?url="}]'
         + '}') as Record<string, Object>;
-      const cfg = parseTvboxConfig(raw);
+      const cfg = parseAggConfig(raw);
       expect(cfg.spider).assertEqual('http://a/b.jpg;md5;abc');
       expect(cfg.sites.length).assertEqual(1);
       expect(cfg.sites[0].type).assertEqual(3);
@@ -54,7 +54,7 @@ export default function modelTest() {
       expect(siteEngine(mkSite(3, 'csp_Gz360')) === 'proxy').assertTrue();
       expect(siteEngine(mkSite(3, 'csp_Douban')) === 'proxy').assertTrue();
       expect(siteEngine(mkSite(3, '')) === 'proxy').assertTrue();
-      // type 0 → XML 采集（TVBox 约定）；type 4 → AppYs；其余类型 → unknown
+      // type 0 → XML 采集（聚合协议约定）；type 4 → AppYs；其余类型 → unknown
       expect(siteEngine(mkSite(0, 'https://a.example/api.php/provide/vod/at/xml')) === 'xml').assertTrue();
       expect(isSiteSupported(mkSite(0, 'https://a.example/api.php/provide/vod/at/xml'))).assertTrue();
       expect(siteEngine(mkSite(4, 'https://a.example/api')) === 'appys').assertTrue();
@@ -105,7 +105,7 @@ export default function modelTest() {
         + '{"key":"abs","name":"绝对","type":1,"api":"https://c.example/api"},'
         + '{"key":"objext","name":"对象ext","type":3,"api":"https://d.example/x.js","ext":"{\\"url\\":\\"./rel/\\"}"}'
         + ']}') as Record<string, Object>;
-      const cfg = parseTvboxConfig(raw);
+      const cfg = parseAggConfig(raw);
       resolveSiteUrls(cfg, 'https://sub.example/box/8.10.json');
       expect(cfg.sites[0].api).assertEqual('https://sub.example/box/drpy_libs/drpy2.min.js');
       expect(cfg.sites[0].ext).assertEqual('https://sub.example/box/drpy_js/北川.js');

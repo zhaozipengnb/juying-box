@@ -1,5 +1,5 @@
 /**
- * XbpqDriver：XBPQ 网页规则引擎——把 TVBox 生态的 XBPQ JSON 规则(ext 内嵌)跑成本地引擎。
+ * XbpqDriver：XBPQ 网页规则引擎——把 聚合协议生态的 XBPQ JSON 规则(ext 内嵌)跑成本地引擎。
  * 规则 DSL（`A&&B` = 取 A 之后到 B 之前的片段）：
  *   分类: 名称$id#…（'||' 同 '#'）  分类url: {cateId}/{catePg}/{area}/{by}/{class}/{lang}/{year}/{letter} 模板
  *   列表: 数组 → 每项套 标题/图片/副标题/链接
@@ -11,7 +11,7 @@
  * 对真实页面现场验证取第一个命中的，并缓存到实例规则表。
  * 兼容点：api 的 `[备用地址]` 后缀剥掉；模板占位支持 %7Bxx%7D；请求头 User-Agent$MOBILE_UA。
  */
-import { SiteConfig } from '../model/TvboxModels';
+import { SiteConfig } from '../model/AggModels';
 import { HomeContent, PageResult, MovieDetail, Movie, Category, Episode, PlayLine } from '../model/VideoModels';
 import { FetchText, SiteDriver } from './SiteDriver';
 

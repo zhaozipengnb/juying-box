@@ -1,4 +1,4 @@
-// 聚合源包导入助手：系统文件选择器选聚合源 JSON（{sites:[...]} 或完整 TVBox 配置，
+// 聚合源包导入助手：系统文件选择器选聚合源 JSON（{sites:[...]} 或完整 聚合源配置，
 // 规则可内嵌 data: URL）→ 读回文本 → AppState 装载。供首页空态引导与设置页共用。
 import { picker } from '@kit.CoreFileKit';
 import fs from '@ohos.file.fs';

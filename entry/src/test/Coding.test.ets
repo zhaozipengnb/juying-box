@@ -4,7 +4,7 @@ import { utf8Encode, utf8Decode, b64encode, b64decode, stripNonB64 } from 'commo
 export default function codingTest() {
   describe('CodingTest', () => {
     it('utf8_roundtrip_chinese', 0, () => {
-      const s = '饭太硬订阅站长┃不卡';
+      const s = '测试订阅站┃不卡';
       expect(utf8Decode(utf8Encode(s))).assertEqual(s);
     });
     it('b64_roundtrip', 0, () => {

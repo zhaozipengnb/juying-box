@@ -55,7 +55,7 @@ export default function appSettingsTest() {
     });
     it('corrupt_payload_falls_back_to_defaults', 0, () => {
       const kv = new MemKV();
-      kv.putSync('okvideo_settings_json', '{not json');
+      kv.putSync('juying_settings_json', '{not json');
       const s = new AppSettings();
       s.attach(kv);
       expect(s.picSize === 'normal').assertTrue();
@@ -63,7 +63,7 @@ export default function appSettingsTest() {
     });
     it('invalid_values_ignored', 0, () => {
       const kv = new MemKV();
-      kv.putSync('okvideo_settings_json',
+      kv.putSync('juying_settings_json',
         '{"picSize":"huge","playSpeed":7,"longPressSpeed":9,"wallpaper":"pink","incognito":"yes"}');
       const s = new AppSettings();
       s.attach(kv);

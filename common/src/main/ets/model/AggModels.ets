@@ -1,4 +1,4 @@
-// TVBox 配置模型与解析：字段宽松取值 + ext 统一为 string（object 形态 JSON 序列化为字符串，Spider 期再解）。
+// 聚合源配置模型与解析：字段宽松取值 + ext 统一为 string（object 形态 JSON 序列化为字符串，Spider 期再解）。
 import { toInt, toStr } from '../util/TypeUtil';
 import { resolveUrl } from '../util/UrlUtil';
 
@@ -10,14 +10,14 @@ export interface SiteConfig {
 }
 export interface LiveGroupConfig { name: string; type: string; url: string; ua: string; playerType: number }
 export interface ParseConfig { name: string; type: string; url: string; ext: string }
-export interface TvboxConfig {
+export interface AggConfig {
   spider: string; wallpaper: string;
   sites: SiteConfig[]; lives: LiveGroupConfig[]; parses: ParseConfig[];
 }
 
-// 站点引擎形态分类：cms=type1 CMS JSON；xml=type0 MacCMS XML 采集（TVBox 约定 type 0 即 XML）；
+// 站点引擎形态分类：cms=type1 CMS JSON；xml=type0 MacCMS XML 采集（聚合协议约定 type 0 即 XML）；
 // js=type3 drpy JS 插件（api 为 http(s) URL，.py 结尾的 Python 规则除外——JS 运行时跑不了，判 unknown）；
-// jar=type3 TVBox JAR spider（api 为 csp_* 类名等非 URL 形态，实体在配置 spider/jar 指向的 Android JAR 内，
+// jar=type3 外部 JAR 爬虫（api 为 csp_* 类名等非 URL 形态，实体在配置 spider/jar 指向的 Android JAR 内，
 // JS 引擎无法执行）；unknown=其余类型。type3 判据是「api 是否为 http(s) URL」而非 csp_ 前缀。
 export type SiteEngine = 'cms' | 'xml' | 'js' | 'appys' | 'proxy' | 'jar' | 'unknown';
 
@@ -95,7 +95,7 @@ export function tryConvertCspToCms(site: SiteConfig): boolean {
   return true;
 }
 
-export function resolveSiteUrls(config: TvboxConfig, subUrl: string): void {
+export function resolveSiteUrls(config: AggConfig, subUrl: string): void {
   let converted = 0;
   for (const s of config.sites) {
     if (subUrl.trim() !== '') {
@@ -115,7 +115,7 @@ export function resolveSiteUrls(config: TvboxConfig, subUrl: string): void {
   }
 }
 
-export function parseTvboxConfig(raw: Record<string, Object>): TvboxConfig {
+export function parseAggConfig(raw: Record<string, Object>): AggConfig {
   const sitesRaw = (raw['sites'] ?? []) as Record<string, Object>[];
   const livesRaw = (raw['lives'] ?? []) as Record<string, Object>[];
   const parsesRaw = (raw['parses'] ?? []) as Record<string, Object>[];

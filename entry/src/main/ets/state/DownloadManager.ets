@@ -26,7 +26,7 @@ export class DownloadItem {
   siteKey: string = '';        // 来源站点
 }
 
-const KEY_DOWNLOADS = 'okvideo_downloads_json';
+const KEY_DOWNLOADS = 'juying_downloads_json';
 const DOMAIN = 0x0001;
 
 @ObservedV2

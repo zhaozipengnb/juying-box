@@ -2,7 +2,7 @@
 // 消费点：HomePage 搜索栏下方展示历史标签、SettingsPage 清除搜索历史。
 import { KVStore } from './ConfigStore';
 
-const KEY_SEARCH_HISTORY = 'okvideo_search_history';
+const KEY_SEARCH_HISTORY = 'juying_search_history';
 const MAX_HISTORY = 20;
 
 export class SearchHistory {

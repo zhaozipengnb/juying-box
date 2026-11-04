@@ -1,7 +1,7 @@
 /**
  * PlayUrlResolver：起播前把「播放页地址」解析成媒体直链，交给 app 内置播放器。
  *
- * TVBox 生态的 vod_play_url 有两类：
+ * 聚合协议生态的 vod_play_url 有两类：
  *   1. 媒体直链（m3u8/mp4…）——可直接交给 Video；
  *   2. 网页播放页——MacCMS 的 /play/xxx-1-1.html、/share/<id>，解析接口 https://jx.xx/?url=…，
  *      真实地址藏在页面里的 player_aaaa 配置或 JS 变量里。

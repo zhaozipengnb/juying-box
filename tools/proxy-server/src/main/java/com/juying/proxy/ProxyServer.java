@@ -1,4 +1,4 @@
-package com.okvideo.proxy;
+package com.juying.proxy;
 
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
@@ -10,7 +10,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * TVBox JAR 爬虫代理服务器。
+ * 外部 JAR 爬虫代理服务器。
  * 用法: java -jar proxy-server.jar <configUrl> [port]
  * 示例: java -jar proxy-server.jar https://700sjro44343.vicp.fun/eggp/0211/tv.json 9978
  *

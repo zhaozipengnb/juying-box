@@ -74,8 +74,8 @@ globalThis.req = function (url, obj) {
   return { content: r.content, headers: r.headers };
 };
 
-// ---------- TVBox 宿主内建：pdfh/pdfa/pd（jsoup 链式选择器）----------
-// drpy2 的 defaultParser={pdfh,pdfa,pd} 直接引用这三个全局（TVBox QuickJS 内建），
+// ---------- 宿主内建：pdfh/pdfa/pd（jsoup 链式选择器）----------
+// drpy2 的 defaultParser={pdfh,pdfa,pd} 直接引用这三个全局（宿主 QuickJS 内建），
 // 语义基准为 hipy htmlParser.py（drpy3 移植对接指南 §4.2），用打包的 cheerio 实现。
 // 选择器语法：'&&' 分段，最后一段为取值器（Text/Html/属性名，支持 '||' 属性回退），
 // 段内支持 tag/.class/#id 与 :eq/:lt/:gt/:first/:last/:not/:contains/--剔除。

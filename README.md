@@ -6,13 +6,13 @@
 
 ## ✨ 功能特性
 
-- **多源聚合**：支持导入 TVBox 系订阅配置（含 JPEG 伪装 → 去盐 → Base64 → JSON5 四层解码链），站点可自由增删管理
+- **多源聚合**：支持导入聚合源订阅配置（含 JPEG 伪装 → 去盐 → Base64 → JSON5 四层解码链），站点可自由增删管理
 - **多协议站点引擎**：
   - CMS 标准接口（JSON API / XML CMS）
   - AppYs（苹果CMS V10 应用型接口）
   - XBPQ 规则网页站
-  - drpy JS 插件（type 3，Web 容器内运行 drpy 运行时）
-  - TVBox `csp_*` JAR 爬虫（通过本地 JAR 代理服务器支持，见下文）
+  - JS 插件（type 3，Web 容器内运行 JS 爬虫运行时）
+  - 外部 `csp_*` JAR 爬虫（通过本地 JAR 代理服务器支持，见下文）
 - **播放器**：
   - 全屏 / 影院模式，屏幕跟随手机旋转
   - 左右半屏竖滑调节亮度 / 音量
@@ -35,7 +35,7 @@
 | UI | ArkUI（声明式） |
 | SDK | modelVersion / compile / compatible / target 均为 26.0.0 |
 | IDE | DevEco Studio 6.x |
-| 运行时 | Web 容器承载 drpy JS 爬虫运行时 |
+| 运行时 | Web 容器承载 JS 爬虫运行时 |
 | 辅助工具 | Java 17（JAR 爬虫代理服务器） |
 
 ## 📁 项目结构
@@ -47,18 +47,17 @@ juying-app/
 │   └── src/main/ets/
 │       ├── pages/               # 页面：首页/搜索/详情/播放/直播/下载/历史/设置/站点管理
 │       ├── components/          # 通用组件：底部导航、影片网格、选项器等
-│       ├── engine -> net/spider # 见 common 引擎层
-│       ├── net/                 # 网络层：HttpClient、HLS广告过滤服务、嗅探代理、drpy CORS 代理
-│       ├── spider/              # drpy 驱动与 Web 桥（IDrpyBridge 契约）
+│       ├── net/                 # 网络层：HttpClient、HLS广告过滤服务、嗅探代理、JS 爬虫 CORS 代理
+│       ├── spider/              # JS 爬虫驱动与 Web 桥（IDrpyBridge 契约）
 │       └── state/               # 全局状态：订阅导入、收藏/历史/下载/设置、KV 存储
 ├── common/                      # 公共库模块
 │   └── src/main/ets/
 │       ├── engine/              # 站点引擎：SiteDriver、CmsJsonApi、XmlCmsDriver、AppYsApi、
 │       │                        #   XbpqDriver、ProxyDriver、PlayUrlResolver
-│       ├── decode/              # ConfigDecoder：TVBox 订阅四层解码链
-│       ├── model/               # TVBox / 影片数据模型
+│       ├── decode/              # ConfigDecoder：外部订阅四层解码链
+│       ├── model/               # 聚合源 / 影片数据模型
 │       └── util/                # HLS 广告过滤、直播源解析、编解码等工具
-├── tools/proxy-server/          # TVBox JAR 爬虫代理服务器（Java，独立运行）
+├── tools/proxy-server/          # 外部 JAR 爬虫代理服务器（Java，独立运行）
 └── hvigor/                      # 构建工具配置
 ```
 
@@ -83,7 +82,7 @@ git clone https://gitee.com/ZKingp/juyuan-box.git
 
 ### JAR 爬虫代理（可选）
 
-TVBox 订阅中的 `csp_*` Java 爬虫站点需要本地代理服务器执行，详细说明见 [`tools/proxy-server/README.md`](tools/proxy-server/README.md)：
+订阅中的 `csp_*` Java 爬虫站点需要本地代理服务器执行，详细说明见 [`tools/proxy-server/README.md`](tools/proxy-server/README.md)：
 
 ```bash
 cd tools/proxy-server
@@ -95,7 +94,7 @@ java -jar build/libs/proxy-server.jar <订阅地址> [端口]
 
 ## 📖 使用说明
 
-1. 首次使用请在 App 内导入自己的订阅配置（支持 TVBox 系订阅格式）
+1. 首次使用请在 App 内导入自己的订阅配置（支持聚合源订阅格式）
 2. 在「站点管理」中按需启用/停用站点
 3. 底部导航：首页（点播）/ 直播 / 设置
 4. 播放页支持换源、投屏、下载、收藏等操作

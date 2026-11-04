@@ -1,5 +1,5 @@
 // 全局状态（V2）：配置 + 当前站点 + 引擎实例。测试可注入 testFetchText 替代真网络。
-import { TvboxConfig, SiteConfig, SiteDriver, CmsJsonApi, AppYsApi, XmlCmsDriver, ProxyDriver, FetchText, decodeConfigContent,
+import { AggConfig, SiteConfig, SiteDriver, CmsJsonApi, AppYsApi, XmlCmsDriver, ProxyDriver, FetchText, decodeConfigContent,
   siteEngine, isSiteSupported, resolveSiteUrls, LiveGroupConfig, XbpqDriver, isXbpqSite } from 'common';
 import { httpFetch } from '../net/HttpClient';
 import { WebFetchBridge, isCfChallenge } from '../net/WebFetchBridge';
@@ -23,7 +23,7 @@ function errText(e: Object): string {
 export class AppState {
   static instance: AppState = new AppState();
   @Trace phase: AppPhase = 'initing';
-  @Trace config: TvboxConfig | null = null;
+  @Trace config: AggConfig | null = null;
   @Trace currentSite: SiteConfig | null = null;
   @Trace driver: SiteDriver | null = null;
   @Trace subUrl: string = '';
@@ -56,7 +56,7 @@ export class AppState {
 
   // 站点引擎路由：type 3 且 api 为 http(s) URL（drpy JS 插件）→ DrpyDriver（Web 容器引擎）；
   // type 1（CMS JSON）→ CmsJsonApi；type 0（MacCMS XML 采集）→ XmlCmsDriver；
-  // type 3 非 URL（csp_* 类名 = TVBox JAR spider，实体在 Android JAR 内，不可当 URL 下载）及其他类型不支持，
+  // type 3 非 URL（csp_* 类名 = 外部 JAR 爬虫，实体在 Android JAR 内，不可当 URL 下载）及其他类型不支持，
   // 不建 driver（首站选择/switchSite 均经 isSiteSupported 过滤，此处兜底）。
   private buildDriver(site: SiteConfig): void {
     const engine = siteEngine(site);
@@ -85,7 +85,7 @@ export class AppState {
   }
 
   // 首个受引擎支持的站点（订阅可能是纯 JAR 型，首站未必可用）
-  private firstSupportedSite(config: TvboxConfig): SiteConfig | null {
+  private firstSupportedSite(config: AggConfig): SiteConfig | null {
     // 优先非代理源（CMS/XML/JS），代理源仅在没有其他选择时才用；禁用站点跳过
     for (const s of config.sites) {
       if (siteEngine(s) !== 'proxy' && isSiteSupported(s) && this.canDrive(s) && !AppSettings.instance.isSiteDisabled(s.key)) { return s; }
@@ -140,7 +140,7 @@ export class AppState {
   }
 
   // 装配配置后选定起始站点：优先上次记住的 siteKey（存在且受支持），否则首个受支持站
-  private pickInitialSite(config: TvboxConfig): void {
+  private pickInitialSite(config: AggConfig): void {
     const remembered: string = this.store?.loadCurrentSite() ?? '';
     if (remembered !== '') {
       for (const s of config.sites) {
@@ -157,7 +157,7 @@ export class AppState {
 
   // 装配一份配置进 home 态：合并聚合源包 → 校验有受支持站点 → 选首站建 driver。
   // 返回 false 时不动 phase（调用方展示 errMsg；订阅加载失败仍停留在发起页面）。
-  private applyConfig(config: TvboxConfig): boolean {
+  private applyConfig(config: AggConfig): boolean {
     this.stripLegacyBuiltinRefs(config);
     if (config.sites.length === 0) { return false; }
     const usableCount = config.sites.filter((s: SiteConfig): boolean => isSiteSupported(s)).length;
@@ -172,8 +172,8 @@ export class AppState {
     return true;
   }
 
-  // TVBox 语义：配置/源包声明了 lives 就采纳首个直播源（导入时应用一次，日常改动仍走直播设置）
-  private applyLives(config: TvboxConfig): void {
+  // 聚合源语义：配置/源包声明了 lives 就采纳首个直播源（导入时应用一次，日常改动仍走直播设置）
+  private applyLives(config: AggConfig): void {
     const first = config.lives.find((l: LiveGroupConfig): boolean => l.url.trim() !== '');
     if (first === undefined) { return; }
     if (AppSettings.instance.liveUrl !== first.url) {
@@ -288,7 +288,7 @@ export class AppState {
 
   // ---------- 本地源包（点播弹窗 📁 导入，替换当前互联网订阅源；与订阅二选一） ----------
 
-  // 导入聚合源包文本（TVBox 配置格式 {sites:[...]} 或完整配置；规则可内嵌 data: URL）。
+  // 导入聚合源包文本（聚合源配置格式 {sites:[...]} 或完整配置；规则可内嵌 data: URL）。
   // 语义：整体替换当前源（覆盖此前导入的源包或互联网订阅），subUrl 置空以本地源包形态持久化。
   // 返回是否成功；失败置 errMsg 由调用方提示。
   loadFromPackText(text: string): boolean {
@@ -315,7 +315,7 @@ export class AppState {
   }
 
   // 迁移：旧版本随包内置的站点（ext 指向已删除的 rawfile 规则）在配置装载时剥除
-  private stripLegacyBuiltinRefs(config: TvboxConfig): void {
+  private stripLegacyBuiltinRefs(config: AggConfig): void {
     const before = config.sites.length;
     config.sites = config.sites.filter((s: SiteConfig): boolean =>
       !(s.ext.startsWith('builtin://') && s.ext !== 'builtin://drpy2.min.js'));

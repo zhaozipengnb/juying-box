@@ -12,7 +12,7 @@ export interface FavoriteItem {
   addedAt: number;
 }
 
-const KEY = 'okvideo_favorites';
+const KEY = 'juying_favorites';
 
 @ObservedV2
 export class Favorites {

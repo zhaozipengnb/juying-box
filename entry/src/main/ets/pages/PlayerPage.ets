@@ -184,7 +184,7 @@ export struct PlayerPage {
     if (resolvedEp !== null && isDirectMedia(resolvedEp.url)) {
       target = resolvedEp.url;
     } else if (resolvedEp !== null && resolvedEp.url !== '' && resolvedEp.parse === '1') {
-      // play 结果 parse=1:url 为网页地址,需嗅探真实流(FongMi 嗅探能力对齐)
+      // play 结果 parse=1:url 为网页地址,需嗅探真实流(主流播放器嗅探能力对齐)
       target = resolvedEp.url;
       needSniff = true;
     } else {
@@ -215,7 +215,7 @@ export struct PlayerPage {
     this.resolving = false;
   }
 
-  // 嗅探:隐藏 Web 加载播放页,监听网络请求抓媒体直链(对齐 FongMi 嗅探)
+  // 嗅探:隐藏 Web 加载播放页,监听网络请求抓媒体直链(对齐主流播放器嗅探)
   private startSniff(pageUrl: string): void {
     this.sniffReferer = pageUrl;
     this.sniffUrl = pageUrl;
@@ -342,7 +342,7 @@ export struct PlayerPage {
       this.epIdx = ei >= 0 ? ei : 0;
       this.ep = eps[this.epIdx] ?? null;
       this.playUrl = '';
-      // 对齐 FongMi:换线有提示(挖掘自 OK影视 onErrorEvent 降级链)
+      // 对齐主流播放器:换线有提示(onErrorEvent 降级链)
       this.getUIContext().getPromptAction().showToast({
         message: `正在切换线路至 ${next + 1}/${this.lines.length}:${this.lines[next].from}`
       });

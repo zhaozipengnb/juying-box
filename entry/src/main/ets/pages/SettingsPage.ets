@@ -1,4 +1,4 @@
-// 设置页（FongMi 格式）：三张 URL 卡（点播/直播/壁纸）+ 播放设置/个性设置入口行
+// 设置页（主流影视App格式）：三张 URL 卡（点播/直播/壁纸）+ 播放设置/个性设置入口行
 // + Proxy/DoH/缓存/版本/关于 值行；播放与个性配置收拢在二级页（PlaySettings/PersonSettings）。
 // 个性化设置即改即存（AppSettings.save），返回首页后由各消费点读取生效。
 import { AppState } from '../state/AppState';
@@ -189,14 +189,14 @@ export struct SettingsPage {
   }
 
   // ---------- 备份 ----------
-  // 导出：okvideo_settings 与 okvideo_config 偏好合并写入 filesDir/backups/okvideo_backup.json
+  // 导出：juying_settings 与 juying_config 偏好合并写入 filesDir/backups/juying_backup.json
   private exportBackup(): void {
     try {
       this.settings.save();   // 先确保最新设置落盘
       const ctx = getContext(this) as common.UIAbilityContext;
       const dir = ctx.filesDir + '/backups';
       if (!fs.accessSync(dir)) { fs.mkdirSync(dir); }
-      const path = dir + '/okvideo_backup.json';
+      const path = dir + '/juying_backup.json';
       interface BackupPayload { settingsJson: string; exportedAt: string; }
       const payload: BackupPayload = {
         settingsJson: this.settings.toJson(),
@@ -228,7 +228,7 @@ export struct SettingsPage {
     }
   }
 
-  // 粘贴导入：剪贴板内容按优先级解析——本应用备份 → TVBox 配置 → 订阅 URL
+  // 粘贴导入：剪贴板内容按优先级解析——本应用备份 → 聚合源配置 → 订阅 URL
   private pasteImport(): void {
     pasteboard.getSystemPasteboard().getData().then((pd: pasteboard.PasteData) => {
       const text = pd.getPrimaryText().trim();

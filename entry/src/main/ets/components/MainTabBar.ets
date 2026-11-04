@@ -1,5 +1,5 @@
 // 底部主导航栏：首页/直播/设置 三页共享（手机/平板）。
-// 对齐 OK影视 模板：纯图标、无文字，当前项白色胶囊高亮；TV 不渲染（build 空）。
+// 对齐 主流影视App模板：纯图标、无文字，当前项白色胶囊高亮；TV 不渲染（build 空）。
 // 直播/设置仍走 Nav 路由栈：回首页清栈到栈底，返回键行为与 tab 直觉一致。
 import { Nav } from '../nav/Nav';
 import { deviceInfo } from '@kit.BasicServicesKit';

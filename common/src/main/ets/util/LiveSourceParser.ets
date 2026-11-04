@@ -9,7 +9,7 @@
 export interface LiveChannel {
   name: string;
   url: string;
-  urls?: string[];   // 多线路（FongMi txt：频道名,url1#url2#url3；url = 首线路）
+  urls?: string[];   // 多线路（聚合协议 txt：频道名,url1#url2#url3；url = 首线路）
 }
 
 export interface LiveGroup {

@@ -1,11 +1,11 @@
 /**
  * ProxyDriver：将 csp_* JAR 爬虫请求转发到远程代理服务器执行。
- * 代理服务器需加载 TVBox JAR 并执行 Java 爬虫类，返回标准 JSON。
+ * 代理服务器需加载 外部 JAR 并执行 Java 爬虫类，返回标准 JSON。
  * API 格式：GET {proxyUrl}/api?site={key}&action={home|category|search|detail}&...
  */
 import { SiteDriver, FetchText } from './SiteDriver';
 import { HomeContent, PageResult, MovieDetail, Movie, Category, PlayLine, Episode } from '../model/VideoModels';
-import { SiteConfig } from '../model/TvboxModels';
+import { SiteConfig } from '../model/AggModels';
 
 export class ProxyDriver implements SiteDriver {
   private site: SiteConfig;

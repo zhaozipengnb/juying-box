@@ -7,7 +7,7 @@
  *   搜索   GET {api}?ac=detail&wd={key}（list 为空时退 ?ac=videolist&wd={key}）
  *   播放串 vod_play_from / vod_play_url 以 $$$ 分线路、# 分集、名称$地址
  */
-import { SiteConfig } from '../model/TvboxModels';
+import { SiteConfig } from '../model/AggModels';
 import { HomeContent, PageResult, MovieDetail, Movie, Category, Episode, PlayLine } from '../model/VideoModels';
 import { FetchText, SiteDriver } from './SiteDriver';
 import { toStr, toInt } from '../util/TypeUtil';

@@ -20,8 +20,8 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
     // 装配持久化：preferences 就绪后从存储恢复配置（loadContent 先行渲染 initing 态，不阻塞首帧）
     const context = this.context.getApplicationContext();
-    // 个性化设置独立持久化（okvideo_settings），装载失败不影响订阅链路
-    preferences.getPreferences(context, 'okvideo_settings').then((prefS: preferences.Preferences) => {
+    // 个性化设置独立持久化（juying_settings），装载失败不影响订阅链路
+    preferences.getPreferences(context, 'juying_settings').then((prefS: preferences.Preferences) => {
       AppSettings.instance.attach(new PreferencesKVStore(prefS));
       SearchHistory.instance.attach(new PreferencesKVStore(prefS));
     UrlHistory.instance.attach(new PreferencesKVStore(prefS));
@@ -32,7 +32,7 @@ export default class EntryAbility extends UIAbility {
     }).catch((eS: Object) => {
       hilog.error(DOMAIN, 'testTag', 'settings 装配异常: %{public}s', eS instanceof Error ? eS.message : JSON.stringify(eS));
     });
-    preferences.getPreferences(context, 'okvideo_config').then(async (pref: preferences.Preferences) => {
+    preferences.getPreferences(context, 'juying_config').then(async (pref: preferences.Preferences) => {
       const store = new ConfigStore(new PreferencesKVStore(pref));
       // 恢复订阅并合并已导入的聚合源包（initFromStore 内部装载源包）
       return AppState.instance.initFromStore(store);

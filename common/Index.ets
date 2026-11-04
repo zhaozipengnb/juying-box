@@ -6,7 +6,7 @@ export * from './src/main/ets/util/UrlUtil';
 export * from './src/main/ets/util/TimeUtil';
 export * from './src/main/ets/util/HlsAdFilter';
 export * from './src/main/ets/util/LiveSourceParser';
-export * from './src/main/ets/model/TvboxModels';
+export * from './src/main/ets/model/AggModels';
 export * from './src/main/ets/model/VideoModels';
 export * from './src/main/ets/decode/ConfigDecoder';
 export * from './src/main/ets/engine/SiteDriver';

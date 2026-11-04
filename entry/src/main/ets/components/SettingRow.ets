@@ -1,5 +1,5 @@
 // 设置行子组件：左侧标签/说明 + 右侧控件（@BuilderParam 尾随闭包）
-// 视觉对齐 FongMi 设置页：圆角半透明胶囊卡，壁纸透出。
+// 视觉对齐 主流影视App设置页：圆角半透明胶囊卡，壁纸透出。
 // onTap：整行点击（入口行用，子控件自身点击仍优先生效）；arrow：右侧渲染 › 箭头
 @Builder
 function emptyBuilder() {}

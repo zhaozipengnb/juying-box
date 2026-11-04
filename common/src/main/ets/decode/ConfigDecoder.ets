@@ -1,4 +1,4 @@
-import { parseTvboxConfig, TvboxConfig } from '../model/TvboxModels';
+import { parseAggConfig, AggConfig } from '../model/AggModels';
 import { b64decode, utf8Decode, stripNonB64 } from '../util/Coding';
 
 /**
@@ -59,20 +59,20 @@ function findJpegEnd(b: Uint8Array): number {
  * 订阅内容四层解码链：纯 JSON5 → 整体 base64（试盐偏移 0..16）→ JPEG 尾部 steg（FFD9 定位）。
  * 每层失败进入下一层，全部失败抛 ConfigDecodeError。
  */
-export function decodeConfigContent(input: string | Uint8Array): TvboxConfig {
+export function decodeConfigContent(input: string | Uint8Array): AggConfig {
   const text = typeof input === 'string' ? input : utf8Decode(input);
   // 1) 纯 JSON/JSON5
-  try { return parseTvboxConfig(parseJson5ish(text)); } catch (e) { /* 下探 */ }
+  try { return parseAggConfig(parseJson5ish(text)); } catch (e) { /* 下探 */ }
   // 2) 整体 base64（可能带盐）
   const fromB64 = fromB64Maybe(text);
-  if (fromB64 !== null) { return parseTvboxConfig(fromB64); }
+  if (fromB64 !== null) { return parseAggConfig(fromB64); }
   // 3) JPEG 尾部 steg（FFD9 之后藏 10 字符盐 + base64 配置）
   if (typeof input !== 'string') {
     const end = findJpegEnd(input);
     if (end > 0 && end < input.length) {
       const tailText = utf8Decode(input.slice(end));
       const steg = fromB64Maybe(tailText);
-      if (steg !== null) { return parseTvboxConfig(steg); }
+      if (steg !== null) { return parseAggConfig(steg); }
     }
   }
   throw new ConfigDecodeError('无法识别的订阅内容格式');
