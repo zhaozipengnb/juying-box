@@ -63,7 +63,7 @@ export struct OptionPicker {
         .constraintSize({ maxHeight: 430 })
       }
       .width('72%')
-      .constraintSize({ maxWidth: 480 })   // 横屏全宽时会过宽,限幅居中
+      .constraintSize({ maxWidth: 360 })   // 横屏全宽时会过宽,限幅居中
       .padding({ bottom: 6 })
       .backgroundColor('#D9262629')
       .borderRadius(14)

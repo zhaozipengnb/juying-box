@@ -1427,9 +1427,9 @@ export struct PlayerPage {
   // 弹幕面板:开关/时间偏移/手动搜索选库(自动匹配失败时的补救)。三阶段:main/search/pages
   @Builder
   dmPanel() {
-    Column() {
+    Stack() {
       Column()
-        .width('100%').layoutWeight(1)
+        .width('100%').height('100%')
         .onClick(() => {
           this.showDmPanel = false;
           this.dmStage = 'main';
@@ -1545,10 +1545,11 @@ export struct PlayerPage {
           .layoutWeight(1).scrollBar(BarState.Off).width('100%')
         }
       }
-      .width('100%').height('52%')
-      .constraintSize({ maxWidth: 640 })   // 横屏限幅居中
+      .width('80%')
+      .constraintSize({ maxWidth: 480 })
+      .height(460)
       .backgroundColor('#D9262629')
-      .borderRadius({ topLeft: 16, topRight: 16 })
+      .borderRadius(14)
       .padding(12)
       .onClick(() => { })
     }
