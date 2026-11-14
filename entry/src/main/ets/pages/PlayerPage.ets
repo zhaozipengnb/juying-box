@@ -1302,8 +1302,8 @@ export struct PlayerPage {
           .position({ x: '50%', y: 60 }).markAnchor({ x: '50%' })
       }
 
-      // 旋转锁:全屏右侧中部常驻(控制层隐藏时也能操作);锁定态蓝色,解锁态白色
-      if (this.isTheater) {
+      // 旋转锁:全屏右侧中部,随控制层显隐(锁定状态本身持续生效,仅图标隐藏)
+      if (this.isTheater && this.showCtrl) {
         Image(this.rotationLocked ? $r('app.media.ic_lock') : $r('app.media.ic_lock_open')).width(22).height(22)
           .fillColor(this.rotationLocked ? '#4D9EFF' : '#FFFFFF')
           .onClick(() => { this.toggleRotationLock(); })
