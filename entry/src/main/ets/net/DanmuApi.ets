@@ -1,5 +1,5 @@
 // 弹幕数据源:B站匿名链路(零配置,无需任何账号/输入)。
-// 链路:匿名取 wbi 签名密钥 → 签名搜索片名 → 分P列表按集对齐 → 弹幕 XML。
+// 链路:匿名取 wbi 签名密钥 → 签名搜索片名 → 候选按播放数排序 → 分P列表按集对齐 → 弹幕 XML。
 // 弹幕 list.so 返回原始 deflate 压缩的 XML——ArkTS zlib 只支持文件级解压,
 // 借常驻 ArkWeb 容器的 DecompressionStream('deflate-raw') 解压(浏览器原生能力)。
 import { util } from '@kit.ArkTS';
@@ -8,7 +8,9 @@ import { httpFetch } from './HttpClient';
 import { utf8Decode } from 'common';
 import { WebFetchBridge } from './WebFetchBridge';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+
 const DTAG = 'OKV-DANMU';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
 
 export interface DanmuItem {
   t: number;      // 出现时间(秒)
@@ -20,7 +22,6 @@ export interface DanmuItem {
 const MIXIN_TAB: number[] = [46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
   33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61,
   26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52];
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
 
 function bytesOf(s: string): Uint8Array {
   return new util.TextEncoder().encodeInto(s);
@@ -53,18 +54,24 @@ function biliFilterValue(v: string): string {
   return out;
 }
 
+// buvid3 必须是 UUID 形态:B站风控对非法格式直接回空体(弹幕拉不到的根因之一)
+function biliCookie(): string {
+  let h = '';
+  for (let i = 0; i < 32; i++) { h += Math.floor(Math.random() * 16).toString(16); }
+  return 'buvid3=' + `${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20, 32)}`;
+}
+
 async function biliGet(url: string): Promise<Uint8Array> {
   const r = await httpFetch(url, {
     headers: {
       'User-Agent': UA,
       'Referer': 'https://www.bilibili.com',
-      'Cookie': 'buvid3=INJECT-' + Math.floor(Math.random() * 1e8).toString()
+      'Cookie': biliCookie()
     }
   });
   return new Uint8Array(r.body);
 }
 
-// wbi 签名密钥:nav 接口匿名可取,img/sub 文件名拼接后按置换表取前 32 位
 async function biliWbiKey(): Promise<string> {
   const bytes = await biliGet('https://api.bilibili.com/x/web-interface/nav');
   const nav = JSON.parse(utf8Decode(bytes)) as Record<string, Object>;
@@ -74,8 +81,8 @@ async function biliWbiKey(): Promise<string> {
   return biliMixinKey(img, sub);
 }
 
-// wbi 签名搜索:标题含片名的第一个视频 → bvid(找不到返回 '')
-async function biliSearchBvid(keyword: string, mixin: string): Promise<string> {
+// wbi 签名搜索:返回候选 bvid 列表(有序:标题含片名核心词的播放王在前,全局播放王兜底)
+async function biliCandidates(keyword: string, mixin: string): Promise<string[]> {
   const wts = Math.floor(Date.now() / 1000);
   const params: Record<string, string> = {
     'keyword': biliFilterValue(keyword),
@@ -89,22 +96,33 @@ async function biliSearchBvid(keyword: string, mixin: string): Promise<string> {
   const sr = JSON.parse(utf8Decode(bytes)) as Record<string, Object>;
   const data = (sr['data'] ?? {}) as Record<string, Object>;
   const results = (data['result'] ?? []) as Object[];
-  // 同片名候选里选播放数最高的:人看得多的版本才有弹幕(解说/搬运版常是 0 弹幕)
-  let bvid = '';
+  // 候选打分:标题含片名核心词(前4字)的按播放数最高优先——人看得多的版本才有弹幕;
+  // B站模糊搜索结果标题未必包含完整片名(如 Ⅱ 绝世唐门),无相关时兜底取全局播放最高
+  let titledBvid = '';
   let bestPlay = -1;
+  let bestTitledPlay = -1;
+  let globalBvid = '';
   const kw = keyword.split(' ')[0];
+  const kwCore = kw.length > 4 ? kw.substring(0, 4) : kw;
   for (const r of results) {
     const rr = r as Record<string, Object>;
     const title = ((rr['title'] as string) ?? '').replace(/<[^>]+>/g, '');
-    if (kw === '' || title.indexOf(kw) < 0) { continue; }
     const play = parseInt(rr['play'] as string ?? '0') || 0;
     if (play > bestPlay) {
       bestPlay = play;
-      bvid = rr['bvid'] as string ?? '';
+      globalBvid = rr['bvid'] as string ?? '';
+    }
+    if (kwCore !== '' && title.indexOf(kwCore) >= 0 && play > bestTitledPlay) {
+      bestTitledPlay = play;
+      titledBvid = rr['bvid'] as string ?? '';
     }
   }
-  hilog.info(0x0000, DTAG, 'bili pick bvid=%{public}s play=%{public}d', bvid, bestPlay);
-  return bvid;
+  const out: string[] = [];
+  if (titledBvid !== '') { out.push(titledBvid); }
+  if (globalBvid !== '' && globalBvid !== titledBvid) { out.push(globalBvid); }
+  hilog.info(0x0000, DTAG, 'candidates: %{public}s (titled=%{public}d global=%{public}d)',
+    out.join(','), bestTitledPlay, bestPlay);
+  return out;
 }
 
 // 分P列表:返回 {cid, part} 数组(匿名)
@@ -130,9 +148,16 @@ function epNumberOf(name: string): number {
   return m === null ? -1 : parseInt(m[0]);
 }
 
-// 弹幕 XML(原始 deflate):取回字节 → base64 → 经 ArkWeb DecompressionStream 解压
+// 弹幕 XML(原始 deflate):取回字节 → base64 → 经 ArkWeb DecompressionStream 解压。
+// 部分 HTTP 栈会自动解压(响应即 XML),两种形态都兼容
 async function biliDanmuXml(oid: number): Promise<string> {
   const bytes = await biliGet(`https://api.bilibili.com/x/v1/dm/list.so?oid=${oid}`);
+  hilog.info(0x0000, DTAG, 'danmu raw %{public}d bytes', bytes.length);
+  if (bytes.length < 4) { return ''; }
+  const head = utf8Decode(bytes.subarray(0, 8));
+  if (head.startsWith('<?xml') || head.startsWith('<i>') || head.startsWith('<i ')) {
+    return utf8Decode(bytes);   // HTTP 栈已自动解压
+  }
   const b64 = new util.Base64Helper().encodeToStringSync(bytes);
   const script = `(async () => {
     try {
@@ -171,30 +196,34 @@ function parseDanmuXml(xml: string): DanmuItem[] {
   return items;
 }
 
+// 分P对齐:集号一致优先,其次同名,再退到集序/第 1 页
+async function biliPickCid(pages: BiliPage[], epName: string, epIdx: number): Promise<number> {
+  const num = epNumberOf(epName);
+  for (const p of pages) {
+    if (num >= 0 && epNumberOf(p.part) === num) { return p.cid; }
+    if (p.part === epName) { return p.cid; }
+  }
+  return pages[Math.min(epIdx, pages.length - 1)].cid;
+}
+
 // ===== 对外入口:片名+集名+集序 → 弹幕列表(零配置) =====
-// 1. wbi 签名搜索片名 → 标题含片名的视频 2. 分P按集号/集名/序对齐 3. 弹幕解压解析
+// 逐候选尝试:标题最佳的可能是 0 弹幕的解说/新上传,此时回退全局播放王候选
 export async function biliDanmu(movieName: string, epName: string, epIdx: number): Promise<DanmuItem[]> {
   hilog.info(0x0000, DTAG, 'bili start: movie=%{public}s ep=%{public}s', movieName, epName);
   const mixin = await biliWbiKey();
-  const bvid = await biliSearchBvid(movieName, mixin);
-  hilog.info(0x0000, DTAG, 'bili search bvid=%{public}s', bvid);
-  if (bvid === '') { return []; }
-  const pages = await biliPagelist(bvid);
-  hilog.info(0x0000, DTAG, 'bili pages=%{public}d', pages.length);
-  if (pages.length === 0) { return []; }
-  // 分P对齐:集号一致优先,其次同名,再退到集序/第 1 页
-  const num = epNumberOf(epName);
-  let cid = -1;
-  for (const p of pages) {
-    if (num >= 0 && epNumberOf(p.part) === num) { cid = p.cid; break; }
-    if (p.part === epName) { cid = p.cid; break; }
+  const cands = await biliCandidates(movieName, mixin);
+  for (const bvid of cands) {
+    const pages = await biliPagelist(bvid);
+    if (pages.length === 0) { continue; }
+    const cid = await biliPickCid(pages, epName, epIdx);
+    const xml = await biliDanmuXml(cid);
+    if (xml === '') { continue; }
+    const items = parseDanmuXml(xml);
+    if (items.length > 0) {
+      hilog.info(0x0000, DTAG, 'bili hit %{public}s: %{public}d danmaku', bvid, items.length);
+      return items;
+    }
+    hilog.info(0x0000, DTAG, 'bili %{public}s has no danmaku, try next candidate', bvid);
   }
-  if (cid < 0) { cid = pages[Math.min(epIdx, pages.length - 1)].cid; }
-  hilog.info(0x0000, DTAG, 'bili cid=%{public}d', cid);
-  const xml = await biliDanmuXml(cid);
-  hilog.info(0x0000, DTAG, 'bili xml len=%{public}d', xml.length);
-  if (xml === '') { return []; }
-  const items = parseDanmuXml(xml);
-  hilog.info(0x0000, DTAG, 'bili parsed %{public}d', items.length);
-  return items;
+  return [];
 }
