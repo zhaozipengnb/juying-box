@@ -111,6 +111,7 @@ export struct PlayerPage {
   private lastDur: number = 0;
   private lastSaveAt: number = 0;      // 上次持久化时间戳（节流 5s）
   private seekedResume: boolean = false;  // 断点续播只 seek 一次
+  private liveSkip: number = 0;           // 直播自动换台已跳过的死频道数
   @Local showCtrl: boolean = false;    // 自绘控制层显隐：默认隐藏，点击视频切换，播放中 4s 无操作自动隐藏
   private ctrlTimer: number = -1;      // 自动隐藏定时器（-1 = 未挂）
   @Local seekPreview: boolean = false; // 横向滑动快进/快退的预览气泡
@@ -177,6 +178,8 @@ export struct PlayerPage {
     this.sniffClear();
     this.castUrl = '';   // 换集先清可投直链,确认直链后再补
     let target: string = ep.url;
+    if (this.siteKey === 'live') { this.liveSkip = 0; }   // 用户手动选台重置换台计数
+    this.engine.isLive = this.siteKey === 'live';   // 直播流禁用倍速/循环(prepared 时调会 error)
     if (target.startsWith('file://')) {
       // 已下载的本地文件:直接播,不走解析/防盗链代理/投屏队列(文件在沙箱里,链路都无意义)
       this.playUrl = target;
@@ -368,6 +371,34 @@ export struct PlayerPage {
     } else {
       this.errMsg = '全部线路均无法播放';
     }
+  }
+
+  // 直播换台:当前频道不可播时自动切下一频道(同组内顺序试,上限 10 个;直播源死链多,
+  // 死在一个运营商内网频道上就报错会让用户以为直播全坏)
+  private tryNextChannel(): void {
+    hilog.info(0x0000, 'OKV-Player', 'tryNextChannel site=%{public}s lines=%{public}d epIdx=%{public}d', this.siteKey, this.lines.length, this.epIdx);
+    if (this.siteKey !== 'live' || this.lines.length === 0) { return; }
+    const eps = this.lines[this.lineIdx]?.episodes ?? [];
+    if (eps.length === 0) { return; }
+    if (this.liveSkip >= 10) {
+      this.errMsg = '连续 10 个频道不可播，请手动换台';
+      this.liveSkip = 0;
+      return;
+    }
+    const next = this.epIdx + 1;
+    if (next >= eps.length) {
+      this.errMsg = '本组频道均无法播放，请手动换台';
+      this.liveSkip = 0;
+      return;
+    }
+    this.liveSkip++;
+    this.epIdx = next;
+    this.ep = eps[next] ?? null;
+    this.playUrl = '';
+    this.getUIContext().getPromptAction().showToast({
+      message: `频道不可用，切换至 ${this.ep?.name}`
+    });
+    if (this.ep !== null) { this.prepare(); }
   }
 
   private switchTo(li: number, ei: number): void {
@@ -628,13 +659,18 @@ export struct PlayerPage {
       else if (st === 'paused') { this.isPlaying = false; }
       else if (st === 'error') {
         this.playUrl = '';
-        if (this.settings.lineAutoPlay) { this.tryNextLine(); }
-        else { this.errMsg = '播放失败,请手动切换线路重试'; }
+        hilog.info(0x0000, 'OKV-Player', 'onState error site=%{public}s', this.siteKey);
+        if (this.siteKey === 'live') { this.tryNextChannel(); }
+        else if (this.settings.lineAutoPlay) { this.tryNextLine(); }
+        else if (this.siteKey === 'live') { this.tryNextChannel(); }
+      else { this.errMsg = '播放失败,请手动切换线路重试'; }
       }
     };
     this.engine.onError = (msg: string): void => {
       this.playUrl = '';
-      if (this.settings.lineAutoPlay) { this.tryNextLine(); }
+      hilog.info(0x0000, 'OKV-Player', 'onError site=%{public}s msg=%{public}s', this.siteKey, msg);
+      if (this.siteKey === 'live') { this.tryNextChannel(); }
+      else if (this.settings.lineAutoPlay) { this.tryNextLine(); }
       else { this.errMsg = '播放失败,请手动切换线路重试'; }
     };
   }
