@@ -326,6 +326,12 @@ export struct PlayerPage {
       const ks = Object.keys(site.header);
       for (const k of ks) { dlHeaders[k] = site.header[k]; }
     }
+    if (await this.dl.wifiBlocked()) {
+      this.dlResolveText = '当前为移动网络，下载仅 Wi-Fi 已开启';
+      this.dlBusy = false;
+      setTimeout((): void => { if (!this.dlBusy) { this.dlResolveText = ''; } }, 3000);
+      return;
+    }
     try {
       for (let i = 0; i < picks.length; i++) {
         const ep = picks[i];

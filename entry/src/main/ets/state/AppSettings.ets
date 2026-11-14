@@ -29,9 +29,10 @@ export class AppSettings {
   @Trace aiAdFilter: boolean = false;        // AI去广告（预留：将作用于播放地址解析阶段）
   @Trace autoSkipDead: boolean = true;       // 自动跳过失效源：加载失败/无内容的源自动切下一个并隐藏
                                              // （默认开：合包采集站质量参差，坏站卡住首页不可接受；可在个性设置关）
-  @Trace builtinDownload: boolean = true;    // 内置下载：详情页/播放页显示下载按钮（核心功能默认开，个性设置可关）
+  @Trace builtinDownload: boolean = true;
+  @Trace downloadWifiOnly: boolean = false;  // 下载仅 Wi-Fi：移动网络下不启动/不续传下载
+                                             // 内置下载：详情页/播放页显示下载按钮（核心功能默认开，个性设置可关）
   @Trace videoFit: VideoFit = 'contain';     // 播放画面缩放：contain=适应 contain/cover=裁剪铺满/fill=拉伸
-  @Trace danmakuOn: boolean = true;          // 弹幕加载：进播放页时弹幕的默认状态
   @Trace lineAutoPlay: boolean = true;       // 线路播放：播放失败时自动切换下一条线路
   @Trace disabledSites: string[] = [];       // 站点管理：已禁用的站点 key（下拉/搜索/跳源全部隐藏）
   @Trace detailGrid: boolean = false;          // 详情页聚合视图记忆：false=列表 true=海报网格（跨进出保留）
@@ -88,10 +89,10 @@ export class AppSettings {
       if (typeof dl === 'boolean') { this.builtinDownload = dl; }
       const vf = obj['videoFit'];
       if (vf === 'contain' || vf === 'cover' || vf === 'fill') { this.videoFit = vf as VideoFit; }
-      const dm = obj['danmakuOn'];
-      if (typeof dm === 'boolean') { this.danmakuOn = dm; }
       const lap = obj['lineAutoPlay'];
       if (typeof lap === 'boolean') { this.lineAutoPlay = lap; }
+      const dw = obj['downloadWifiOnly'];
+      if (typeof dw === 'boolean') { this.downloadWifiOnly = dw; }
       const ds = obj['disabledSites'];
       if (Array.isArray(ds)) { this.disabledSites = ds.filter((x: Object): boolean => typeof x === 'string') as string[]; }
       const dg = obj['detailGrid'];
@@ -119,8 +120,8 @@ export class AppSettings {
     this.aiAdFilter = false;
     this.autoSkipDead = false;
     this.builtinDownload = false;
+    this.downloadWifiOnly = false;
     this.videoFit = 'contain';
-    this.danmakuOn = true;
     this.lineAutoPlay = true;
     this.detailGrid = false;
     this.wallpaper = 'default';
@@ -144,7 +145,7 @@ export class AppSettings {
       'picSize': this.picSize, 'playSpeed': this.playSpeed, 'longPressSpeed': this.longPressSpeed,
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
       'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload, 'autoSkipDead': this.autoSkipDead,
-      'videoFit': this.videoFit, 'danmakuOn': this.danmakuOn, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites,
+      'videoFit': this.videoFit, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites, 'downloadWifiOnly': this.downloadWifiOnly,
       'detailGrid': this.detailGrid,
       'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl, 'proxyUrl': this.proxyUrl
     };
@@ -158,7 +159,7 @@ export class AppSettings {
       'picSize': this.picSize, 'playSpeed': this.playSpeed, 'longPressSpeed': this.longPressSpeed,
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
       'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload, 'autoSkipDead': this.autoSkipDead,
-      'videoFit': this.videoFit, 'danmakuOn': this.danmakuOn, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites,
+      'videoFit': this.videoFit, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites, 'downloadWifiOnly': this.downloadWifiOnly,
       'detailGrid': this.detailGrid,
       'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl,
       'proxyUrl': this.proxyUrl

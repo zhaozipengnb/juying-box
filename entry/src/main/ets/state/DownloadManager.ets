@@ -1,6 +1,8 @@
 // 内置下载管理器：基于 @ohos.request.agent 后台下载，支持进度/暂停/恢复/删除。
 // 持久化到 preferences，应用重启后恢复列表（已完成的可直接播放，下载中的需手动恢复）。
 import { request } from '@kit.BasicServicesKit';
+import { connection } from '@kit.NetworkKit';
+import { AppSettings } from './AppSettings';
 import { common } from '@kit.AbilityKit';
 import { KVStore } from './ConfigStore';
 import { util } from '@kit.ArkTS';
@@ -68,6 +70,22 @@ export class DownloadManager {
     return s.replace(/[\\/:*?"<>|]/g, '_').trim() || 'unknown';
   }
 
+  // 仅 Wi-Fi 门控用的网络类型检测(Wi-Fi=true;检测失败放行不阻塞)
+  async isWifi(): Promise<boolean> {
+    try {
+      const net = await connection.getDefaultNet();
+      const cap = await connection.getNetCapabilities(net);
+      return cap.bearerTypes.includes(connection.NetBearType.BEARER_WIFI);
+    } catch (e) {
+      return true;
+    }
+  }
+
+  // 仅 Wi-Fi 且当前不在 Wi-Fi:调用方应提示并跳过
+  async wifiBlocked(): Promise<boolean> {
+    return AppSettings.instance.downloadWifiOnly && !(await this.isWifi());
+  }
+
   isDownloading(url: string): boolean {
     const id = this.makeId(url);
     return this.items.some((it: DownloadItem): boolean => it.id === id && it.status !== 'failed');
@@ -83,15 +101,17 @@ export class DownloadManager {
     return this.items.find((it: DownloadItem): boolean => it.movieName === movieName && it.epName === epName);
   }
 
-  // 启动下载。headers:源站防盗链头(站点 header + UA),mp4 透传给 agent、HLS 透传给分段拉取
+  // 启动下载。headers:源站防盗链头(站点 header + UA),mp4 透传给 agent、HLS 透传给分段拉取。
+  // 返回 true=已入队;false=被拦(仅 Wi-Fi 且当前为移动网络/重复任务)
   async startDownload(movieName: string, epName: string, url: string, siteKey: string,
-    headers: Record<string, string> = {}): Promise<void> {
-    if (!this.context) { return; }
+    headers: Record<string, string> = {}): Promise<boolean> {
+    if (!this.context) { return false; }
+    if (await this.wifiBlocked()) { return false; }
     const context = this.context;   // 回调里用的上下文(编译器无法跨闭包跟踪非空)
     const id = this.makeId(url);
     const existIdx = this.items.findIndex((it: DownloadItem): boolean => it.id === id);
     if (existIdx >= 0) {
-      if (this.items[existIdx].status !== 'failed') { return; }   // 在队列/已完成的不重复
+      if (this.items[existIdx].status !== 'failed') { return false; }   // 在队列/已完成的不重复
       this.items.splice(existIdx, 1);                             // 失败任务允许重建重下
     }
 
@@ -129,7 +149,7 @@ export class DownloadManager {
         // HLS：拉播放列表 → 全部分段顺序拼接为 .ts（request.agent 只能下直链）；
         // 批量选集时多任务并发会互相抢带宽,限 2 路同时下载其余排队
         this.scheduleHls(item, headers);
-        return;
+        return true;
       }
       const cfg: request.agent.Config = {
         action: request.agent.Action.DOWNLOAD,
@@ -151,6 +171,7 @@ export class DownloadManager {
       let lastTs = Date.now();
       task.on('progress', (progress: request.agent.Progress): void => {
         const processed = progress.processed;
+        const total = progress.sizes.length > 0 ? progress.sizes[0] : -1;
         const now = Date.now();
         const dt = now - lastTs;
         if (dt > 500) {
@@ -158,7 +179,8 @@ export class DownloadManager {
           lastBytes = processed;
           lastTs = now;
         }
-        this.updateProgress(id, 0, processed, 0);
+        const pct = total > 0 ? Math.min(99, Math.floor(processed * 100 / total)) : 0;
+        this.updateProgress(id, pct, processed, total);
       });
       task.on('completed', (): void => {
         item.speed = 0;
@@ -187,10 +209,12 @@ export class DownloadManager {
         this.taskMap.delete(id);
         this.save();
       });
+      return true;
     } catch (e) {
       hilog.error(DOMAIN, 'dl', 'create failed: %{public}s', `${e}`);
       this.updateStatus(id, 'failed');
       this.save();
+      return false;
     }
   }
 
@@ -325,20 +349,24 @@ export class DownloadManager {
     this.save();
   }
 
-  async resume(id: string): Promise<void> {
+  async resume(id: string): Promise<boolean> {
     const it = this.items.find((x: DownloadItem): boolean => x.id === id);
-    if (it !== undefined && (/\.m3u8($|\?)/i.test(it.url) || (!isDirectMedia(it.url) && it.url.startsWith('http')))) {
+    if (it === undefined) { return false; }
+    if (await this.wifiBlocked()) { return false; }
+    if (/\.m3u8($|\?)/i.test(it.url) || (!isDirectMedia(it.url) && it.url.startsWith('http'))) {
       // HLS:从检查点分段继续追加(headers 随任务持久化),暂停/失败/重启后都能续
       it.status = 'downloading';
       this.save();
       this.scheduleHls(it, it.headers);
-      return;
+      return true;
     }
     const task = this.taskMap.get(id);
     if (task) {
       try { await task.resume(); this.updateStatus(id, 'downloading'); } catch (e) { /* ignore */ }
+      return true;
     }
     this.save();
+    return false;
   }
 
   async remove(id: string): Promise<void> {

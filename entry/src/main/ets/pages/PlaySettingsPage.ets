@@ -13,10 +13,10 @@ export struct PlaySettingsPage {
   @Local playSpeed: number = AppSettings.instance.playSpeed;
   @Local longPressSpeed: number = AppSettings.instance.longPressSpeed;
   @Local videoFit: VideoFit = AppSettings.instance.videoFit;
-  @Local danmakuOn: boolean = AppSettings.instance.danmakuOn;
   @Local lineAutoPlay: boolean = AppSettings.instance.lineAutoPlay;
   @Local aiAdFilter: boolean = AppSettings.instance.aiAdFilter;
   @Local builtinDownload: boolean = AppSettings.instance.builtinDownload;
+  @Local downloadWifiOnly: boolean = AppSettings.instance.downloadWifiOnly;
   @Local picker: PickerSpec | null = null;   // 居中选择弹层（null = 不显示）
 
   // 写镜像 + 同步单例持久化（页面显示读镜像，播放页读单例，二者经 sync 保持一致）
@@ -24,10 +24,10 @@ export struct PlaySettingsPage {
     this.settings.playSpeed = this.playSpeed;
     this.settings.longPressSpeed = this.longPressSpeed;
     this.settings.videoFit = this.videoFit;
-    this.settings.danmakuOn = this.danmakuOn;
     this.settings.lineAutoPlay = this.lineAutoPlay;
     this.settings.aiAdFilter = this.aiAdFilter;
     this.settings.builtinDownload = this.builtinDownload;
+    this.settings.downloadWifiOnly = this.downloadWifiOnly;
     this.settings.save();
   }
 
@@ -91,6 +91,11 @@ export struct PlaySettingsPage {
             SettingRow({ label: '内置下载', value: this.builtinDownload ? '开启' : '关闭',
               onTap: (): void => {
                 this.builtinDownload = !this.builtinDownload;
+                this.sync();
+              } })
+            SettingRow({ label: '下载仅 Wi-Fi', value: this.downloadWifiOnly ? '开启' : '关闭',
+              onTap: (): void => {
+                this.downloadWifiOnly = !this.downloadWifiOnly;
                 this.sync();
               } })
           }

@@ -142,7 +142,14 @@ export struct DownloadPage {
                       Button('继续').height(32).fontSize(12)
                         .backgroundColor('#3A3A3C')
                         .fontColor('#FFFFFF')
-                        .onClick(() => { this.dl.resume(it.id).then((): void => this.refreshDl()); })
+                        .onClick(() => {
+                      this.dl.resume(it.id).then((ok: boolean): void => {
+                        if (!ok) {
+                          this.getUIContext().getPromptAction().showToast({ message: '当前为移动网络，下载仅 Wi-Fi 已开启' });
+                        }
+                        this.refreshDl();
+                      });
+                    })
                     }
                     if (it.status === 'completed') {
                       Button('播放').height(32).fontSize(12).margin({ left: 6 })
