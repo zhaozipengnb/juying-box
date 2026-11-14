@@ -1547,7 +1547,7 @@ export struct PlayerPage {
       }
       .width('80%')
       .constraintSize({ maxWidth: 480 })
-      .height(360)
+      .height(280)
       .backgroundColor('#D9262629')
       .borderRadius(14)
       .padding(12)
