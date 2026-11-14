@@ -15,6 +15,7 @@ import { SPEED_OPTIONS } from '../state/AppSettings';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
 import { display, window } from '@kit.ArkUI';
+import settings from '@ohos.settings';
 import { common, Want } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 
@@ -133,6 +134,7 @@ export struct PlayerPage {
   private volLast: number = -1;        // 上次设置的音量档位（去重用）
   private tipTimer: number = -1;       // 提示气泡延时清除定时器
   private brightTimer: number = -1;    // 亮度重申定时器(对抗系统自动亮度覆盖)
+  private sysBrightModeSet: boolean = false;  // 本次会话是否已把系统亮度模式切为手动
   engine: AVPlayerEngine = new AVPlayerEngine();   // AVPlayer 内核(真倍速/循环/精准 seek)
   static activeEngine: AVPlayerEngine | null = null;   // 退后台自动暂停用的引擎槽(EntryAbility.onBackground 调用)
 
@@ -676,6 +678,18 @@ export struct PlayerPage {
       this.brightCache = b;
       gBrightness = b;
       this.applyBrightness(b);
+      // 双写系统亮度:仅窗口覆盖会被系统自动亮度回调打回(实测),切手动模式+写系统值才稳
+      if (!this.sysBrightModeSet) {
+        this.sysBrightModeSet = true;
+        try {
+          settings.setValue(getContext(this) as common.UIAbilityContext, settings.display.AUTO_SCREEN_BRIGHTNESS,
+            String(settings.display.MANUAL_SCREEN_BRIGHTNESS_MODE)).catch((): void => { });
+        } catch (err) { }
+      }
+      try {
+        settings.setValue(getContext(this) as common.UIAbilityContext, settings.display.SCREEN_BRIGHTNESS_STATUS,
+          String(Math.round(b * 255))).catch((): void => { });
+      } catch (err) { }
       this.gestureTip = '亮度 ' + Math.round(b * 100) + '%';
     }
   }
