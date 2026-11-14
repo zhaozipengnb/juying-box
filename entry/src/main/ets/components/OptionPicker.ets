@@ -38,6 +38,7 @@ export struct OptionPicker {
                   .fontSize(14)
                   .fontColor(i === this.selectedIndex ? '#4D9EFF' : '#E6FFFFFF')
                   .fontWeight(i === this.selectedIndex ? FontWeight.Medium : FontWeight.Normal)
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 Blank()
                 if (i === this.selectedIndex) {
                   Text('✓').fontSize(14).fontColor('#4D9EFF')
@@ -62,6 +63,7 @@ export struct OptionPicker {
         .constraintSize({ maxHeight: 430 })
       }
       .width('72%')
+      .constraintSize({ maxWidth: 480 })   // 横屏全宽时会过宽,限幅居中
       .padding({ bottom: 6 })
       .backgroundColor('#D9262629')
       .borderRadius(14)

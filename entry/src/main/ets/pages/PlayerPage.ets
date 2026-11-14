@@ -1546,6 +1546,7 @@ export struct PlayerPage {
         }
       }
       .width('100%').height('52%')
+      .constraintSize({ maxWidth: 640 })   // 横屏限幅居中
       .backgroundColor('#D9262629')
       .borderRadius({ topLeft: 16, topRight: 16 })
       .padding(12)
