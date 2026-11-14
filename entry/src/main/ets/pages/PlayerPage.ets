@@ -126,7 +126,8 @@ export struct PlayerPage {
   private seekPending: boolean = false;// seek 已发出：丢弃引擎seek前的首个进度回调，防滑块回跳
   @Local gestureTip: string = '';      // 左右半屏竖滑的音量/亮度提示气泡
   private vbVolumeSide: boolean = false; // 本次竖滑落在右半屏(音量)；false=左半屏(亮度)
-  private volStart: number = 0;        // 手势起点媒体音量
+  private volCur: number = -1;         // 当前媒体音量(应用侧同步跟踪,setVolume 后立即更新)
+  private volReady: boolean = false;   // 音量基准就绪(首次异步读取完成前手势不动,避免旧基准跳变)
   private volMax: number = 0;          // 媒体最大音量(0=获取失败,本次音量手势不生效)
   private brightCache: number = 0.5;   // 亮度缓存(0..1)，手势基准；上次手势设置值经 gBrightness 跨实例持久
   private volLast: number = -1;        // 上次设置的音量档位（去重用）
@@ -638,7 +639,7 @@ export struct PlayerPage {
     const x = fl.length > 0 ? fl[0].localX : 0;
     this.vbVolumeSide = x > this.areaW / 2;
     if (this.vbVolumeSide) {
-      this.readVolumes();
+      if (this.volCur < 0 || !this.volReady) { this.readVolumes(); }
     }
   }
 
@@ -647,8 +648,10 @@ export struct PlayerPage {
     try {
       const am = audio.getAudioManager();
       this.volMax = await am.getMaxVolume(audio.AudioVolumeType.MEDIA);
-      this.volStart = await am.getVolume(audio.AudioVolumeType.MEDIA);
-      this.volLast = -1;
+      const cur = await am.getVolume(audio.AudioVolumeType.MEDIA);
+      this.volCur = cur;
+      this.volLast = cur;
+      this.volReady = true;
     } catch (err) {
       this.volMax = 0;
     }
@@ -657,8 +660,8 @@ export struct PlayerPage {
   private vbMove(e: GestureEvent): void {
     if (this.useWeb || this.errMsg !== '' || this.playUrl === '') { return; }
     const dy = e.offsetY;   // vp，上滑为负
-    if (this.vbVolumeSide && this.volMax > 0) {
-      let v = Math.round(this.volStart + this.volMax * (-dy / 300));
+    if (this.vbVolumeSide && this.volMax > 0 && this.volCur >= 0) {
+      let v = Math.round(this.volCur + this.volMax * (-dy / 300));
       v = Math.max(0, Math.min(this.volMax, v));
       if (v !== this.volLast) {   // 去重：拖动事件远密于音量档位，避免洪水式 setVolume
         this.volLast = v;
