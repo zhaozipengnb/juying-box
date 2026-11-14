@@ -143,6 +143,11 @@ export class AVPlayerEngine {
     this.player?.pause();
   }
 
+  // 退后台自动暂停(仅播放中;桌面/其他应用不应继续出声)
+  pauseIfPlaying(): void {
+    if (this.state === 'playing') { this.pause(); }
+  }
+
   stop(): void {
     this.player?.stop();
   }

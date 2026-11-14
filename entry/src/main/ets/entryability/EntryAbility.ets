@@ -12,6 +12,7 @@ import { PlayHistory } from '../state/PlayHistory';
 import { Favorites } from '../state/Favorites';
 import { LiveFavs } from '../state/LiveFavs';
 import { DownloadManager } from '../state/DownloadManager';
+import { PlayerPage } from '../pages/PlayerPage';
 
 const DOMAIN = 0x0000;
 
@@ -79,5 +80,7 @@ export default class EntryAbility extends UIAbility {
   onBackground(): void {
     // Ability has back to background
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
+    // 回到桌面/切走时暂停视频播放(画面不可见不应继续出声)
+    PlayerPage.pauseIfPlaying();
   }
 }

@@ -132,6 +132,12 @@ export struct PlayerPage {
   private volLast: number = -1;        // 上次设置的音量档位（去重用）
   private tipTimer: number = -1;       // 提示气泡延时清除定时器
   engine: AVPlayerEngine = new AVPlayerEngine();   // AVPlayer 内核(真倍速/循环/精准 seek)
+  static activeEngine: AVPlayerEngine | null = null;   // 退后台自动暂停用的引擎槽(EntryAbility.onBackground 调用)
+
+  static pauseIfPlaying(): void {
+    const e = PlayerPage.activeEngine;
+    if (e !== null) { e.pauseIfPlaying(); }
+  }
   // 投屏(AVSession + 系统投播选择器):队列里放 TV 可直接拉流的公网直链(本机代理地址 TV 拉不到)
   private avSession: AVSessionManager.AVSession | null = null;
   private castHelper: AVSessionManager.AVCastPickerHelper | null = null;
@@ -805,6 +811,7 @@ export struct PlayerPage {
       this.videoH = d.width / this.density / 1.78;
     } catch (e) { }
     if (gBrightness >= 0) { this.brightCache = gBrightness; }   // 延续上次手势亮度
+    PlayerPage.activeEngine = this.engine;
     this.setupCastSession();
     this.engine.onVideoSize = (w: number, h: number): void => {
       this.vidW = w; this.vidH = h;
@@ -961,6 +968,7 @@ export struct PlayerPage {
       this.engine.stop();
       this.engine.release();
       // 退出播放页销毁投屏会话(投播随之结束)
+      if (PlayerPage.activeEngine === this.engine) { PlayerPage.activeEngine = null; }
       if (this.avSession !== null) {
         this.avSession.destroy();
         this.avSession = null;
