@@ -164,7 +164,8 @@ export struct PlayerPage {
       const ctx = getContext(this) as common.UIAbilityContext;
       const win = await window.getLastWindow(ctx);
       await win.setWindowLayoutFullScreen(on);
-      await win.setWindowBackgroundColor(on ? '#FF000000' : '#FFFFFFFF');
+      // 退出播放器恢复暗色窗口底(此前恢复白色:系统标题栏透明,下载/历史页标题区会透出白底)
+      await win.setWindowBackgroundColor('#FF000000');
     } catch (e) { }
   }
 
