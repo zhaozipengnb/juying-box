@@ -112,6 +112,7 @@ export struct PlayerPage {
   private lastSaveAt: number = 0;      // 上次持久化时间戳（节流 5s）
   private seekedResume: boolean = false;  // 断点续播只 seek 一次
   private liveSkip: number = 0;           // 直播自动换台已跳过的死频道数
+  private liveWatchdog: number = -1;      // 直播出画看门狗(12s 未播判定死频道换台)
   @Local showCtrl: boolean = false;    // 自绘控制层显隐：默认隐藏，点击视频切换，播放中 4s 无操作自动隐藏
   private ctrlTimer: number = -1;      // 自动隐藏定时器（-1 = 未挂）
   @Local seekPreview: boolean = false; // 横向滑动快进/快退的预览气泡
@@ -178,8 +179,8 @@ export struct PlayerPage {
     this.sniffClear();
     this.castUrl = '';   // 换集先清可投直链,确认直链后再补
     let target: string = ep.url;
-    if (this.siteKey === 'live') { this.liveSkip = 0; }   // 用户手动选台重置换台计数
     this.engine.isLive = this.siteKey === 'live';   // 直播流禁用倍速/循环(prepared 时调会 error)
+    if (this.siteKey === 'live') { this.armLiveWatchdog(); }
     if (target.startsWith('file://')) {
       // 已下载的本地文件:直接播,不走解析/防盗链代理/投屏队列(文件在沙箱里,链路都无意义)
       this.playUrl = target;
@@ -373,9 +374,23 @@ export struct PlayerPage {
     }
   }
 
+  // 直播出画看门狗:12s 没到 playing 判定当前频道不可用,自动换台(死频道挂起可能几十秒不报错)
+  private armLiveWatchdog(): void {
+    if (this.liveWatchdog >= 0) { clearTimeout(this.liveWatchdog); }
+    this.liveWatchdog = setTimeout((): void => {
+      this.liveWatchdog = -1;
+      if (this.siteKey === 'live' && !this.isPlaying && this.playUrl !== '') {
+        hilog.info(0x0000, 'OKV-Player', 'watchdog: channel no picture in 12s, switch');
+        this.playUrl = '';
+        this.tryNextChannel();
+      }
+    }, 12000);
+  }
+
   // 直播换台:当前频道不可播时自动切下一频道(同组内顺序试,上限 10 个;直播源死链多,
   // 死在一个运营商内网频道上就报错会让用户以为直播全坏)
   private tryNextChannel(): void {
+    if (this.liveWatchdog >= 0) { clearTimeout(this.liveWatchdog); this.liveWatchdog = -1; }
     hilog.info(0x0000, 'OKV-Player', 'tryNextChannel site=%{public}s lines=%{public}d epIdx=%{public}d', this.siteKey, this.lines.length, this.epIdx);
     if (this.siteKey !== 'live' || this.lines.length === 0) { return; }
     const eps = this.lines[this.lineIdx]?.episodes ?? [];
@@ -395,6 +410,7 @@ export struct PlayerPage {
     this.epIdx = next;
     this.ep = eps[next] ?? null;
     this.playUrl = '';
+    this.isPlaying = true;   // 直播换台永远自动播(继承的 isPlaying 可能是 false 导致 prepared 后不 play)
     this.getUIContext().getPromptAction().showToast({
       message: `频道不可用，切换至 ${this.ep?.name}`
     });
@@ -402,6 +418,7 @@ export struct PlayerPage {
   }
 
   private switchTo(li: number, ei: number): void {
+    if (this.siteKey === 'live') { this.liveSkip = 0; }   // 用户手动选台重置换台计数
     if (li < 0 || li >= this.lines.length) { return; }
     const eps = this.lines[li].episodes;
     if (ei < 0 || ei >= eps.length) { return; }
@@ -655,7 +672,10 @@ export struct PlayerPage {
     };
     this.engine.onState = (st: EngineState): void => {
       if (st === 'prepared') { this.dur = this.engine.durationSec; }
-      else if (st === 'playing') { this.isPlaying = true; }
+      else if (st === 'playing') {
+        this.isPlaying = true;
+        if (this.liveWatchdog >= 0) { clearTimeout(this.liveWatchdog); this.liveWatchdog = -1; }
+      }
       else if (st === 'paused') { this.isPlaying = false; }
       else if (st === 'error') {
         this.playUrl = '';
@@ -774,6 +794,7 @@ export struct PlayerPage {
         this.castDeviceName = '';
       }
       if (this.ctrlTimer >= 0) { clearTimeout(this.ctrlTimer); this.ctrlTimer = -1; }
+      if (this.liveWatchdog >= 0) { clearTimeout(this.liveWatchdog); this.liveWatchdog = -1; }
       this.showCtrl = false;
       this.setImmersive(false);
       this.setStatusBarContent('#000000');
