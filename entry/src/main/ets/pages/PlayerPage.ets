@@ -642,9 +642,10 @@ export struct PlayerPage {
     const x = fl.length > 0 ? fl[0].localX : 0;
     this.vbVolumeSide = x > this.areaW / 2;
     if (this.vbVolumeSide) {
-      hilog.info(0x0000, 'OKV-VOL', 'vbStart right: volCur=%{public}d volMax=%{public}d ready=%{public}s',
-        this.volCur, this.volMax, String(this.volReady));
-      if (this.volCur < 0 || !this.volReady) { this.readVolumes(); }
+      // 每次手势强制重读系统真实音量(系统音量可能被外部改变:硬件键/其他应用/重启)
+      this.volReady = false;
+      this.readVolumes();
+      hilog.info(0x0000, 'OKV-VOL', 'vbStart right: re-reading system volume');
     } else {
       hilog.info(0x0000, 'OKV-VOL', 'vbStart left(brightness)');
     }
@@ -669,12 +670,13 @@ export struct PlayerPage {
   private vbMove(e: GestureEvent): void {
     if (this.useWeb || this.errMsg !== '' || this.playUrl === '') { return; }
     const dy = e.offsetY;   // vp，上滑为负
-    if (this.vbVolumeSide && this.volMax > 0 && this.volCur >= 0) {
+    if (this.vbVolumeSide && this.volReady && this.volMax > 0 && this.volCur >= 0) {
       let v = Math.round(this.volCur + this.volMax * (-dy / 300));
       hilog.info(0x0000, 'OKV-VOL', 'move dy=%{public}d v=%{public}d', Math.round(dy), v);
       v = Math.max(0, Math.min(this.volMax, v));
       if (v !== this.volLast) {   // 去重：拖动事件远密于音量档位，避免洪水式 setVolume
         this.volLast = v;
+        this.volCur = v;   // 同步跟踪:下一次手势的基准永远是最新音量(缺失此行=每次手势都从旧基准重来)
         try {
           audio.getAudioManager().setVolume(audio.AudioVolumeType.MEDIA, v).catch((): void => { });
         } catch (err) { }
