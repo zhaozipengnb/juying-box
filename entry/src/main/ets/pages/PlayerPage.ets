@@ -176,6 +176,12 @@ export struct PlayerPage {
     this.sniffClear();
     this.castUrl = '';   // 换集先清可投直链,确认直链后再补
     let target: string = ep.url;
+    if (target.startsWith('file://')) {
+      // 已下载的本地文件:直接播,不走解析/防盗链代理/投屏队列(文件在沙箱里,链路都无意义)
+      this.playUrl = target;
+      this.resolving = false;
+      return;
+    }
     // drpy（js 引擎）源：起播前先经 ext 的 play() 换直链（API 型源必需）；
     // 字符串规则源无 lazy，play 原样返回播放页地址——仅当结果确为媒体直链才采纳，
     // 否则回落通用解析（拉播放页 HTML 抽 player_aaaa/m3u8）

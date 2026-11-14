@@ -5,6 +5,7 @@
 // prepared → 才能 setSpeed/loop → play。同步赋值会打在 idle 上被状态机拒绝。
 import { media } from '@kit.MediaKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import fs from '@ohos.file.fs';
 const ETAG = 'OKV-AVP';
 
 export type EngineState = 'idle' | 'initialized' | 'prepared' | 'playing' | 'paused' | 'error';
@@ -26,6 +27,7 @@ export class AVPlayerEngine {
   private surfaceId: string = '';
   private state: EngineState = 'idle';
   private pendingPlay: boolean = false;   // prepared 后是否自动播放
+  private localFd: number = -1;           // 本地文件播放的 fd(播放完/换址时关闭)
   url: string = '';
   speed: media.PlaybackSpeed = media.PlaybackSpeed.SPEED_FORWARD_1_00_X;
   loop: boolean = false;
@@ -47,6 +49,11 @@ export class AVPlayerEngine {
   async open(url: string, autoPlay: boolean): Promise<void> {
     this.url = url;
     this.pendingPlay = autoPlay;
+    // 换址前关掉上一个本地文件的 fd(调用方负责 fd 生命周期)
+    if (this.localFd >= 0) {
+      try { fs.closeSync(this.localFd); } catch (e) { /* ignore */ }
+      this.localFd = -1;
+    }
     if (this.player === null) {
       hilog.info(0x0000, ETAG, 'createAVPlayer');
       this.player = await media.createAVPlayer();
@@ -55,6 +62,19 @@ export class AVPlayerEngine {
       await this.player.reset();   // → idle
     }
     this.state = 'idle';
+    if (url.startsWith('file://')) {
+      // 本地已下载文件:走 fd 媒体源(WithUrl 只认网络地址,file:// 会永远停在 idle 黑屏)
+      const path = url.substring('file://'.length);
+      const f = fs.openSync(path, fs.OpenMode.READ_ONLY);
+      const st = fs.statSync(path);
+      this.localFd = f.fd;
+      hilog.info(0x0000, ETAG, 'local file %{public}s fd=%{public}d size=%{public}lld', path, f.fd, Number(st.size));
+      const ms = media.createMediaSourceWithFd({ fd: f.fd, offset: 0, length: st.size });
+      if (ms === undefined) { throw new Error('本地媒体源创建失败'); }
+      await this.player.setMediaSource(ms);
+      this.onState?.('idle');
+      return;
+    }
     // 统一走带 UA 的 MediaSource:部分 CDN 按客户端 UA 拒绝媒体栈默认请求
     // (实测 didibo2 对 curl 类 UA 回 403/空响应),显式 okhttp UA 即放行
     const ms = media.createMediaSourceWithUrl(url, { 'User-Agent': 'okhttp/4.10.0' });
@@ -141,6 +161,10 @@ export class AVPlayerEngine {
       await this.player.release();
       this.player = null;
       this.state = 'idle';
+    }
+    if (this.localFd >= 0) {
+      try { fs.closeSync(this.localFd); } catch (e) { /* ignore */ }
+      this.localFd = -1;
     }
   }
 }

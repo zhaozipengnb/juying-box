@@ -202,6 +202,9 @@ export class DownloadManager {
         segs.push(resolveUrl(listUrl, t));
       }
       if (segs.length === 0) { throw new Error('HLS 无分段'); }
+      // fMP4 切片:EXT-X-MAP 的 init 段必须放在最前,拼接才是合法 mp4
+      const mapMatch = text.match(/#EXT-X-MAP:URI="([^"]+)"/);
+      if (mapMatch !== null) { segs.unshift(resolveUrl(listUrl, mapMatch[1])); }
       // 写入前重建目录(前面 accessSync 已确认存在,这里再兜底一次并落日志)
       try {
         fs.mkdirSync(item.localPath.substring(0, item.localPath.lastIndexOf('/')), true);
