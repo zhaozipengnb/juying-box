@@ -1484,11 +1484,12 @@ export struct PlayerPage {
             Text('弹幕显示').fontSize(14).fontColor('#FFFFFF').layoutWeight(1)
             Text(this.dmOn ? '开' : '关').fontSize(14).fontColor(this.dmOn ? '#4D9EFF' : '#99FFFFFF')
               .padding({ left: 12, right: 12 })
-              .onClick(() => {
-                this.dmOn = !this.dmOn;
-                if (!this.dmOn) { this.clearDanmaku(); }
-              })
-          }.width('100%').padding({ top: 6, bottom: 6 })
+          }
+          .width('100%').padding({ top: 8, bottom: 8 })
+          .onClick(() => {
+            this.dmOn = !this.dmOn;
+            if (!this.dmOn) { this.clearDanmaku(); }
+          })
           Row() {
             Text('时间偏移').fontSize(14).fontColor('#FFFFFF').layoutWeight(1)
             Text('−5s').fontSize(14).fontColor('#FFFFFF').padding({ left: 10, right: 10 })
@@ -1500,13 +1501,15 @@ export struct PlayerPage {
           Row() {
             Text('重新匹配当前集').fontSize(14).fontColor('#FFFFFF').layoutWeight(1)
             Text('›').fontSize(16).fontColor('#99FFFFFF')
-              .onClick(() => { this.loadDanmaku(); })
-          }.width('100%').padding({ top: 6, bottom: 6 })
+          }
+          .width('100%').padding({ top: 10, bottom: 10 })
+          .onClick(() => { this.loadDanmaku(); })
           Row() {
             Text('搜索弹幕库').fontSize(14).fontColor('#FFFFFF').layoutWeight(1)
             Text('›').fontSize(16).fontColor('#99FFFFFF')
-              .onClick(() => { this.dmStage = 'search'; })
-          }.width('100%').padding({ top: 6, bottom: 6 })
+          }
+          .width('100%').padding({ top: 10, bottom: 10 })
+          .onClick(() => { this.dmStage = 'search'; })
         } else if (this.dmStage === 'search') {
           Row({ space: 8 }) {
             TextInput({ text: this.dmKeyword!!, placeholder: '按片名/剧名搜索' })
