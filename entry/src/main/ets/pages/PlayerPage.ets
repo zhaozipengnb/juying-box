@@ -129,6 +129,7 @@ export struct PlayerPage {
   private vbVolumeSide: boolean = false; // 本次竖滑落在右半屏(音量)；false=左半屏(亮度)
   private volCur: number = -1;         // 当前媒体音量(应用侧同步跟踪,setVolume 后立即更新)
   private volReady: boolean = false;   // 音量基准就绪(首次异步读取完成前手势不动,避免旧基准跳变)
+  private volHoldTimer: number = -1;   // 音量重申定时器
   private volMax: number = 0;          // 媒体最大音量(0=获取失败,本次音量手势不生效)
   private brightCache: number = 0.5;   // 亮度缓存(0..1)，手势基准；上次手势设置值经 gBrightness 跨实例持久
   private volLast: number = -1;        // 上次设置的音量档位（去重用）
@@ -641,7 +642,11 @@ export struct PlayerPage {
     const x = fl.length > 0 ? fl[0].localX : 0;
     this.vbVolumeSide = x > this.areaW / 2;
     if (this.vbVolumeSide) {
+      hilog.info(0x0000, 'OKV-VOL', 'vbStart right: volCur=%{public}d volMax=%{public}d ready=%{public}s',
+        this.volCur, this.volMax, String(this.volReady));
       if (this.volCur < 0 || !this.volReady) { this.readVolumes(); }
+    } else {
+      hilog.info(0x0000, 'OKV-VOL', 'vbStart left(brightness)');
     }
   }
 
@@ -654,8 +659,10 @@ export struct PlayerPage {
       this.volCur = cur;
       this.volLast = cur;
       this.volReady = true;
+      hilog.info(0x0000, 'OKV-VOL', 'readVolumes ok max=%{public}d cur=%{public}d', this.volMax, this.volCur);
     } catch (err) {
       this.volMax = 0;
+      hilog.error(0x0000, 'OKV-VOL', 'readVolumes fail: %{public}s', err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -664,6 +671,7 @@ export struct PlayerPage {
     const dy = e.offsetY;   // vp，上滑为负
     if (this.vbVolumeSide && this.volMax > 0 && this.volCur >= 0) {
       let v = Math.round(this.volCur + this.volMax * (-dy / 300));
+      hilog.info(0x0000, 'OKV-VOL', 'move dy=%{public}d v=%{public}d', Math.round(dy), v);
       v = Math.max(0, Math.min(this.volMax, v));
       if (v !== this.volLast) {   // 去重：拖动事件远密于音量档位，避免洪水式 setVolume
         this.volLast = v;
@@ -1016,6 +1024,7 @@ export struct PlayerPage {
       if (this.bufTimer >= 0) { clearTimeout(this.bufTimer); this.bufTimer = -1; }
       if (this.danmuTimer >= 0) { clearInterval(this.danmuTimer); this.danmuTimer = -1; }
       if (this.brightTimer >= 0) { clearInterval(this.brightTimer); this.brightTimer = -1; }
+      if (this.volHoldTimer >= 0) { clearInterval(this.volHoldTimer); this.volHoldTimer = -1; }
       this.showCtrl = false;
       this.rotationLocked = false;
       this.setImmersive(false);
