@@ -27,6 +27,10 @@ export class DownloadItem {
   // HLS 断点续传检查点:已完成分段数/总数(追加写入,续传从此分段继续)
   @Trace segDone: number = 0;
   @Trace segTotal: number = 0;
+  // 实时网速(bytes/s,@Trace 让页面即时刷新;估算值,不持久化)
+  @Trace speed: number = 0;
+  private lastBytes: number = 0;   // 速度采样基准(上次已下字节)
+  private lastTs: number = 0;      // 速度采样基准(上次时间戳)
   headers: Record<string, string> = {};  // 源站防盗链头(续传时复用,随任务持久化)
 }
 
@@ -141,11 +145,22 @@ export class DownloadManager {
       this.taskMap.set(id, task);
       this.updateStatus(id, 'downloading');
 
+      // 网速估算:进度回调差分,按 item 上临时基准计算(回调周期约 1s,天然平滑)
+      let lastBytes = 0;
+      let lastTs = Date.now();
       task.on('progress', (progress: request.agent.Progress): void => {
         const processed = progress.processed;
+        const now = Date.now();
+        const dt = now - lastTs;
+        if (dt > 500) {
+          item.speed = (processed - lastBytes) * 1000 / dt;
+          lastBytes = processed;
+          lastTs = now;
+        }
         this.updateProgress(id, 0, processed, 0);
       });
       task.on('completed', (): void => {
+        item.speed = 0;
         let at = false;
         try { fs.accessSync(localPath); at = true; } catch (e) { }
         hilog.info(DOMAIN, 'OKV-DL', 'mp4 completed, file at localPath=%{public}s', at ? 'yes' : 'NO(落点与 localPath 不符!)');
@@ -155,6 +170,7 @@ export class DownloadManager {
         this.save();
       });
       task.on('failed', (): void => {
+        item.speed = 0;
         this.updateStatus(id, 'failed');
         this.taskMap.delete(id);
         this.save();
@@ -233,10 +249,13 @@ export class DownloadManager {
         item.localPath = asciiPath;   // 播放按钮按这个路径离线播放
       }
       let done = 0;
+      let speedBase = done;          // 网速窗口起点(字节)
+      let speedTs = Date.now();      // 网速窗口起点(毫秒)
       for (let i = startSeg; i < segs.length; i++) {
         // 暂停/清空/删除:中止写入,检查点已持久化,随时可"继续"
         if (this.items.indexOf(item) < 0 || item.status !== 'downloading') {
           fs.closeSync(f);
+          item.speed = 0;
           this.save();
           return;
         }
@@ -246,15 +265,26 @@ export class DownloadManager {
         fs.writeSync(f.fd, bytes.buffer);
         done += bytes.length;
         item.segDone = i + 1;
+        // 网速:滑动窗口 EMA,秒级平滑(分段越大越抖,半衰滤波足够看)
+        const now = Date.now();
+        const dt = now - speedTs;
+        if (dt > 500) {
+          const inst = (done - speedBase) * 1000 / dt;
+          item.speed = item.speed > 0 ? item.speed * 0.5 + inst * 0.5 : inst;
+          speedBase = done;
+          speedTs = now;
+        }
         this.updateProgress(item.id, Math.min(99, Math.floor((i + 1) * 100 / segs.length)), done, 0);
         if ((i + 1) % 20 === 0) { this.save(); }   // 断点节流持久化
       }
       item.segDone = segs.length;
+      item.speed = 0;
       fs.closeSync(f);
       this.updateProgress(item.id, 100, done, done);
       this.updateStatus(item.id, 'completed');
       hilog.info(DOMAIN, 'OKV-DL', 'hls done %{public}d segs %{public}d bytes', segs.length, done);
     } catch (e) {
+      item.speed = 0;
       this.updateStatus(item.id, 'failed');
       hilog.error(DOMAIN, 'OKV-DL', 'hls fail %{public}s', e instanceof Error ? e.message : String(e));
     }

@@ -36,6 +36,12 @@ export struct DownloadPage {
     return '失败';
   }
 
+  private fmtSpeed(bps: number): string {
+    if (bps <= 0) { return '0'; }
+    if (bps < 1024 * 1024) { return `${(bps / 1024).toFixed(0)} KB/s`; }
+    return `${(bps / 1024 / 1024).toFixed(1)} MB/s`;
+  }
+
   private statusColor(s: DownloadStatus): string {
     if (s === 'completed') { return '#4CAF50'; }
     if (s === 'failed') { return '#E53935'; }
@@ -102,6 +108,10 @@ export struct DownloadPage {
                   Row() {
                     Text(this.statusText(it.status)).fontSize(11)
                       .fontColor(this.statusColor(it.status))
+                    if (it.status === 'downloading') {
+                      Text(` · ${this.fmtSpeed(it.speed)}`).fontSize(11)
+                        .fontColor('#4D9EFF')
+                    }
                     if (it.totalSize > 0) {
                       Text(` · ${this.fmtSize(it.downloadedSize)}/${this.fmtSize(it.totalSize)}`)
                         .fontSize(11)
