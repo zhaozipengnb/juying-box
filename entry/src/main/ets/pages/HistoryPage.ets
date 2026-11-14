@@ -81,6 +81,10 @@ export struct HistoryPage {
   build() {
     NavDestination() {
       Column() {
+        // 自绘标题行(系统标题栏会透出播放器退出后的白色窗口底)
+        Text(this.tab === 0 ? '观看历史' : '我的收藏')
+          .fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+          .width('100%').padding({ left: 16, right: 16, top: 14, bottom: 4 })
         // tab 栏
         Row() {
           ForEach(TABS, (t: string, i: number) => {
@@ -159,8 +163,7 @@ export struct HistoryPage {
       .backgroundImageSize(ImageSize.Cover)
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
-    .hideTitleBar(false)
-    .title(this.tab === 0 ? '观看历史' : '我的收藏')
+    .hideTitleBar(true)   // 自绘标题(系统标题栏透白底)
     .onShown(() => { this.refreshLists(); })   // 每次可见都同步单例(播放写入历史/收藏后回来也是最新)
     .onReady((ctx: NavDestinationContext) => {
       const arg = ctx.pathInfo.param as string;
