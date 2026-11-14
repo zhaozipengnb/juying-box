@@ -131,6 +131,7 @@ export struct PlayerPage {
   private brightCache: number = 0.5;   // 亮度缓存(0..1)，手势基准；上次手势设置值经 gBrightness 跨实例持久
   private volLast: number = -1;        // 上次设置的音量档位（去重用）
   private tipTimer: number = -1;       // 提示气泡延时清除定时器
+  private brightTimer: number = -1;    // 亮度重申定时器(对抗系统自动亮度覆盖)
   engine: AVPlayerEngine = new AVPlayerEngine();   // AVPlayer 内核(真倍速/循环/精准 seek)
   static activeEngine: AVPlayerEngine | null = null;   // 退后台自动暂停用的引擎槽(EntryAbility.onBackground 调用)
 
@@ -997,6 +998,7 @@ export struct PlayerPage {
       if (this.liveWatchdog >= 0) { clearTimeout(this.liveWatchdog); this.liveWatchdog = -1; }
       if (this.bufTimer >= 0) { clearTimeout(this.bufTimer); this.bufTimer = -1; }
       if (this.danmuTimer >= 0) { clearInterval(this.danmuTimer); this.danmuTimer = -1; }
+      if (this.brightTimer >= 0) { clearInterval(this.brightTimer); this.brightTimer = -1; }
       this.showCtrl = false;
       this.rotationLocked = false;
       this.setImmersive(false);
