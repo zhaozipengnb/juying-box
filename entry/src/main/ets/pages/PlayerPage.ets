@@ -112,6 +112,7 @@ export struct PlayerPage {
   private lastDur: number = 0;
   private lastSaveAt: number = 0;      // 上次持久化时间戳（节流 5s）
   private seekedResume: boolean = false;  // 断点续播只 seek 一次
+  private pendingResume: number = 0;      // 播放开始前读好的断点(首帧进度会覆盖历史,必须先取)
   private liveSkip: number = 0;           // 直播自动换台已跳过的死频道数
   private liveWatchdog: number = -1;      // 直播出画看门狗(12s 未播判定死频道换台)
   @Local showCtrl: boolean = false;    // 自绘控制层显隐：默认隐藏，点击视频切换，播放中 4s 无操作自动隐藏
@@ -200,6 +201,12 @@ export struct PlayerPage {
     this.castUrl = '';   // 换集先清可投直链,确认直链后再补
     let target: string = ep.url;
     this.engine.isLive = this.siteKey === 'live';   // 直播流禁用倍速/循环(prepared 时调会 error)
+    // 断点在播放开始前读取:首个进度回调会以当前位置覆盖历史记录,顺序反了续播必失效
+    const m0 = this.detail?.movie;
+    this.pendingResume = (this.ep !== null && m0 !== null && m0 !== undefined)
+      ? (this.ph.resumePosition(this.siteKey, m0.vodId, this.ep.url)
+        || this.ph.resumePositionByName(this.movieName, this.ep.name, this.epIdx)) : 0;
+    this.seekedResume = false;
     if (this.siteKey === 'live') { this.armLiveWatchdog(); }
     if (target.startsWith('file://')) {
       // 已下载的本地文件:直接播,不走解析/防盗链代理/投屏队列(文件在沙箱里,链路都无意义)
@@ -806,20 +813,16 @@ export struct PlayerPage {
       // Slider 拖动中不回写(否则滑块被旧进度拽回)；seek 后的首个回调仍可能是旧位置，丢弃
       if (this.uiSeeking) { return; }
       if (this.seekPending) { this.seekPending = false; return; }
+      // 断点续播:首个进度回调先 seek 到断点——必须先于 saveProgress,
+      // 否则首帧位置(≈0)会覆盖历史记录,重开时永远从头播(实测踩坑)
+      if (!this.seekedResume && this.pendingResume > 0) {
+        this.seekedResume = true;
+        this.engine.seek(this.pendingResume);
+        return;
+      }
       this.curTime = sec;
       this.lastPos = sec;
       this.saveProgress(false);
-      // 断点续播:首次进度回调时 seek 一次(PlaybackInfo 无 duration,看完的由切集覆盖断点)
-      if (!this.seekedResume && this.ep !== null) {
-        this.seekedResume = true;
-        const m = this.detail?.movie;
-        const nameForLookup = (m !== null && m !== undefined && m.name !== '') ? m.name : this.movieName;
-        // 先按本源精确断点;换源/换线路后键全变,再按片名+集号跨源回退
-        const resume = (m !== null && m !== undefined)
-          ? (this.ph.resumePosition(this.siteKey, m.vodId, this.ep.url)
-            || this.ph.resumePositionByName(nameForLookup, this.ep.name, this.epIdx)) : 0;
-        if (resume > 0) { this.engine.seek(resume); }
-      }
     };
     this.engine.onState = (st: EngineState): void => {
       if (st === 'prepared') { this.dur = this.engine.durationSec; }
@@ -1112,51 +1115,6 @@ export struct PlayerPage {
       // 锚定依赖「容器盒子=裁剪盒=子布局空间」三者重合——视频容器不可加 expandSafeArea(见上)
       if (this.playUrl !== '' && this.errMsg === '' && !this.resolving && !this.useWeb && this.showCtrl) {
         Column() {
-          // 影院模式底部设置行(倍速/线路/刷新/循环;选集已移至进度行右端)
-          if (this.isTheater) {
-            Row({ space: 22 }) {
-              Text(this.curSpeed === 1.0 ? '1.00' : this.curSpeed + 'x')
-                .fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => {
-                  this.picker = {
-                    title: '播放倍速',
-                    options: SPEED_OPTIONS.map((s: number): string => s + 'x'),
-                    index: SPEED_OPTIONS.indexOf(this.curSpeed),
-                    onPick: (idx: number): void => {
-                      this.curSpeed = SPEED_OPTIONS[idx];
-                      this.settings.playSpeed = this.curSpeed;
-                      this.settings.save();
-                      this.engine.setSpeed(this.curSpeed);
-                    }
-                  };
-                })
-              if (this.lines.length > 1) {
-                Text(`线路${this.lineIdx + 1}`)
-                  .fontSize(12).fontColor('#FFFFFF')
-                  .onClick(() => {
-                    this.picker = {
-                      title: '切换线路',
-                      options: this.lines.map((l: PlayLine): string => l.from),
-                      index: this.lineIdx,
-                      onPick: (idx: number): void => { this.switchTo(idx, this.epIdx); }
-                    };
-                  })
-              }
-              Text('刷新')
-                .fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => { this.playUrl = ''; this.prepare(); })
-              Text(this.loopPlay ? '循环开' : '循环关')
-                .fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => {
-                  this.loopPlay = !this.loopPlay;
-                  this.engine.setLoop(this.loopPlay);
-                })
-            }
-            .width('100%')
-            .justifyContent(FlexAlign.Center)
-            .padding({ left: 12, right: 12, bottom: 4 })
-          }
-
           Row({ space: 10 }) {
             Text(formatDuration(this.curTime)).fontSize(11).fontColor('#FFFFFF')
             Slider({ value: Math.min(this.curTime, this.dur > 0 ? this.dur : 1), min: 0, max: this.dur > 0 ? this.dur : 1 })
@@ -1227,6 +1185,13 @@ export struct PlayerPage {
                 };
               })
             if (this.isTheater) {
+              Text('刷新').fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => { this.playUrl = ''; this.prepare(); })
+              Text(this.loopPlay ? '循环开' : '循环关').fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  this.loopPlay = !this.loopPlay;
+                  this.engine.setLoop(this.loopPlay);
+                })
               Text('选集').fontSize(12).fontColor('#FFFFFF')
                 .onClick(() => {
                   if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
