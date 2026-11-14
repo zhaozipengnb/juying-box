@@ -16,6 +16,7 @@ export interface DanmuItem {
   t: number;      // 出现时间(秒)
   text: string;   // 内容
   color: string;  // #RRGGBB
+  mode: number;   // 1=滚动 4=底部固定 5=顶部固定(其余按滚动处理)
 }
 
 // wbi 签名用置换表(B站公开算法)
@@ -227,10 +228,12 @@ function parseDanmuXml(xml: string): DanmuItem[] {
     const sec = parseFloat(parts[0]);
     if (!isNaN(sec) && sec >= 0) {
       const colorNum = parseInt(parts[3]);
+      const modeNum = parseInt(parts[1]);
       items.push({
         t: sec,
         text: m[2],
-        color: isNaN(colorNum) ? '#FFFFFF' : '#' + (colorNum & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase()
+        color: isNaN(colorNum) ? '#FFFFFF' : '#' + (colorNum & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase(),
+        mode: isNaN(modeNum) ? 1 : modeNum
       });
     }
     m = re.exec(xml);

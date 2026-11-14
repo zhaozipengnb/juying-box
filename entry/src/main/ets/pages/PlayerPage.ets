@@ -448,20 +448,37 @@ export struct PlayerPage {
     const DUR = 8;   // 每条弹幕滚过全屏的时长(秒)
     const font = Math.floor(15 * this.density);
     ctx.font = `${font}px sans-serif`;
-    const laneH = Math.max(28 * this.density, H / 6);
     ctx.textBaseline = 'top';
+    ctx.globalAlpha = 0.75;   // 半透明:弹幕从人物身上"透"过去,不挡脸
+    const laneH = Math.max(28 * this.density, H / 6);
+    const scrollLanes: boolean[] = [];   // 泳道占用(滚动弹幕避让)
     for (const d of this.danmus) {
       const elapsed = this.curTime - (d.t + this.dmOffset);
       if (elapsed < 0 || elapsed > DUR) { continue; }
       const tw = ctx.measureText(d.text).width;
-      const x = W - (elapsed / DUR) * (W + tw);
-      const lane = Math.abs(this.simpleHash(d.text)) % 6;
-      const y = lane * laneH + 4;
+      const scroll = d.mode !== 4 && d.mode !== 5;   // 底部/顶部固定弹幕不滚动
       ctx.fillStyle = '#000000';
-      ctx.fillText(d.text, x + 1, y + 1);
-      ctx.fillStyle = d.color;
-      ctx.fillText(d.text, x, y);
+      if (scroll) {
+        const x = W - (elapsed / DUR) * (W + tw);
+        // 泳道避让:同一泳道的前一条还没走远就不再堆叠
+        const lane = Math.abs(this.simpleHash(d.text)) % 6;
+        if (elapsed < 2 && scrollLanes[lane]) { continue; }
+        scrollLanes[lane] = true;
+        const y = lane * laneH + 4;
+        ctx.fillText(d.text, x + 1, y + 1);
+        ctx.fillStyle = d.color;
+        ctx.fillText(d.text, x, y);
+      } else {
+        // 底部/顶部固定:水平居中,驻留 4 秒
+        if (elapsed > 4) { continue; }
+        const x = W / 2 - tw / 2;
+        const y = d.mode === 5 ? 4 : H - font - 8;
+        ctx.fillText(d.text, x + 1, y + 1);
+        ctx.fillStyle = d.color;
+        ctx.fillText(d.text, x, y);
+      }
     }
+    ctx.globalAlpha = 1;
     this.danmuLastSec = this.curTime;
   }
 
