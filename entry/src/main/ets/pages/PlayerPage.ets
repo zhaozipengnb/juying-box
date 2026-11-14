@@ -306,6 +306,13 @@ export struct PlayerPage {
     this.dlBusy = true;
     let ok = 0;
     const flag = line.from;
+    // 源站防盗链头:站点配置 header + 默认 UA——CDN 按 UA/Referer 掐流时下载必须带同样头
+    const dlHeaders: Record<string, string> = { 'User-Agent': 'okhttp/4.9.3' };
+    const site = AppState.instance.config?.sites.find((s: SiteConfig): boolean => s.key === this.siteKey);
+    if (site !== undefined) {
+      const ks = Object.keys(site.header);
+      for (const k of ks) { dlHeaders[k] = site.header[k]; }
+    }
     for (let i = 0; i < picks.length; i++) {
       const ep = picks[i];
       this.dlResolveText = `解析 ${i + 1}/${picks.length}：${ep.name}`;
@@ -320,7 +327,7 @@ export struct PlayerPage {
         } catch (err) { }
       }
       if (direct === '') { continue; }
-      await this.dl.startDownload(this.movieName, ep.name, direct, this.siteKey);
+      await this.dl.startDownload(this.movieName, ep.name, direct, this.siteKey, dlHeaders);
       ok++;
     }
     this.dlBusy = false;

@@ -75,8 +75,9 @@ export class DownloadManager {
     return this.items.find((it: DownloadItem): boolean => it.movieName === movieName && it.epName === epName);
   }
 
-  // 启动下载
-  async startDownload(movieName: string, epName: string, url: string, siteKey: string): Promise<void> {
+  // 启动下载。headers:源站防盗链头(站点 header + UA),mp4 透传给 agent、HLS 透传给分段拉取
+  async startDownload(movieName: string, epName: string, url: string, siteKey: string,
+    headers: Record<string, string> = {}): Promise<void> {
     if (!this.context) { return; }
     const id = this.makeId(url);
     const existIdx = this.items.findIndex((it: DownloadItem): boolean => it.id === id);
@@ -110,16 +111,19 @@ export class DownloadManager {
       if (/\.m3u8($|\?)/i.test(url) || (!isDirectMedia(url) && url.startsWith('http'))) {
         // HLS：拉播放列表 → 全部分段顺序拼接为 .ts（request.agent 只能下直链）；
         // 批量选集时多任务并发会互相抢带宽,限 2 路同时下载其余排队
-        this.scheduleHls(item);
+        this.scheduleHls(item, headers);
         return;
       }
       const cfg: request.agent.Config = {
         action: request.agent.Action.DOWNLOAD,
         url,
-        saveas: localPath,
+        // saveas 契约:不支持绝对沙箱路径!支持 './data/storage/…'(base 目录内)——
+        // 本应用 filesDir 即 /data/storage/el2/base/…,加 '.' 前缀即合法形态
+        saveas: '.' + localPath,
         gauge: true,
         overwrite: true,
         mode: request.agent.Mode.BACKGROUND,
+        headers: headers as object,   // 防盗链源必须带源站 UA/Referer,默认头会被 CDN 掐断
       };
       const task = await request.agent.create(this.context, cfg);
       this.taskMap.set(id, task);
@@ -152,30 +156,34 @@ export class DownloadManager {
   private readonly maxHls: number = 2;
   private hlsWaiting: DownloadItem[] = [];
 
-  private scheduleHls(item: DownloadItem): void {
+  private scheduleHls(item: DownloadItem, headers: Record<string, string> = {}): void {
     if (this.activeHls >= this.maxHls) {
       this.hlsWaiting.push(item);
       return;
     }
     this.activeHls++;
-    this.downloadHls(item).then((): void => {
+    this.downloadHls(item, headers).then((): void => {
       this.activeHls--;
       const next = this.hlsWaiting.shift();
-      if (next !== undefined) { this.scheduleHls(next); }
+      if (next !== undefined) { this.scheduleHls(next, headers); }
     });
   }
 
   // HLS 下载：master 列表取首子列表；逐段拉取追加写入 .ts。进度按已下字节数估算。
-  private async downloadHls(item: DownloadItem): Promise<void> {
+  // 加密流(AES-128)一期不支持解密——拼出来也是乱码,明确失败提示
+  private async downloadHls(item: DownloadItem, headers: Record<string, string> = {}): Promise<void> {
     this.updateStatus(item.id, 'downloading');
     try {
       let listUrl = item.url;
-      let text = (await httpFetch(listUrl, {})).text();
+      let text = (await httpFetch(listUrl, { headers })).text();
       if (text.indexOf('#EXT-X-STREAM-INF') >= 0) {
         const sub = this.firstMediaLine(text);
         if (sub === '') { throw new Error('HLS 列表无可播地址'); }
         listUrl = resolveUrl(listUrl, sub);
-        text = (await httpFetch(listUrl, {})).text();
+        text = (await httpFetch(listUrl, { headers })).text();
+      }
+      if (text.indexOf('#EXT-X-KEY:METHOD=AES-128') >= 0 || text.indexOf('#EXT-X-KEY:METHOD=SAMPLE-AES') >= 0) {
+        throw new Error('该源为加密 HLS，暂不支持下载');
       }
       const segs: string[] = [];
       for (const raw of text.split(/\r?\n/)) {
@@ -192,7 +200,7 @@ export class DownloadManager {
           return;
         }
         const seg = segs[i];
-        const r = await httpFetch(seg, {});
+        const r = await httpFetch(seg, { headers });
         const bytes = new Uint8Array(r.body);
         fs.writeSync(f.fd, bytes.buffer);
         done += bytes.length;
