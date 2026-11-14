@@ -24,6 +24,10 @@ export class DownloadItem {
   totalSize: number = 0;       // 总字节
   downloadedSize: number = 0;  // 已下载字节
   siteKey: string = '';        // 来源站点
+  // HLS 断点续传检查点:已完成分段数/总数(追加写入,续传从此分段继续)
+  @Trace segDone: number = 0;
+  @Trace segTotal: number = 0;
+  headers: Record<string, string> = {};  // 源站防盗链头(续传时复用,随任务持久化)
 }
 
 const KEY_DOWNLOADS = 'juying_downloads_json';
@@ -111,6 +115,7 @@ export class DownloadManager {
     item.url = url;
     item.localPath = localPath;
     item.siteKey = siteKey;
+    item.headers = headers;
     this.items.push(item);
     this.save();
 
@@ -180,17 +185,19 @@ export class DownloadManager {
   }
 
   // HLS 下载：master 列表取首子列表；逐段拉取追加写入 .ts。进度按已下字节数估算。
-  // 加密流(AES-128)一期不支持解密——拼出来也是乱码,明确失败提示
+  // 加密流(AES-128)一期不支持解密——拼出来也是乱码,明确失败提示。
+  // 断点续传:segDone=已完成分段数,startSeg>0 时以 APPEND 从断点追加;
+  // 暂停/清空/重启后可从检查点"继续",失败的整段任务也能续传不重头
   private async downloadHls(item: DownloadItem, headers: Record<string, string> = {}): Promise<void> {
     this.updateStatus(item.id, 'downloading');
     try {
       let listUrl = item.url;
-      let text = (await httpFetch(listUrl, { headers })).text();
+      let text = (await httpFetch(listUrl, { headers: item.headers })).text();
       if (text.indexOf('#EXT-X-STREAM-INF') >= 0) {
         const sub = this.firstMediaLine(text);
         if (sub === '') { throw new Error('HLS 列表无可播地址'); }
         listUrl = resolveUrl(listUrl, sub);
-        text = (await httpFetch(listUrl, { headers })).text();
+        text = (await httpFetch(listUrl, { headers: item.headers })).text();
       }
       if (text.indexOf('#EXT-X-KEY:METHOD=AES-128') >= 0 || text.indexOf('#EXT-X-KEY:METHOD=SAMPLE-AES') >= 0) {
         throw new Error('该源为加密 HLS，暂不支持下载');
@@ -205,33 +212,44 @@ export class DownloadManager {
       // fMP4 切片:EXT-X-MAP 的 init 段必须放在最前,拼接才是合法 mp4
       const mapMatch = text.match(/#EXT-X-MAP:URI="([^"]+)"/);
       if (mapMatch !== null) { segs.unshift(resolveUrl(listUrl, mapMatch[1])); }
+      item.segTotal = segs.length;
+      const startSeg = Math.min(item.segDone, segs.length);   // 断点:上次完成到第几段
       // 写入前重建目录(前面 accessSync 已确认存在,这里再兜底一次并落日志)
       try {
         fs.mkdirSync(item.localPath.substring(0, item.localPath.lastIndexOf('/')), true);
       } catch (err) { /* 已存在会抛 File exists,忽略 */ }
+      // startSeg>0 = 续传:APPEND 追加;=0 = 全新:TRUNC 覆盖旧残片
+      const mode = startSeg > 0
+        ? (fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.APPEND)
+        : (fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
       let f: fs.File;
       try {
-        f = fs.openSync(item.localPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+        f = fs.openSync(item.localPath, mode);
       } catch (err) {
         // 兜底:中文名文件在此设备上异常时改用纯 ASCII 文件名重试
-        const asciiPath = item.localPath.substring(0, item.localPath.lastIndexOf('/') + 1) + 'dl_' + item.id + (item.url.toLowerCase().includes('.mp4') ? '.mp4' : '.ts');
+        const asciiPath = item.localPath.substring(0, item.localPath.lastIndexOf('/') + 1) + 'dl_' + item.id + '.ts';
         hilog.error(DOMAIN, 'OKV-DL', 'open fail %{public}s, retry ascii: %{public}s', err instanceof Error ? err.message : String(err), asciiPath);
-        f = fs.openSync(asciiPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+        f = fs.openSync(asciiPath, mode);
         item.localPath = asciiPath;   // 播放按钮按这个路径离线播放
       }
       let done = 0;
-      for (let i = 0; i < segs.length; i++) {
-        if (this.items.indexOf(item) < 0) {   // 清空/删除后中止写入
+      for (let i = startSeg; i < segs.length; i++) {
+        // 暂停/清空/删除:中止写入,检查点已持久化,随时可"继续"
+        if (this.items.indexOf(item) < 0 || item.status !== 'downloading') {
           fs.closeSync(f);
+          this.save();
           return;
         }
         const seg = segs[i];
-        const r = await httpFetch(seg, { headers });
+        const r = await httpFetch(seg, { headers: item.headers });
         const bytes = new Uint8Array(r.body);
         fs.writeSync(f.fd, bytes.buffer);
         done += bytes.length;
+        item.segDone = i + 1;
         this.updateProgress(item.id, Math.min(99, Math.floor((i + 1) * 100 / segs.length)), done, 0);
+        if ((i + 1) % 20 === 0) { this.save(); }   // 断点节流持久化
       }
+      item.segDone = segs.length;
       fs.closeSync(f);
       this.updateProgress(item.id, 100, done, done);
       this.updateStatus(item.id, 'completed');
@@ -261,6 +279,14 @@ export class DownloadManager {
   }
 
   async resume(id: string): Promise<void> {
+    const it = this.items.find((x: DownloadItem): boolean => x.id === id);
+    if (it !== undefined && (/\.m3u8($|\?)/i.test(it.url) || (!isDirectMedia(it.url) && it.url.startsWith('http')))) {
+      // HLS:从检查点分段继续追加(headers 随任务持久化),暂停/失败/重启后都能续
+      it.status = 'downloading';
+      this.save();
+      this.scheduleHls(it, it.headers);
+      return;
+    }
     const task = this.taskMap.get(id);
     if (task) {
       try { await task.resume(); this.updateStatus(id, 'downloading'); } catch (e) { /* ignore */ }
@@ -296,6 +322,7 @@ export class DownloadManager {
       'id': it.id, 'movieName': it.movieName, 'epName': it.epName, 'url': it.url,
       'localPath': it.localPath, 'progress': it.progress, 'status': it.status,
       'totalSize': it.totalSize, 'downloadedSize': it.downloadedSize, 'siteKey': it.siteKey,
+      'segDone': it.segDone, 'segTotal': it.segTotal, 'headers': it.headers,
     }));
     this.store.putSync(KEY_DOWNLOADS, JSON.stringify(arr));
   }
@@ -319,6 +346,10 @@ export class DownloadManager {
         it.totalSize = r['totalSize'] as number;
         it.downloadedSize = r['downloadedSize'] as number;
         it.siteKey = r['siteKey'] as string;
+        it.segDone = r['segDone'] as number ?? 0;
+        it.segTotal = r['segTotal'] as number ?? 0;
+        const hdr = r['headers'];
+        if (hdr !== undefined && hdr !== null) { it.headers = hdr as Record<string, string>; }
         return it;
       });
       // 进程重启后 taskMap 丢失:HLS 拼接循环无法续传,mp4 任务句柄也要重新关联——
