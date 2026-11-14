@@ -1155,38 +1155,43 @@ export struct PlayerPage {
                 }
               })
             Text(formatDuration(this.dur)).fontSize(11).fontColor('#FFFFFF')
-            if (this.siteKey !== 'live' && this.lines.length > 1) {
-              Text(`线路${this.lineIdx + 1}`)
-                .fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => {
-                  this.picker = {
-                    title: '切换线路',
-                    options: this.lines.map((l: PlayLine): string => l.from),
-                    index: this.lineIdx,
-                    onPick: (idx: number): void => { this.switchTo(idx, this.epIdx); }
-                  };
-                })
-            }
-            if (this.channelUrls.length > 1) {
-              Text(`线路${this.channelLine + 1}`)
-                .fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => {
-                  this.picker = {
-                    title: '切换线路',
-                    options: this.channelUrls.map((_u: string, i: number): string => `线路${i + 1}`),
-                    index: this.channelLine,
-                    onPick: (idx: number): void => {
-                      this.channelLine = idx;
-                      this.playUrl = this.channelUrls[idx];
-                    }
-                  };
-                })
-            }
-            if (this.isTheater) {
+            Image(this.isTheater ? $r('app.media.ic_shrink') : $r('app.media.ic_expand'))
+              .width(22).height(22).fillColor('#FFFFFF')
+              .onClick(() => { this.toggleTheater(); })
+          }
+          .width('100%')
+          .padding({ left: 12, right: 12, bottom: 8 })
+          // 全屏设置行:进度条下方集中排列(线路/弹幕/倍速/旋转锁/刷新/循环/选集)
+          if (this.isTheater) {
+            Row({ space: 18 }) {
+              if (this.siteKey !== 'live' && this.lines.length > 1) {
+                Text(`线路${this.lineIdx + 1}`).fontSize(12).fontColor('#FFFFFF')
+                  .onClick(() => {
+                    this.picker = {
+                      title: '切换线路',
+                      options: this.lines.map((l: PlayLine): string => l.from),
+                      index: this.lineIdx,
+                      onPick: (idx: number): void => { this.switchTo(idx, this.epIdx); }
+                    };
+                  })
+              }
+              if (this.channelUrls.length > 1) {
+                Text(`线路${this.channelLine + 1}`).fontSize(12).fontColor('#FFFFFF')
+                  .onClick(() => {
+                    this.picker = {
+                      title: '切换线路',
+                      options: this.channelUrls.map((_u: string, i: number): string => `线路${i + 1}`),
+                      index: this.channelLine,
+                      onPick: (idx: number): void => {
+                        this.channelLine = idx;
+                        this.playUrl = this.channelUrls[idx];
+                      }
+                    };
+                  })
+              }
               Text('弹幕').fontSize(12).fontColor('#FFFFFF')
                 .onClick(() => { this.showDmPanel = true; this.dmStage = 'main'; })
-              Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x')
-                .fontSize(12).fontColor('#FFFFFF')
+              Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x').fontSize(12).fontColor('#FFFFFF')
                 .onClick(() => {
                   this.picker = {
                     title: '播放倍速',
@@ -1200,35 +1205,6 @@ export struct PlayerPage {
                     }
                   };
                 })
-              Text(this.rotationLocked ? '解锁旋转' : '锁定旋转').fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => { this.toggleRotationLock(); })
-              Text('刷新').fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => { this.playUrl = ''; this.prepare(); })
-              Text(this.loopPlay ? '循环开' : '循环关').fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => {
-                  this.loopPlay = !this.loopPlay;
-                  this.engine.setLoop(this.loopPlay);
-                })
-              Text('选集').fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => {
-                  if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
-                  this.picker = {
-                    title: '选集',
-                    options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
-                    index: this.epIdx,
-                    onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
-                  };
-                })
-            }
-            Image(this.isTheater ? $r('app.media.ic_shrink') : $r('app.media.ic_expand'))
-              .width(22).height(22).fillColor('#FFFFFF')
-              .onClick(() => { this.toggleTheater(); })
-          }
-          .width('100%')
-          .padding({ left: 12, right: 12, bottom: 8 })
-          // 全屏设置行:刷新/循环/选集 移到进度条下方(右端集群上移后会与换台拥挤)
-          if (this.isTheater) {
-            Row({ space: 26 }) {
               Text('刷新').fontSize(12).fontColor('#FFFFFF')
                 .onClick(() => { this.playUrl = ''; this.prepare(); })
               Text(this.loopPlay ? '循环开' : '循环关').fontSize(12).fontColor('#FFFFFF')
@@ -1248,8 +1224,8 @@ export struct PlayerPage {
                 })
             }
             .width('100%')
-            .justifyContent(FlexAlign.Center)
-            .padding({ bottom: 6 })
+            .justifyContent(FlexAlign.End)   // 右下角对齐
+            .padding({ left: 12, right: 12, bottom: 16 })
           }
         }
         .width('100%')
@@ -1267,6 +1243,16 @@ export struct PlayerPage {
           .backgroundColor('#B3000000')
           .borderRadius(10)
           .position({ x: '50%', y: 60 }).markAnchor({ x: '50%' })
+      }
+
+      // 旋转锁:全屏右侧中部常驻(控制层隐藏时也能操作);锁定态蓝色,解锁态白色
+      if (this.isTheater) {
+        Image($r('app.media.ic_lock')).width(22).height(22)
+          .fillColor(this.rotationLocked ? '#4D9EFF' : '#FFFFFF')
+          .onClick(() => { this.toggleRotationLock(); })
+          .position({ x: '100%', y: '50%' })
+          .markAnchor({ x: '100%', y: '50%' })
+          .translate({ x: -30 })
       }
 
       // 缓冲加载指示(快进/慢网时 START→END 之间):转圈+缓冲进度,触摸穿透不挡手势
