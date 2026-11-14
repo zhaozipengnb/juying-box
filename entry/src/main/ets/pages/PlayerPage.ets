@@ -15,7 +15,8 @@ import { SPEED_OPTIONS } from '../state/AppSettings';
 import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
 import { display, window } from '@kit.ArkUI';
-import { common } from '@kit.AbilityKit';
+import { common, Want } from '@kit.AbilityKit';
+import { PiPWindow } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 
 import { AppState } from '../state/AppState';
@@ -163,6 +164,7 @@ export struct PlayerPage {
   @Local dmSearching: boolean = false;
   @Local dmSelVideo: string = '';       // 搜索阶段选中的 bvid
   @Local dmOffset: number = 0;             // 弹幕时间偏移(秒,正值=弹幕延后出现)
+  private pipController: PiPWindow.PiPController | null = null;   // 画中画控制器
   // 批量下载选集面板(原型:下载=选集弹层,可切线路/多选/显示各集下载状态)
   @Local showDlPanel: boolean = false;
   @Local dlLineIdx: number = 0;        // 面板内线路
@@ -748,6 +750,46 @@ export struct PlayerPage {
     this.ctrlTimer = setTimeout(() => { this.showCtrl = false; this.ctrlTimer = -1; }, 4000);
   }
 
+  // 画中画:XComponent 表面移交悬浮窗,AVPlayer 不中断;再次点击还原全屏
+  private async togglePip(): Promise<void> {
+    try {
+      if (this.pipController !== null) {
+        await this.pipController.stopPiP();
+        this.pipController = null;
+        return;
+      }
+      const config: PiPWindow.PiPConfiguration = {
+        context: getContext(this) as common.UIAbilityContext,
+        componentController: this.xcController
+      };
+      this.pipController = await PiPWindow.create(config);
+      await this.pipController.startPiP();
+      this.getUIContext().getPromptAction().showToast({ message: '已进入画中画' });
+    } catch (e) {
+      this.pipController = null;
+      const msg = e instanceof Error ? e.message : String(e);
+      hilog.error(0x0000, 'OKV-Player', 'pip fail: %{public}s', msg);
+      this.getUIContext().getPromptAction().showToast({ message: '画中画启动失败：' + msg });
+    }
+  }
+
+  // 系统分享:视频直链交给系统分享面板(华为分享/隔空投送等由系统处理)
+  private shareVideo(): void {
+    const url = this.castUrl !== '' ? this.castUrl : (this.ep?.url ?? '');
+    if (url === '' || url.startsWith('file://')) {
+      this.getUIContext().getPromptAction().showToast({ message: '当前内容不支持分享' });
+      return;
+    }
+    const want: Want = {
+      action: 'ohos.want.action.sendData',
+      type: 'text/plain',
+      parameters: { content: url, title: this.movieName }
+    };
+    (getContext(this) as common.UIAbilityContext).startAbility(want).catch((e: Object): void => {
+      hilog.error(0x0000, 'OKV-Player', 'share fail: %{public}s', e instanceof Error ? e.message : String(e));
+    });
+  }
+
   // 全屏旋转锁:锁定后窗口方向固定(不随传感器转),解锁恢复按片源方向的传感器跟随
   private toggleRotationLock(): void {
     this.rotationLocked = !this.rotationLocked;
@@ -961,7 +1003,7 @@ export struct PlayerPage {
       if (this.ep !== null) { this.prepare(); }
       this.setStatusBarContent('#FFFFFF');
     })
-    .onWillDisappear(() => {
+    .onWillDisappear(async () => {
       this.saveProgress(true);
       this.sniffClear();
       // AVPlayer 不随页面销毁自动停止:退出播放页必须显式停掉并释放(否则声音继续)
@@ -980,6 +1022,10 @@ export struct PlayerPage {
       if (this.liveWatchdog >= 0) { clearTimeout(this.liveWatchdog); this.liveWatchdog = -1; }
       if (this.bufTimer >= 0) { clearTimeout(this.bufTimer); this.bufTimer = -1; }
       if (this.danmuTimer >= 0) { clearInterval(this.danmuTimer); this.danmuTimer = -1; }
+      if (this.pipController !== null) {
+        try { await this.pipController.stopPiP(); } catch (e) { }
+        this.pipController = null;
+      }
       this.showCtrl = false;
       this.rotationLocked = false;
       this.setImmersive(false);
@@ -1213,6 +1259,10 @@ export struct PlayerPage {
                     }
                   };
                 })
+              Text('小窗').fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => { this.togglePip(); })
+              Text('分享').fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => { this.shareVideo(); })
               Text('刷新').fontSize(12).fontColor('#FFFFFF')
                 .onClick(() => { this.playUrl = ''; this.prepare(); })
               Text(this.loopPlay ? '循环开' : '循环关').fontSize(12).fontColor('#FFFFFF')
