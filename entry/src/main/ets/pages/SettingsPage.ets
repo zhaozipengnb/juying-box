@@ -130,13 +130,18 @@ export struct SettingsPage {
   }
 
   // ---------- 缓存 ----------
-  private cacheDir(): string {
-    return (getContext(this) as common.UIAbilityContext).cacheDir;
+  // 应用有两套沙箱目录:ability 级(cacheDir/filesDir)与 application 级——
+  // 网页/媒体栈的大头缓存写在 application 级,只统计 ability 级会"永远没有缓存"
+  private cacheDirs(): string[] {
+    const ctx = getContext(this) as common.UIAbilityContext;
+    const app = ctx.getApplicationContext();
+    return [ctx.cacheDir, app.cacheDir, app.filesDir + '/__arkweb'];
   }
 
-  // 离线影片目录:本应用真正的空间大头,与运行缓存分开展示
-  private downloadsDir(): string {
-    return (getContext(this) as common.UIAbilityContext).filesDir + '/downloads';
+  private downloadDirs(): string[] {
+    const ctx = getContext(this) as common.UIAbilityContext;
+    const app = ctx.getApplicationContext();
+    return [ctx.filesDir + '/downloads', app.filesDir + '/downloads'];
   }
 
   private dirSize(path: string): number {
@@ -154,18 +159,25 @@ export struct SettingsPage {
     return total;
   }
 
+  private sumDirs(dirs: string[]): number {
+    let total = 0;
+    for (const d of dirs) { total += this.dirSize(d); }
+    return total;
+  }
+
   private refreshCacheSize(): void {
-    this.cacheBytes = this.dirSize(this.cacheDir());
-    this.downloadsBytes = this.dirSize(this.downloadsDir());   // 目录不存在时 dirSize 返回 0
+    this.cacheBytes = this.sumDirs(this.cacheDirs());
+    this.downloadsBytes = this.sumDirs(this.downloadDirs());
   }
 
   private clearCache(): void {
-    const dir = this.cacheDir();
-    let names: string[] = [];
-    try { names = fs.listFileSync(dir); } catch (e) { /* 目录不存在视为已清 */ }
-    for (const n of names) {
-      try { fs.rmdirSync(dir + '/' + n); } catch (e) {
-        try { fs.unlinkSync(dir + '/' + n); } catch (e2) { /* 单项失败跳过 */ }
+    for (const dir of this.cacheDirs()) {
+      let names: string[] = [];
+      try { names = fs.listFileSync(dir); } catch (e) { /* 目录不存在视为已清 */ }
+      for (const n of names) {
+        try { fs.rmdirSync(dir + '/' + n); } catch (e) {
+          try { fs.unlinkSync(dir + '/' + n); } catch (e2) { /* 单项失败跳过 */ }
+        }
       }
     }
     this.refreshCacheSize();
@@ -466,7 +478,7 @@ export struct SettingsPage {
           }
 
           // ---------- 存储 ----------
-          SettingRow({ label: '缓存占用', sub: this.fmtSize(this.cacheBytes) + '（图片/网页运行缓存）' }) {
+          SettingRow({ label: '缓存占用', sub: this.fmtSize(this.cacheBytes) + '（网页/图片缓存；清理后网页类源需重新过验证）' }) {
             Button('清理')
               .height(36)
               .backgroundColor('#F5F5F5').fontColor('#C62828')
