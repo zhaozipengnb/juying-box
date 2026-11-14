@@ -137,6 +137,7 @@ export struct PlayerPage {
   @Local castDeviceName: string = '';
   @Local buffering: boolean = false;   // 播放器缓冲中(START→END 之间)
   @Local bufPercent: number = 0;       // 缓冲进度 0-100
+  private bufTimer: number = -1;       // 缓冲延迟显示计时器(短缓冲不闪浮层)
   // 批量下载选集面板(原型:下载=选集弹层,可切线路/多选/显示各集下载状态)
   @Local showDlPanel: boolean = false;
   @Local dlLineIdx: number = 0;        // 面板内线路
@@ -657,9 +658,19 @@ export struct PlayerPage {
     this.engine.onVideoSize = (w: number, h: number): void => {
       this.vidW = w; this.vidH = h;
     };
-    this.engine.onBufferingStart = (): void => { this.buffering = true; this.bufPercent = 0; };
-    this.engine.onBufferingEnd = (): void => { this.buffering = false; };
-    this.engine.onBufferingPercent = (p: number): void => { this.buffering = true; this.bufPercent = p; };
+    this.engine.onBufferingStart = (): void => {
+      // 正常播放中缓冲余量波动也会触发 START——延迟 800ms,短缓冲不闪浮层
+      if (this.bufTimer >= 0) { clearTimeout(this.bufTimer); }
+      this.bufTimer = setTimeout((): void => {
+        this.bufTimer = -1;
+        this.buffering = true;
+      }, 800);
+    };
+    this.engine.onBufferingEnd = (): void => {
+      if (this.bufTimer >= 0) { clearTimeout(this.bufTimer); this.bufTimer = -1; }
+      this.buffering = false;
+    };
+    this.engine.onBufferingPercent = (p: number): void => { this.bufPercent = p; };
     // AVPlayer 回调:进度/状态/错误;倍速与循环由设置驱动
     this.engine.speed = speedEnum(this.settings.playSpeed);
     this.engine.onTime = (sec: number): void => {
@@ -685,6 +696,7 @@ export struct PlayerPage {
       if (st === 'prepared') { this.dur = this.engine.durationSec; }
       else if (st === 'playing') {
         this.isPlaying = true;
+        this.buffering = false;   // playing 态出现即缓冲已结束(兜底 END 丢失的流)
         if (this.liveWatchdog >= 0) { clearTimeout(this.liveWatchdog); this.liveWatchdog = -1; }
       }
       else if (st === 'paused') { this.isPlaying = false; }
@@ -807,6 +819,7 @@ export struct PlayerPage {
       }
       if (this.ctrlTimer >= 0) { clearTimeout(this.ctrlTimer); this.ctrlTimer = -1; }
       if (this.liveWatchdog >= 0) { clearTimeout(this.liveWatchdog); this.liveWatchdog = -1; }
+      if (this.bufTimer >= 0) { clearTimeout(this.bufTimer); this.bufTimer = -1; }
       this.showCtrl = false;
       this.setImmersive(false);
       this.setStatusBarContent('#000000');
