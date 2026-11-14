@@ -90,8 +90,15 @@ export class DownloadManager {
     // 首次下载时目录不存在,request.agent 与 HLS 建文件都会失败
     try {
       fs.accessSync(dir);
+      hilog.info(DOMAIN, 'OKV-DL', 'dir exists: %{public}s', dir);
     } catch (e) {
-      try { fs.mkdirSync(dir, true); } catch (err) { }
+      hilog.info(DOMAIN, 'OKV-DL', 'dir missing, mkdir: %{public}s', dir);
+      try {
+        fs.mkdirSync(dir, true);
+        hilog.info(DOMAIN, 'OKV-DL', 'mkdir ok');
+      } catch (err) {
+        hilog.error(DOMAIN, 'OKV-DL', 'mkdir fail: %{public}s', err instanceof Error ? err.message : String(err));
+      }
     }
     const isHls = /\.m3u8($|\?)/i.test(url);
     const fileName = `${this.safeName(movieName)}_${this.safeName(epName)}.${isHls ? 'ts' : 'mp4'}`;
@@ -134,6 +141,9 @@ export class DownloadManager {
         this.updateProgress(id, 0, processed, 0);
       });
       task.on('completed', (): void => {
+        let at = false;
+        try { fs.accessSync(localPath); at = true; } catch (e) { }
+        hilog.info(DOMAIN, 'OKV-DL', 'mp4 completed, file at localPath=%{public}s', at ? 'yes' : 'NO(落点与 localPath 不符!)');
         this.updateProgress(id, 100, 0, 0);
         this.updateStatus(id, 'completed');
         this.taskMap.delete(id);
@@ -192,7 +202,20 @@ export class DownloadManager {
         segs.push(resolveUrl(listUrl, t));
       }
       if (segs.length === 0) { throw new Error('HLS 无分段'); }
-      const f = fs.openSync(item.localPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      // 写入前重建目录(前面 accessSync 已确认存在,这里再兜底一次并落日志)
+      try {
+        fs.mkdirSync(item.localPath.substring(0, item.localPath.lastIndexOf('/')), true);
+      } catch (err) { /* 已存在会抛 File exists,忽略 */ }
+      let f: fs.File;
+      try {
+        f = fs.openSync(item.localPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      } catch (err) {
+        // 兜底:中文名文件在此设备上异常时改用纯 ASCII 文件名重试
+        const asciiPath = item.localPath.substring(0, item.localPath.lastIndexOf('/') + 1) + 'dl_' + item.id + (item.url.toLowerCase().includes('.mp4') ? '.mp4' : '.ts');
+        hilog.error(DOMAIN, 'OKV-DL', 'open fail %{public}s, retry ascii: %{public}s', err instanceof Error ? err.message : String(err), asciiPath);
+        f = fs.openSync(asciiPath, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+        item.localPath = asciiPath;   // 播放按钮按这个路径离线播放
+      }
       let done = 0;
       for (let i = 0; i < segs.length; i++) {
         if (this.items.indexOf(item) < 0) {   // 清空/删除后中止写入
