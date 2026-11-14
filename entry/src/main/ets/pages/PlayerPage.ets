@@ -1545,9 +1545,9 @@ export struct PlayerPage {
           .layoutWeight(1).scrollBar(BarState.Off).width('100%')
         }
       }
-      .width('80%')
-      .constraintSize({ maxWidth: 480 })
-      .height(280)
+      .width('70%')
+      .constraintSize({ maxWidth: 400 })
+      .height(240)
       .backgroundColor('#D9262629')
       .borderRadius(14)
       .padding(12)

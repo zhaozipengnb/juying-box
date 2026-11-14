@@ -60,10 +60,10 @@ export struct OptionPicker {
         .scrollable(ScrollDirection.Vertical)
         .scrollBar(BarState.Auto)
         .align(Alignment.Top)
-        .constraintSize({ maxHeight: 280 })
+        .constraintSize({ maxHeight: 240 })
       }
-      .width('72%')
-      .constraintSize({ maxWidth: 360 })   // 横屏全宽时会过宽,限幅居中
+      .width('60%')
+      .constraintSize({ maxWidth: 320 })   // 横屏全宽时会过宽,限幅居中
       .padding({ bottom: 6 })
       .backgroundColor('#D9262629')
       .borderRadius(14)
