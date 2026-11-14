@@ -114,6 +114,7 @@ export struct PlayerPage {
   private seekedResume: boolean = false;  // 断点续播只 seek 一次
   private pendingResume: number = 0;      // 播放开始前读好的断点(首帧进度会覆盖历史,必须先取)
   private liveSkip: number = 0;           // 直播自动换台已跳过的死频道数
+  @Local rotationLocked: boolean = false;  // 全屏旋转锁定(锁定后不跟随传感器)
   private liveWatchdog: number = -1;      // 直播出画看门狗(12s 未播判定死频道换台)
   @Local showCtrl: boolean = false;    // 自绘控制层显隐：默认隐藏，点击视频切换，播放中 4s 无操作自动隐藏
   private ctrlTimer: number = -1;      // 自动隐藏定时器（-1 = 未挂）
@@ -741,6 +742,20 @@ export struct PlayerPage {
     this.ctrlTimer = setTimeout(() => { this.showCtrl = false; this.ctrlTimer = -1; }, 4000);
   }
 
+  // 全屏旋转锁:锁定后窗口方向固定(不随传感器转),解锁恢复按片源方向的传感器跟随
+  private toggleRotationLock(): void {
+    this.rotationLocked = !this.rotationLocked;
+    if (this.rotationLocked) {
+      this.setOrientation(window.Orientation.LOCKED);   // 锁定当前方向
+    } else {
+      const portraitVideo = this.vidH > this.vidW && this.vidW > 0;
+      this.setOrientation(portraitVideo ? window.Orientation.AUTO_ROTATION_PORTRAIT : window.Orientation.AUTO_ROTATION_LANDSCAPE);
+    }
+    this.getUIContext().getPromptAction().showToast({
+      message: this.rotationLocked ? '已锁定旋转' : '已解锁旋转'
+    });
+  }
+
   // 影院模式：横屏 + 播放器铺满 + 隐藏详情；再点还原。
   // 视频区常驻（见 build），切换只改布局属性与窗口方向，Video 不重建、进度与解码状态天然保留
   private toggleTheater(): void {
@@ -958,6 +973,7 @@ export struct PlayerPage {
       if (this.bufTimer >= 0) { clearTimeout(this.bufTimer); this.bufTimer = -1; }
       if (this.danmuTimer >= 0) { clearInterval(this.danmuTimer); this.danmuTimer = -1; }
       this.showCtrl = false;
+      this.rotationLocked = false;
       this.setImmersive(false);
       this.setStatusBarContent('#000000');
       this.setOrientation(window.Orientation.UNSPECIFIED);
@@ -1166,25 +1182,26 @@ export struct PlayerPage {
                   };
                 })
             }
-            Text('弹幕')
-              .fontSize(12).fontColor('#FFFFFF')
-              .onClick(() => { this.showDmPanel = true; this.dmStage = 'main'; })
-            Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x')
-              .fontSize(12).fontColor('#FFFFFF')
-              .onClick(() => {
-                this.picker = {
-                  title: '播放倍速',
-                  options: SPEED_OPTIONS.map((s: number): string => s + 'x'),
-                  index: SPEED_OPTIONS.indexOf(this.curSpeed),
-                  onPick: (idx: number): void => {
-                    this.curSpeed = SPEED_OPTIONS[idx];
-                    this.settings.playSpeed = this.curSpeed;
-                    this.settings.save();
-                    this.engine.setSpeed(this.curSpeed);
-                  }
-                };
-              })
             if (this.isTheater) {
+              Text('弹幕').fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => { this.showDmPanel = true; this.dmStage = 'main'; })
+              Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x')
+                .fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  this.picker = {
+                    title: '播放倍速',
+                    options: SPEED_OPTIONS.map((s: number): string => s + 'x'),
+                    index: SPEED_OPTIONS.indexOf(this.curSpeed),
+                    onPick: (idx: number): void => {
+                      this.curSpeed = SPEED_OPTIONS[idx];
+                      this.settings.playSpeed = this.curSpeed;
+                      this.settings.save();
+                      this.engine.setSpeed(this.curSpeed);
+                    }
+                  };
+                })
+              Text(this.rotationLocked ? '解锁旋转' : '锁定旋转').fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => { this.toggleRotationLock(); })
               Text('刷新').fontSize(12).fontColor('#FFFFFF')
                 .onClick(() => { this.playUrl = ''; this.prepare(); })
               Text(this.loopPlay ? '循环开' : '循环关').fontSize(12).fontColor('#FFFFFF')
@@ -1209,6 +1226,31 @@ export struct PlayerPage {
           }
           .width('100%')
           .padding({ left: 12, right: 12, bottom: 8 })
+          // 全屏设置行:刷新/循环/选集 移到进度条下方(右端集群上移后会与换台拥挤)
+          if (this.isTheater) {
+            Row({ space: 26 }) {
+              Text('刷新').fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => { this.playUrl = ''; this.prepare(); })
+              Text(this.loopPlay ? '循环开' : '循环关').fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  this.loopPlay = !this.loopPlay;
+                  this.engine.setLoop(this.loopPlay);
+                })
+              Text('选集').fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
+                  this.picker = {
+                    title: '选集',
+                    options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
+                    index: this.epIdx,
+                    onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
+                  };
+                })
+            }
+            .width('100%')
+            .justifyContent(FlexAlign.Center)
+            .padding({ bottom: 6 })
+          }
         }
         .width('100%')
         .position({ x: 0, y: '100%' })
