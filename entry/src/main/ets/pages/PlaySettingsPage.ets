@@ -101,7 +101,6 @@ export struct PlaySettingsPage {
                 this.sync();
               } })
             SettingRow({ label: '弹幕', value: this.danmakuOn ? '开启' : '关闭',
-              sub: this.danmakuOn && (AppSettings.instance.dandanAppId === '') ? '需先在设置页填写弹弹play AppId' : '',
               onTap: (): void => {
                 this.danmakuOn = !this.danmakuOn;
                 this.sync();

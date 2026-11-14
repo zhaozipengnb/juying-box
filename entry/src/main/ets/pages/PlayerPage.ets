@@ -21,7 +21,7 @@ import { util } from '@kit.ArkTS';
 import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
 import { DownloadManager, DownloadItem } from '../state/DownloadManager';
-import { DanmuItem, DanmuEpisode, danmuMatch, danmuSearch, danmuComments } from '../net/DanmuApi';
+import { DanmuItem, biliDanmu } from '../net/DanmuApi';
 import { HlsAdFilterServer } from '../net/HlsAdFilterServer';
 import { SniffProxy } from '../net/SniffProxyServer';
 import { PlayHistory } from '../state/PlayHistory';
@@ -391,33 +391,19 @@ export struct PlayerPage {
     }
   }
 
-  // 拉取当前集弹幕(弹弹play):先精确匹配,匹配不到按片名搜索;选集按集号对齐
+  // 拉取当前集弹幕(B站匿名链路,零配置):片名+集名搜索 → 分P对齐 → 弹幕
   private async loadDanmaku(): Promise<void> {
     this.danmus = [];
     this.danmuIdx = 0;
-    if (this.settings.danmakuOn && this.siteKey !== 'live' && !this.useWeb &&
-      this.settings.dandanAppId !== '' && this.settings.dandanSecret !== '' && this.ep !== null) {
-      try {
-        const fileName = `${this.movieName} ${this.ep.name}.mp4`;
-        let eps = await danmuMatch(fileName);
-        if (eps.length === 0) { eps = await danmuSearch(this.movieName); }
-        // 挑集:标题含集号优先,否则按当前集序对齐
-        const numMatch = this.ep.name.match(/\d+/);
-        const num = numMatch === null ? -1 : parseInt(numMatch[0]);
-        let pick: DanmuEpisode | null = null;
-        for (const e of eps) {
-          if (num >= 0 && e.episodeTitle.indexOf(String(num)) >= 0) { pick = e; break; }
-        }
-        if (pick === null && eps.length > 0) { pick = eps[Math.min(this.epIdx, eps.length - 1)]; }
-        if (pick === null || pick.episodeId <= 0) {
-          hilog.info(0x0000, 'OKV-Player', 'danmu no match');
-          return;
-        }
-        this.danmus = await danmuComments(pick.episodeId);
-        hilog.info(0x0000, 'OKV-Player', 'danmu loaded %{public}d from %{public}s', this.danmus.length, pick.animeTitle);
-      } catch (e) {
-        hilog.error(0x0000, 'OKV-Player', 'danmu fail: %{public}s', e instanceof Error ? e.message : String(e));
-      }
+    if (!this.settings.danmakuOn || this.siteKey === 'live' || this.useWeb || this.ep === null) {
+      return;
+    }
+    const bili = await biliDanmu(this.movieName, this.ep.name, this.epIdx);
+    if (bili.length > 0) {
+      this.danmus = bili;
+      hilog.info(0x0000, 'OKV-Player', 'danmu(bili) %{public}d', bili.length);
+    } else {
+      hilog.info(0x0000, 'OKV-Player', 'danmu no match');
     }
   }
 

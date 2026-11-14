@@ -83,6 +83,31 @@ export class WebFetchBridge {
     }
   }
 
+  // 在隐藏 Web 容器里执行任意 JS 并取回字符串结果(复用浏览器独有能力:
+  // DecompressionStream 弹幕解压等)。结果通过 window.__evalResult 传递,轮询取回
+  async evalJs(code: string): Promise<string> {
+    await this.waitAttached();
+    const deadline = Date.now() + 15000;
+    await this.controller.runJavaScriptExt(code + ';window.__evalDone=1;');
+    while (Date.now() < deadline) {
+      let out = '';
+      try {
+        const r = await this.controller.runJavaScriptExt('String(window.__evalResult ?? \'\')');
+        out = r.getString();
+      } catch (e) { out = ''; }
+      if (out !== '' || (await this.evalDone())) { return out; }
+      await new Promise<void>((res) => setTimeout(res, 150));
+    }
+    return '';
+  }
+
+  private async evalDone(): Promise<boolean> {
+    try {
+      const r = await this.controller.runJavaScriptExt('String(window.__evalDone === 1)');
+      return r.getString() === 'true';
+    } catch (e) { return false; }
+  }
+
   // 加载 url → 等 CF 挑战自动通过 → 返回渲染后 HTML
   async fetchHtml(url: string): Promise<string> {
     await this.waitAttached();
