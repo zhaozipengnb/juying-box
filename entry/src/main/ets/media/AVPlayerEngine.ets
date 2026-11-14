@@ -35,6 +35,9 @@ export class AVPlayerEngine {
   onTime?: (sec: number) => void;
   onState?: (s: EngineState) => void;
   onVideoSize?: (w: number, h: number) => void;
+  onBufferingStart?: () => void;
+  onBufferingEnd?: () => void;
+  onBufferingPercent?: (percent: number) => void;
   onError?: (msg: string) => void;
 
   // XComponent onLoad 时注入 surface;若 open 已先行(url 已设),补设并继续
@@ -114,6 +117,11 @@ export class AVPlayerEngine {
     });
     p.on('videoSizeChange', (w: number, h: number): void => {
       this.onVideoSize?.(w, h);
+    });
+    p.on('bufferingUpdate', (infoType: media.BufferingInfoType, value: number): void => {
+      if (infoType === media.BufferingInfoType.BUFFERING_START) { this.onBufferingStart?.(); }
+      else if (infoType === media.BufferingInfoType.BUFFERING_END) { this.onBufferingEnd?.(); }
+      else if (infoType === media.BufferingInfoType.BUFFERING_PERCENT) { this.onBufferingPercent?.(value); }
     });
     p.on('error', (err: Object): void => {
       const msg = err instanceof Error ? err.message : JSON.stringify(err);
