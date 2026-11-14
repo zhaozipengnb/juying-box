@@ -7,6 +7,8 @@ import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { httpFetch } from './HttpClient';
 import { utf8Decode } from 'common';
 import { WebFetchBridge } from './WebFetchBridge';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+const DTAG = 'OKV-DANMU';
 
 export interface DanmuItem {
   t: number;      // 出现时间(秒)
@@ -87,14 +89,22 @@ async function biliSearchBvid(keyword: string, mixin: string): Promise<string> {
   const sr = JSON.parse(utf8Decode(bytes)) as Record<string, Object>;
   const data = (sr['data'] ?? {}) as Record<string, Object>;
   const results = (data['result'] ?? []) as Object[];
+  // 同片名候选里选播放数最高的:人看得多的版本才有弹幕(解说/搬运版常是 0 弹幕)
+  let bvid = '';
+  let bestPlay = -1;
+  const kw = keyword.split(' ')[0];
   for (const r of results) {
     const rr = r as Record<string, Object>;
     const title = ((rr['title'] as string) ?? '').replace(/<[^>]+>/g, '');
-    if (keyword !== '' && title.indexOf(keyword.split(' ')[0]) >= 0) {
-      return rr['bvid'] as string ?? '';
+    if (kw === '' || title.indexOf(kw) < 0) { continue; }
+    const play = parseInt(rr['play'] as string ?? '0') || 0;
+    if (play > bestPlay) {
+      bestPlay = play;
+      bvid = rr['bvid'] as string ?? '';
     }
   }
-  return '';
+  hilog.info(0x0000, DTAG, 'bili pick bvid=%{public}s play=%{public}d', bvid, bestPlay);
+  return bvid;
 }
 
 // 分P列表:返回 {cid, part} 数组(匿名)
@@ -164,10 +174,13 @@ function parseDanmuXml(xml: string): DanmuItem[] {
 // ===== 对外入口:片名+集名+集序 → 弹幕列表(零配置) =====
 // 1. wbi 签名搜索片名 → 标题含片名的视频 2. 分P按集号/集名/序对齐 3. 弹幕解压解析
 export async function biliDanmu(movieName: string, epName: string, epIdx: number): Promise<DanmuItem[]> {
+  hilog.info(0x0000, DTAG, 'bili start: movie=%{public}s ep=%{public}s', movieName, epName);
   const mixin = await biliWbiKey();
   const bvid = await biliSearchBvid(movieName, mixin);
+  hilog.info(0x0000, DTAG, 'bili search bvid=%{public}s', bvid);
   if (bvid === '') { return []; }
   const pages = await biliPagelist(bvid);
+  hilog.info(0x0000, DTAG, 'bili pages=%{public}d', pages.length);
   if (pages.length === 0) { return []; }
   // 分P对齐:集号一致优先,其次同名,再退到集序/第 1 页
   const num = epNumberOf(epName);
@@ -177,7 +190,11 @@ export async function biliDanmu(movieName: string, epName: string, epIdx: number
     if (p.part === epName) { cid = p.cid; break; }
   }
   if (cid < 0) { cid = pages[Math.min(epIdx, pages.length - 1)].cid; }
+  hilog.info(0x0000, DTAG, 'bili cid=%{public}d', cid);
   const xml = await biliDanmuXml(cid);
+  hilog.info(0x0000, DTAG, 'bili xml len=%{public}d', xml.length);
   if (xml === '') { return []; }
-  return parseDanmuXml(xml);
+  const items = parseDanmuXml(xml);
+  hilog.info(0x0000, DTAG, 'bili parsed %{public}d', items.length);
+  return items;
 }
