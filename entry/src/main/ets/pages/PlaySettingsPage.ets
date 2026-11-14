@@ -17,6 +17,7 @@ export struct PlaySettingsPage {
   @Local aiAdFilter: boolean = AppSettings.instance.aiAdFilter;
   @Local builtinDownload: boolean = AppSettings.instance.builtinDownload;
   @Local downloadWifiOnly: boolean = AppSettings.instance.downloadWifiOnly;
+  @Local danmakuOn: boolean = AppSettings.instance.danmakuOn;
   @Local picker: PickerSpec | null = null;   // 居中选择弹层（null = 不显示）
 
   // 写镜像 + 同步单例持久化（页面显示读镜像，播放页读单例，二者经 sync 保持一致）
@@ -28,6 +29,7 @@ export struct PlaySettingsPage {
     this.settings.aiAdFilter = this.aiAdFilter;
     this.settings.builtinDownload = this.builtinDownload;
     this.settings.downloadWifiOnly = this.downloadWifiOnly;
+    this.settings.danmakuOn = this.danmakuOn;
     this.settings.save();
   }
 
@@ -96,6 +98,12 @@ export struct PlaySettingsPage {
             SettingRow({ label: '下载仅 Wi-Fi', value: this.downloadWifiOnly ? '开启' : '关闭',
               onTap: (): void => {
                 this.downloadWifiOnly = !this.downloadWifiOnly;
+                this.sync();
+              } })
+            SettingRow({ label: '弹幕', value: this.danmakuOn ? '开启' : '关闭',
+              sub: this.danmakuOn && (AppSettings.instance.dandanAppId === '') ? '需先在设置页填写弹弹play AppId' : '',
+              onTap: (): void => {
+                this.danmakuOn = !this.danmakuOn;
                 this.sync();
               } })
           }

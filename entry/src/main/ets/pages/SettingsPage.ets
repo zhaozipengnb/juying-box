@@ -492,6 +492,18 @@ export struct SettingsPage {
               .onClick(() => { Nav.stack.pushPathByName('Download', ''); })
           }
 
+          // ---------- 弹幕 ----------
+          SettingRow({ label: '弹幕 · AppId', sub: this.settings.dandanAppId === '' ? '未设置（弹弹play 开放平台申请）' : this.settings.dandanAppId, onTap: (): void => {
+            this.dialogTarget = 'danmu-appid';
+            this.dialogUrl = this.settings.dandanAppId;
+            this.showUrlDialog = true;
+          } })
+          SettingRow({ label: '弹幕 · Secret', sub: this.settings.dandanSecret === '' ? '未设置' : '已设置（点击修改）', onTap: (): void => {
+            this.dialogTarget = 'danmu-secret';
+            this.dialogUrl = this.settings.dandanSecret;
+            this.showUrlDialog = true;
+          } })
+
           // ---------- 版本 ----------
           SettingRow({ label: '当前版本', sub: 'v1.0.0' })
 
@@ -521,7 +533,7 @@ export struct SettingsPage {
         .onClick(() => { this.showUrlDialog = false; })
 
         Column() {
-          Text(this.dialogTarget === 'vod' ? '订阅地址' : this.dialogTarget === 'live' ? '直播源' : this.dialogTarget === 'proxy' ? 'Proxy 地址' : '壁纸图片')
+          Text(this.dialogTarget === 'vod' ? '订阅地址' : this.dialogTarget === 'live' ? '直播源' : this.dialogTarget === 'proxy' ? 'Proxy 地址' : this.dialogTarget === 'danmu-appid' ? '弹弹play AppId' : this.dialogTarget === 'danmu-secret' ? '弹弹play Secret' : '壁纸图片')
             .fontSize(16).fontWeight(FontWeight.Medium).fontColor('#222222')
             .margin({ bottom: 6 })
           if (this.dialogTarget === 'vod') {
@@ -656,6 +668,14 @@ export struct SettingsPage {
       this.settings.proxyUrl = url;
       this.settings.save();
       this.showUrlDialog = false;
+    } else if (this.dialogTarget === 'danmu-appid') {
+      this.settings.dandanAppId = this.dialogUrl.trim();
+      this.settings.save();
+      try { UrlHistory.instance.add('danmu-appid', this.dialogUrl.trim()); } catch (e) { }
+    } else if (this.dialogTarget === 'danmu-secret') {
+      this.settings.dandanSecret = this.dialogUrl.trim();
+      this.settings.save();
+      try { UrlHistory.instance.add('danmu-secret', this.dialogUrl.trim()); } catch (e) { }
     } else if (this.dialogTarget === 'wallpaper') {
       hilog.info(0x0000, 'OKV', 'wallpaper apply target=%{public}s url=%{public}s', this.dialogTarget, url);
       this.showUrlDialog = false;

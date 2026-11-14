@@ -21,6 +21,7 @@ import { util } from '@kit.ArkTS';
 import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
 import { DownloadManager, DownloadItem } from '../state/DownloadManager';
+import { DanmuItem, DanmuEpisode, danmuMatch, danmuSearch, danmuComments } from '../net/DanmuApi';
 import { HlsAdFilterServer } from '../net/HlsAdFilterServer';
 import { SniffProxy } from '../net/SniffProxyServer';
 import { PlayHistory } from '../state/PlayHistory';
@@ -135,6 +136,12 @@ export struct PlayerPage {
   private castUrl: string = '';        // 可投直链(代理包装前的地址);''=当前内容不可投(网页/未解析)
   @Local casting: boolean = false;     // 输出设备处于投屏连接
   @Local castDeviceName: string = '';
+  // 弹幕(弹弹play):数据按时间升序;Canvas 层每帧重绘,滚动位置由 curTime 驱动(暂停即冻结)
+  danmus: DanmuItem[] = [];
+  private danmuIdx: number = 0;        // 首条未上屏弹幕指针
+  private danmuTimer: number = -1;     // 重绘循环
+  private danmuLastSec: number = -999; // seek 检测基准
+  private danmu2D: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   @Local buffering: boolean = false;   // 播放器缓冲中(START→END 之间)
   @Local bufPercent: number = 0;       // 缓冲进度 0-100
   private bufTimer: number = -1;       // 缓冲延迟显示计时器(短缓冲不闪浮层)
@@ -216,6 +223,7 @@ export struct PlayerPage {
       }
       this.playUrl = target;
       this.updateCastSession(ep.name, this.castUrl);
+      this.loadDanmaku();
     } else if (needSniff && target !== '') {
       this.startSniff(target);
     } else if (target !== '' && target !== ep.url) {
@@ -381,6 +389,84 @@ export struct PlayerPage {
     } else {
       this.errMsg = '全部线路均无法播放';
     }
+  }
+
+  // 拉取当前集弹幕(弹弹play):先精确匹配,匹配不到按片名搜索;选集按集号对齐
+  private async loadDanmaku(): Promise<void> {
+    this.danmus = [];
+    this.danmuIdx = 0;
+    if (this.settings.danmakuOn && this.siteKey !== 'live' && !this.useWeb &&
+      this.settings.dandanAppId !== '' && this.settings.dandanSecret !== '' && this.ep !== null) {
+      try {
+        const fileName = `${this.movieName} ${this.ep.name}.mp4`;
+        let eps = await danmuMatch(fileName);
+        if (eps.length === 0) { eps = await danmuSearch(this.movieName); }
+        // 挑集:标题含集号优先,否则按当前集序对齐
+        const numMatch = this.ep.name.match(/\d+/);
+        const num = numMatch === null ? -1 : parseInt(numMatch[0]);
+        let pick: DanmuEpisode | null = null;
+        for (const e of eps) {
+          if (num >= 0 && e.episodeTitle.indexOf(String(num)) >= 0) { pick = e; break; }
+        }
+        if (pick === null && eps.length > 0) { pick = eps[Math.min(this.epIdx, eps.length - 1)]; }
+        if (pick === null || pick.episodeId <= 0) {
+          hilog.info(0x0000, 'OKV-Player', 'danmu no match');
+          return;
+        }
+        this.danmus = await danmuComments(pick.episodeId);
+        hilog.info(0x0000, 'OKV-Player', 'danmu loaded %{public}d from %{public}s', this.danmus.length, pick.animeTitle);
+      } catch (e) {
+        hilog.error(0x0000, 'OKV-Player', 'danmu fail: %{public}s', e instanceof Error ? e.message : String(e));
+      }
+    }
+  }
+
+  // 弹幕重绘:以 curTime 为播放锚点,滚动位置逐帧推进;暂停即冻结;seek 超过 3s 重置指针
+  private drawDanmaku(): void {
+    const ctx = this.danmu2D;
+    if (!this.settings.danmakuOn) { return; }
+    const W = Math.floor(this.areaW * this.density);
+    const H = Math.floor(this.areaH * this.density);
+    if (W <= 0 || H <= 0) { return; }
+    ctx.clearRect(0, 0, W, H);
+    if (this.danmus.length === 0 || this.curTime <= 0 || this.resolving) { return; }
+    // seek/换集:curTime 跳变超 3s → 指针重定位到当前时间
+    if (Math.abs(this.curTime - this.danmuLastSec) > 3) {
+      this.danmuLastSec = this.curTime;
+      this.danmuIdx = 0;
+      while (this.danmuIdx < this.danmus.length && this.danmus[this.danmuIdx].t < this.curTime - 8) {
+        this.danmuIdx++;
+      }
+    }
+    const DUR = 8;   // 每条弹幕滚过全屏的时长(秒)
+    const font = Math.floor(15 * this.density);
+    ctx.font = `${font}px sans-serif`;
+    const laneH = Math.max(28 * this.density, H / 6);
+    ctx.textBaseline = 'top';
+    for (const d of this.danmus) {
+      const elapsed = this.curTime - d.t;
+      if (elapsed < 0 || elapsed > DUR) { continue; }
+      const tw = ctx.measureText(d.text).width;
+      const x = W - (elapsed / DUR) * (W + tw);
+      const lane = Math.abs(this.simpleHash(d.text)) % 6;
+      const y = lane * laneH + 4;
+      ctx.fillStyle = '#000000';
+      ctx.fillText(d.text, x + 1, y + 1);
+      ctx.fillStyle = d.color;
+      ctx.fillText(d.text, x, y);
+    }
+    this.danmuLastSec = this.curTime;
+  }
+
+  private simpleHash(s: string): number {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) & 0x7FFFFFFF; }
+    return h;
+  }
+
+  private startDanmuLoop(): void {
+    if (this.danmuTimer >= 0) { return; }
+    this.danmuTimer = setInterval((): void => { this.drawDanmaku(); }, 33);
   }
 
   // 直播出画看门狗:12s 没到 playing 判定当前频道不可用,自动换台(死频道挂起可能几十秒不报错)
@@ -820,6 +906,7 @@ export struct PlayerPage {
       if (this.ctrlTimer >= 0) { clearTimeout(this.ctrlTimer); this.ctrlTimer = -1; }
       if (this.liveWatchdog >= 0) { clearTimeout(this.liveWatchdog); this.liveWatchdog = -1; }
       if (this.bufTimer >= 0) { clearTimeout(this.bufTimer); this.bufTimer = -1; }
+      if (this.danmuTimer >= 0) { clearInterval(this.danmuTimer); this.danmuTimer = -1; }
       this.showCtrl = false;
       this.setImmersive(false);
       this.setStatusBarContent('#000000');
@@ -875,6 +962,13 @@ export struct PlayerPage {
             // surface 就绪:注入引擎(AVPlayer 用 surfaceId 渲染)
             this.engine.setSurface(this.xcController.getXComponentSurfaceId());
           })
+      }
+
+      // 弹幕层:盖在画面上,触摸穿透(手势/控制由下层处理);开启且数据就绪时逐帧重绘
+      if (this.playUrl !== '' && !this.resolving && !this.useWeb) {
+        Canvas(this.danmu2D)
+          .width('100%').height('100%')
+          .onReady(() => { this.startDanmuLoop(); })
       }
 
       // 手势层：自绘播放时覆盖整个视频区,吃掉点按/横竖滑/长按。位于画面之上、各控制行之下——

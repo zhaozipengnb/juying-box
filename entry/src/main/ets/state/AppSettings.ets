@@ -34,6 +34,9 @@ export class AppSettings {
                                              // 内置下载：详情页/播放页显示下载按钮（核心功能默认开，个性设置可关）
   @Trace videoFit: VideoFit = 'contain';     // 播放画面缩放：contain=适应 contain/cover=裁剪铺满/fill=拉伸
   @Trace lineAutoPlay: boolean = true;       // 线路播放：播放失败时自动切换下一条线路
+  @Trace danmakuOn: boolean = false;         // 播放页弹幕(需在下面填入弹弹play AppId/Secret)
+  @Trace dandanAppId: string = '';           // 弹弹play 开放平台 AppId
+  @Trace dandanSecret: string = '';          // 弹弹play 开放平台 Secret
   @Trace disabledSites: string[] = [];       // 站点管理：已禁用的站点 key（下拉/搜索/跳源全部隐藏）
   @Trace detailGrid: boolean = false;          // 详情页聚合视图记忆：false=列表 true=海报网格（跨进出保留）
   @Trace wallpaper: WallpaperKind = 'default'; // 全局壁纸（颜色主题）
@@ -93,6 +96,12 @@ export class AppSettings {
       if (typeof lap === 'boolean') { this.lineAutoPlay = lap; }
       const dw = obj['downloadWifiOnly'];
       if (typeof dw === 'boolean') { this.downloadWifiOnly = dw; }
+      const dmk = obj['danmakuOn'];
+      if (typeof dmk === 'boolean') { this.danmakuOn = dmk; }
+      const dai = obj['dandanAppId'];
+      if (typeof dai === 'string') { this.dandanAppId = dai; }
+      const dsc = obj['dandanSecret'];
+      if (typeof dsc === 'string') { this.dandanSecret = dsc; }
       const ds = obj['disabledSites'];
       if (Array.isArray(ds)) { this.disabledSites = ds.filter((x: Object): boolean => typeof x === 'string') as string[]; }
       const dg = obj['detailGrid'];
@@ -145,7 +154,7 @@ export class AppSettings {
       'picSize': this.picSize, 'playSpeed': this.playSpeed, 'longPressSpeed': this.longPressSpeed,
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
       'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload, 'autoSkipDead': this.autoSkipDead,
-      'videoFit': this.videoFit, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites, 'downloadWifiOnly': this.downloadWifiOnly,
+      'videoFit': this.videoFit, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites, 'downloadWifiOnly': this.downloadWifiOnly, 'danmakuOn': this.danmakuOn, 'dandanAppId': this.dandanAppId, 'dandanSecret': this.dandanSecret,
       'detailGrid': this.detailGrid,
       'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl, 'proxyUrl': this.proxyUrl
     };
@@ -159,7 +168,7 @@ export class AppSettings {
       'picSize': this.picSize, 'playSpeed': this.playSpeed, 'longPressSpeed': this.longPressSpeed,
       'incognito': this.incognito, 'aggSearch': this.aggSearch, 'showSite': this.showSite,
       'siteFilter': this.siteFilter, 'aiAdFilter': this.aiAdFilter, 'builtinDownload': this.builtinDownload, 'autoSkipDead': this.autoSkipDead,
-      'videoFit': this.videoFit, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites, 'downloadWifiOnly': this.downloadWifiOnly,
+      'videoFit': this.videoFit, 'lineAutoPlay': this.lineAutoPlay, 'disabledSites': this.disabledSites, 'downloadWifiOnly': this.downloadWifiOnly, 'danmakuOn': this.danmakuOn, 'dandanAppId': this.dandanAppId, 'dandanSecret': this.dandanSecret,
       'detailGrid': this.detailGrid,
       'wallpaper': this.wallpaper, 'wallpaperUri': this.wallpaperUri, 'liveUrl': this.liveUrl,
       'proxyUrl': this.proxyUrl
