@@ -1112,7 +1112,7 @@ export struct PlayerPage {
       // 锚定依赖「容器盒子=裁剪盒=子布局空间」三者重合——视频容器不可加 expandSafeArea(见上)
       if (this.playUrl !== '' && this.errMsg === '' && !this.resolving && !this.useWeb && this.showCtrl) {
         Column() {
-          // 影院模式底部设置行(对齐模板:倍速/线路/选集/刷新/循环;内核项不适用未放)
+          // 影院模式底部设置行(倍速/线路/刷新/循环;选集已移至进度行右端)
           if (this.isTheater) {
             Row({ space: 22 }) {
               Text(this.curSpeed === 1.0 ? '1.00' : this.curSpeed + 'x')
@@ -1142,17 +1142,6 @@ export struct PlayerPage {
                     };
                   })
               }
-              Text('选集')
-                .fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => {
-                  if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
-                  this.picker = {
-                    title: '选集',
-                    options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
-                    index: this.epIdx,
-                    onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
-                  };
-                })
               Text('刷新')
                 .fontSize(12).fontColor('#FFFFFF')
                 .onClick(() => { this.playUrl = ''; this.prepare(); })
@@ -1237,6 +1226,18 @@ export struct PlayerPage {
                   }
                 };
               })
+            if (this.isTheater) {
+              Text('选集').fontSize(12).fontColor('#FFFFFF')
+                .onClick(() => {
+                  if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
+                  this.picker = {
+                    title: '选集',
+                    options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
+                    index: this.epIdx,
+                    onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
+                  };
+                })
+            }
             Image(this.isTheater ? $r('app.media.ic_shrink') : $r('app.media.ic_expand'))
               .width(22).height(22).fillColor('#FFFFFF')
               .onClick(() => { this.toggleTheater(); })
