@@ -319,27 +319,31 @@ export struct PlayerPage {
       const ks = Object.keys(site.header);
       for (const k of ks) { dlHeaders[k] = site.header[k]; }
     }
-    for (let i = 0; i < picks.length; i++) {
-      const ep = picks[i];
-      this.dlResolveText = `解析 ${i + 1}/${picks.length}：${ep.name}`;
-      let direct = '';
-      const resolved = await this.resolveViaDrpy(ep, flag);
-      if (resolved !== null && isDirectMedia(resolved.url)) {
-        direct = resolved.url;
-      } else {
-        try {
-          const t = await resolvePlayUrl(ep.url, AppState.instance.makeFetchText());
-          if (isDirectMedia(t)) { direct = t; }
-        } catch (err) { }
+    try {
+      for (let i = 0; i < picks.length; i++) {
+        const ep = picks[i];
+        this.dlResolveText = `解析 ${i + 1}/${picks.length}：${ep.name}`;
+        let direct = '';
+        const resolved = await this.resolveViaDrpy(ep, flag);
+        if (resolved !== null && isDirectMedia(resolved.url)) {
+          direct = resolved.url;
+        } else {
+          try {
+            const t = await resolvePlayUrl(ep.url, AppState.instance.makeFetchText());
+            if (isDirectMedia(t)) { direct = t; }
+          } catch (err) { }
+        }
+        if (direct === '') { continue; }
+        await this.dl.startDownload(this.movieName, ep.name, direct, this.siteKey, dlHeaders);
+        ok++;
       }
-      if (direct === '') { continue; }
-      await this.dl.startDownload(this.movieName, ep.name, direct, this.siteKey, dlHeaders);
-      ok++;
+    } finally {
+      // 解析链路任何异常都不能卡死面板(dlBusy 卡住 = 面板按钮永久失效)
+      this.dlBusy = false;
+      this.dlResolveText = ok > 0 ? `已加入下载 ${ok} 集` : '解析失败，未加入下载';
+      this.dlSel = this.dlSel.map((_v: boolean): boolean => false);
+      setTimeout((): void => { if (!this.dlBusy) { this.dlResolveText = ''; } }, 2500);
     }
-    this.dlBusy = false;
-    this.dlResolveText = ok > 0 ? `已加入下载 ${ok} 集` : '解析失败，未加入下载';
-    this.dlSel = this.dlSel.map((_v: boolean): boolean => false);
-    setTimeout((): void => { if (!this.dlBusy) { this.dlResolveText = ''; } }, 2500);
   }
 
   private tryNextLine(): void {

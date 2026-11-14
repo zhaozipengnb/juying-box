@@ -87,6 +87,7 @@ export class DownloadManager {
   async startDownload(movieName: string, epName: string, url: string, siteKey: string,
     headers: Record<string, string> = {}): Promise<void> {
     if (!this.context) { return; }
+    const context = this.context;   // 回调里用的上下文(编译器无法跨闭包跟踪非空)
     const id = this.makeId(url);
     const existIdx = this.items.findIndex((it: DownloadItem): boolean => it.id === id);
     if (existIdx >= 0) {
@@ -163,7 +164,18 @@ export class DownloadManager {
         item.speed = 0;
         let at = false;
         try { fs.accessSync(localPath); at = true; } catch (e) { }
-        hilog.info(DOMAIN, 'OKV-DL', 'mp4 completed, file at localPath=%{public}s', at ? 'yes' : 'NO(落点与 localPath 不符!)');
+        if (!at) {
+          // 自愈:saveas 相对路径若被解释到 cacheDir(契约里相对路径归属 cache),
+          // 按该形态探测并把文件搬到 localPath,保证播放按钮路径正确
+          const alt = `${context.cacheDir}/data/storage/el2/base/haps/entry/files/downloads/${localPath.substring(localPath.lastIndexOf('/') + 1)}`;
+          try {
+            fs.accessSync(alt);
+            fs.renameSync(alt, localPath);
+            at = true;
+            hilog.info(DOMAIN, 'OKV-DL', 'mp4 relocated from cache-alt to localPath');
+          } catch (e) { }
+        }
+        hilog.info(DOMAIN, 'OKV-DL', 'mp4 completed, file at localPath=%{public}s', at ? 'yes' : 'NO(未找到,需排查)');
         this.updateProgress(id, 100, 0, 0);
         this.updateStatus(id, 'completed');
         this.taskMap.delete(id);
@@ -195,7 +207,12 @@ export class DownloadManager {
     this.activeHls++;
     this.downloadHls(item, headers).then((): void => {
       this.activeHls--;
-      const next = this.hlsWaiting.shift();
+      // 取下一个可起跑的排队项:pending=排队未启动,downloading=断点续传排入的——
+      // 跳过已删除的、以及 paused/failed/completed 的(后者由用户显式"继续"再起跑)
+      let next = this.hlsWaiting.shift();
+      while (next !== undefined && (this.items.indexOf(next) < 0 || (next.status !== 'pending' && next.status !== 'downloading'))) {
+        next = this.hlsWaiting.shift();
+      }
       if (next !== undefined) { this.scheduleHls(next, headers); }
     });
   }
