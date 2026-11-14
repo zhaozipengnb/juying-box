@@ -407,6 +407,25 @@ export struct PlayerPage {
     this.danmuLastSec = -999;
   }
 
+  // 面板搜索:关键词 → B站视频列表(失败有 toast,不再静默)
+  private dmPanelSearch(): void {
+    const kw = this.dmKeyword.trim();
+    if (kw === '' || this.dmSearching) { return; }
+    this.dmSearching = true;
+    biliSearchList(kw).then((list: BiliSearchItem[]): void => {
+      this.dmVideos = list;
+      this.dmSearching = false;
+      if (list.length === 0) {
+        this.getUIContext().getPromptAction().showToast({ message: '没有搜到相关视频' });
+      }
+    }).catch((e: Object): void => {
+      this.dmSearching = false;
+      const msg = e instanceof Error ? e.message : String(e);
+      hilog.error(0x0000, 'OKV-Player', 'dm search fail: %{public}s', msg);
+      this.getUIContext().getPromptAction().showToast({ message: '搜索失败：' + msg });
+    });
+  }
+
   private clearDanmaku(): void {
     const W = Math.floor(this.areaW * this.density);
     const H = Math.floor(this.areaH * this.density);
@@ -1493,17 +1512,11 @@ export struct PlayerPage {
             TextInput({ text: this.dmKeyword!!, placeholder: '按片名/剧名搜索' })
               .fontSize(13).layoutWeight(1).height(40)
               .onChange((v: string) => { this.dmKeyword = v; })
+              .enterKeyType(EnterKeyType.Search)
+              .onSubmit(() => { this.dmPanelSearch(); })
             Button('搜索').height(40).fontSize(13)
               .backgroundColor('#007DFF').fontColor('#FFFFFF')
-              .onClick(() => {
-                const kw = this.dmKeyword.trim();
-                if (kw === '' || this.dmSearching) { return; }
-                this.dmSearching = true;
-                biliSearchList(kw).then((list: BiliSearchItem[]): void => {
-                  this.dmVideos = list;
-                  this.dmSearching = false;
-                }).catch((): void => { this.dmSearching = false; });
-              })
+              .onClick(() => { this.dmPanelSearch(); })
           }.width('100%')
           List({ space: 6 }) {
             if (this.dmSearching) {

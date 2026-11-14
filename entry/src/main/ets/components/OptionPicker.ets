@@ -29,26 +29,37 @@ export struct OptionPicker {
         }
         .width('100%')
         .padding({ left: 20, right: 12, top: 14, bottom: 6 })
-        ForEach(this.options, (o: string, i: number) => {
-          Row() {
-            Text(o)
-              .fontSize(14)
-              .fontColor(i === this.selectedIndex ? '#4D9EFF' : '#E6FFFFFF')
-              .fontWeight(i === this.selectedIndex ? FontWeight.Medium : FontWeight.Normal)
-            Blank()
-            if (i === this.selectedIndex) {
-              Text('✓').fontSize(14).fontColor('#4D9EFF')
-            }
+        // 选项区限高滚动:长列表(200+集)超出屏幕的部分原来永远够不着
+        Scroll() {
+          Column() {
+            ForEach(this.options, (o: string, i: number) => {
+              Row() {
+                Text(o)
+                  .fontSize(14)
+                  .fontColor(i === this.selectedIndex ? '#4D9EFF' : '#E6FFFFFF')
+                  .fontWeight(i === this.selectedIndex ? FontWeight.Medium : FontWeight.Normal)
+                Blank()
+                if (i === this.selectedIndex) {
+                  Text('✓').fontSize(14).fontColor('#4D9EFF')
+                }
+              }
+              .width('100%')
+              .padding({ left: 20, right: 20, top: 13, bottom: 13 })
+              .border(i < this.options.length - 1
+                ? { width: { bottom: 0.5 }, color: '#1AFFFFFF' } : { width: 0 })
+              .onClick(() => {
+                this.onPick(i);
+                this.onClose();
+              })
+            }, (o: string, i: number) => o + i)
           }
           .width('100%')
-          .padding({ left: 20, right: 20, top: 13, bottom: 13 })
-          .border(i < this.options.length - 1
-            ? { width: { bottom: 0.5 }, color: '#1AFFFFFF' } : { width: 0 })
-          .onClick(() => {
-            this.onPick(i);
-            this.onClose();
-          })
-        }, (o: string, i: number) => o + i)
+          .align(Alignment.Top)   // 选项不足一屏时从顶部开始排
+        }
+        .scrollable(ScrollDirection.Vertical)
+        .scrollBar(BarState.Auto)
+        .align(Alignment.Top)
+        .constraintSize({ maxHeight: 430 })
       }
       .width('72%')
       .padding({ bottom: 6 })
