@@ -81,6 +81,35 @@ async function biliWbiKey(): Promise<string> {
   return biliMixinKey(img, sub);
 }
 
+// 搜索结果完整列表(按播放数降序)——弹幕面板手动选库用
+export async function biliSearchList(keyword: string): Promise<BiliSearchItem[]> {
+  const mixin = await biliWbiKey();
+  const wts = Math.floor(Date.now() / 1000);
+  const params: Record<string, string> = {
+    'keyword': biliFilterValue(keyword),
+    'search_type': 'video',
+    'wts': String(wts)
+  };
+  const keys = Object.keys(params).sort();
+  const qs = keys.map((k: string): string => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join('&');
+  const wRid = await md5Hex(qs + mixin);
+  const bytes = await biliGet(`https://api.bilibili.com/x/web-interface/wbi/search/type?${qs}&w_rid=${wRid}`);
+  const sr = JSON.parse(utf8Decode(bytes)) as Record<string, Object>;
+  const data = (sr['data'] ?? {}) as Record<string, Object>;
+  const results = (data['result'] ?? []) as Object[];
+  const out: BiliSearchItem[] = [];
+  for (const r of results) {
+    const rr = r as Record<string, Object>;
+    out.push({
+      bvid: rr['bvid'] as string ?? '',
+      title: ((rr['title'] as string) ?? '').replace(/<[^>]+>/g, ''),
+      play: parseInt(rr['play'] as string ?? '0') || 0
+    });
+  }
+  out.sort((a: BiliSearchItem, b: BiliSearchItem): number => b.play - a.play);
+  return out;
+}
+
 // wbi 签名搜索:返回候选 bvid 列表(有序:标题含片名核心词的播放王在前,全局播放王兜底)
 async function biliCandidates(keyword: string, mixin: string): Promise<string[]> {
   const wts = Math.floor(Date.now() / 1000);
@@ -125,13 +154,20 @@ async function biliCandidates(keyword: string, mixin: string): Promise<string[]>
   return out;
 }
 
+// 搜索结果条目(弹幕面板手选库用)
+export interface BiliSearchItem {
+  bvid: string;
+  title: string;
+  play: number;
+}
+
 // 分P列表:返回 {cid, part} 数组(匿名)
-interface BiliPage {
+export interface BiliPage {
   cid: number;
   part: string;
 }
 
-async function biliPagelist(bvid: string): Promise<BiliPage[]> {
+export async function biliPagelist(bvid: string): Promise<BiliPage[]> {
   const bytes = await biliGet(`https://api.bilibili.com/x/player/pagelist?bvid=${bvid}`);
   const pages = ((JSON.parse(utf8Decode(bytes)) as Record<string, Object>)['data'] ?? []) as Object[];
   const out: BiliPage[] = [];
@@ -173,6 +209,13 @@ async function biliDanmuXml(oid: number): Promise<string> {
     }
   })();`;
   return WebFetchBridge.instance.evalJs(script);
+}
+
+// 按 cid 直接取弹幕列表(面板手选分P用)
+export async function biliDanmuByCid(oid: number): Promise<DanmuItem[]> {
+  const xml = await biliDanmuXml(oid);
+  if (xml === '') { return []; }
+  return parseDanmuXml(xml);
 }
 
 function parseDanmuXml(xml: string): DanmuItem[] {

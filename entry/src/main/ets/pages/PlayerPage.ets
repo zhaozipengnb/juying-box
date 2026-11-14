@@ -21,7 +21,7 @@ import { util } from '@kit.ArkTS';
 import { AppState } from '../state/AppState';
 import { AppSettings } from '../state/AppSettings';
 import { DownloadManager, DownloadItem } from '../state/DownloadManager';
-import { DanmuItem, biliDanmu } from '../net/DanmuApi';
+import { DanmuItem, BiliSearchItem, BiliPage, biliDanmu, biliDanmuByCid, biliSearchList, biliPagelist } from '../net/DanmuApi';
 import { HlsAdFilterServer } from '../net/HlsAdFilterServer';
 import { SniffProxy } from '../net/SniffProxyServer';
 import { PlayHistory } from '../state/PlayHistory';
@@ -145,6 +145,16 @@ export struct PlayerPage {
   @Local buffering: boolean = false;   // 播放器缓冲中(START→END 之间)
   @Local bufPercent: number = 0;       // 缓冲进度 0-100
   private bufTimer: number = -1;       // 缓冲延迟显示计时器(短缓冲不闪浮层)
+  // 弹幕面板:播放页内开关/手动搜索选库/时间偏移(弥补自动匹配的死板)
+  @Local showDmPanel: boolean = false;
+  @Local dmOn: boolean = true;             // 播放页内弹幕显示开关
+  @Local dmStage: string = 'main';         // main | search | pages
+  @Local dmKeyword: string = '';
+  @Local dmVideos: BiliSearchItem[] = [];
+  @Local dmPages: BiliPage[] = [];
+  @Local dmSearching: boolean = false;
+  @Local dmSelVideo: string = '';       // 搜索阶段选中的 bvid
+  @Local dmOffset: number = 0;             // 弹幕时间偏移(秒,正值=弹幕延后出现)
   // 批量下载选集面板(原型:下载=选集弹层,可切线路/多选/显示各集下载状态)
   @Local showDlPanel: boolean = false;
   @Local dlLineIdx: number = 0;        // 面板内线路
@@ -391,16 +401,27 @@ export struct PlayerPage {
     }
   }
 
+  private setDanmus(items: DanmuItem[]): void {
+    this.danmus = items;
+    this.danmuIdx = 0;
+    this.danmuLastSec = -999;
+  }
+
+  private clearDanmaku(): void {
+    const W = Math.floor(this.areaW * this.density);
+    const H = Math.floor(this.areaH * this.density);
+    if (W > 0 && H > 0) { this.danmu2D.clearRect(0, 0, W, H); }
+  }
+
   // 拉取当前集弹幕(B站匿名链路,零配置):片名+集名搜索 → 分P对齐 → 弹幕
   private async loadDanmaku(): Promise<void> {
-    this.danmus = [];
-    this.danmuIdx = 0;
+    this.setDanmus([]);
     if (!this.settings.danmakuOn || this.siteKey === 'live' || this.useWeb || this.ep === null) {
       return;
     }
     const bili = await biliDanmu(this.movieName, this.ep.name, this.epIdx);
     if (bili.length > 0) {
-      this.danmus = bili;
+      this.setDanmus(bili);
       hilog.info(0x0000, 'OKV-Player', 'danmu(bili) %{public}d', bili.length);
     } else {
       hilog.info(0x0000, 'OKV-Player', 'danmu no match');
@@ -410,10 +431,10 @@ export struct PlayerPage {
   // 弹幕重绘:以 curTime 为播放锚点,滚动位置逐帧推进;暂停即冻结;seek 超过 3s 重置指针
   private drawDanmaku(): void {
     const ctx = this.danmu2D;
-    if (!this.settings.danmakuOn) { return; }
     const W = Math.floor(this.areaW * this.density);
     const H = Math.floor(this.areaH * this.density);
     if (W <= 0 || H <= 0) { return; }
+    if (!this.dmOn) { ctx.clearRect(0, 0, W, H); return; }
     ctx.clearRect(0, 0, W, H);
     if (this.danmus.length === 0 || this.curTime <= 0 || this.resolving) { return; }
     // seek/换集:curTime 跳变超 3s → 指针重定位到当前时间
@@ -430,7 +451,7 @@ export struct PlayerPage {
     const laneH = Math.max(28 * this.density, H / 6);
     ctx.textBaseline = 'top';
     for (const d of this.danmus) {
-      const elapsed = this.curTime - d.t;
+      const elapsed = this.curTime - (d.t + this.dmOffset);
       if (elapsed < 0 || elapsed > DUR) { continue; }
       const tw = ctx.measureText(d.text).width;
       const x = W - (elapsed / DUR) * (W + tw);
@@ -839,6 +860,10 @@ export struct PlayerPage {
       if (this.showDlPanel) {
         this.downloadPanel()
       }
+
+      if (this.showDmPanel) {
+        this.dmPanel()
+      }
       }
       .width('100%').height('100%')
     }
@@ -1158,6 +1183,9 @@ export struct PlayerPage {
                   };
                 })
             }
+            Text('弹幕')
+              .fontSize(12).fontColor('#FFFFFF')
+              .onClick(() => { this.showDmPanel = true; this.dmStage = 'main'; })
             Text(this.curSpeed === 1.0 ? '倍速' : this.curSpeed + 'x')
               .fontSize(12).fontColor('#FFFFFF')
               .onClick(() => {
@@ -1392,6 +1420,139 @@ export struct PlayerPage {
     if (it.status === 'completed') { return ' ✓'; }
     if (it.status === 'failed') { return ' ✕'; }
     return ` ${it.progress}%`;
+  }
+
+  // 弹幕面板:开关/时间偏移/手动搜索选库(自动匹配失败时的补救)。三阶段:main/search/pages
+  @Builder
+  dmPanel() {
+    Column() {
+      Column()
+        .width('100%').layoutWeight(1)
+        .onClick(() => {
+          this.showDmPanel = false;
+          this.dmStage = 'main';
+        })
+      Column({ space: 10 }) {
+        Row() {
+          Text('弹幕').fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+          Blank()
+          Text('✕').fontSize(16).fontColor('#99FFFFFF')
+            .padding({ left: 10, right: 2, top: 4, bottom: 4 })
+            .onClick(() => {
+              this.showDmPanel = false;
+              this.dmStage = 'main';
+            })
+        }.width('100%')
+        if (this.dmStage === 'main') {
+          Row() {
+            Text('弹幕显示').fontSize(14).fontColor('#FFFFFF').layoutWeight(1)
+            Text(this.dmOn ? '开' : '关').fontSize(14).fontColor(this.dmOn ? '#4D9EFF' : '#99FFFFFF')
+              .padding({ left: 12, right: 12 })
+              .onClick(() => {
+                this.dmOn = !this.dmOn;
+                if (!this.dmOn) { this.clearDanmaku(); }
+              })
+          }.width('100%').padding({ top: 6, bottom: 6 })
+          Row() {
+            Text('时间偏移').fontSize(14).fontColor('#FFFFFF').layoutWeight(1)
+            Text('−5s').fontSize(14).fontColor('#FFFFFF').padding({ left: 10, right: 10 })
+              .onClick(() => { this.dmOffset -= 5; })
+            Text(`${this.dmOffset}s`).fontSize(13).fontColor('#4D9EFF').width(56).textAlign(TextAlign.Center)
+            Text('＋5s').fontSize(14).fontColor('#FFFFFF').padding({ left: 10, right: 10 })
+              .onClick(() => { this.dmOffset += 5; })
+          }.width('100%').padding({ top: 6, bottom: 6 })
+          Row() {
+            Text('重新匹配当前集').fontSize(14).fontColor('#FFFFFF').layoutWeight(1)
+            Text('›').fontSize(16).fontColor('#99FFFFFF')
+              .onClick(() => { this.loadDanmaku(); })
+          }.width('100%').padding({ top: 6, bottom: 6 })
+          Row() {
+            Text('搜索弹幕库').fontSize(14).fontColor('#FFFFFF').layoutWeight(1)
+            Text('›').fontSize(16).fontColor('#99FFFFFF')
+              .onClick(() => { this.dmStage = 'search'; })
+          }.width('100%').padding({ top: 6, bottom: 6 })
+        } else if (this.dmStage === 'search') {
+          Row({ space: 8 }) {
+            TextInput({ text: this.dmKeyword!!, placeholder: '按片名/剧名搜索' })
+              .fontSize(13).layoutWeight(1).height(40)
+              .onChange((v: string) => { this.dmKeyword = v; })
+            Button('搜索').height(40).fontSize(13)
+              .backgroundColor('#007DFF').fontColor('#FFFFFF')
+              .onClick(() => {
+                const kw = this.dmKeyword.trim();
+                if (kw === '' || this.dmSearching) { return; }
+                this.dmSearching = true;
+                biliSearchList(kw).then((list: BiliSearchItem[]): void => {
+                  this.dmVideos = list;
+                  this.dmSearching = false;
+                }).catch((): void => { this.dmSearching = false; });
+              })
+          }.width('100%')
+          List({ space: 6 }) {
+            if (this.dmSearching) {
+              ListItem() {
+                Row() { LoadingProgress().width(24).height(24).color('#FFFFFF') }
+                  .width('100%').justifyContent(FlexAlign.Center).padding(10)
+              }
+            }
+            ForEach(this.dmVideos, (v: BiliSearchItem) => {
+              ListItem() {
+                Row() {
+                  Text(v.title).fontSize(13).fontColor('#FFFFFF')
+                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+                  Text(`${v.play}`).fontSize(11).fontColor('#99FFFFFF')
+                }.width('100%')
+              }
+              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+              .borderRadius(8).backgroundColor('#22FFFFFF')
+              .onClick(() => {
+                this.dmSelVideo = v.bvid;
+                biliPagelist(v.bvid).then((pages: BiliPage[]): void => {
+                  this.dmPages = pages;
+                  this.dmStage = 'pages';
+                });
+              })
+            }, (v: BiliSearchItem) => v.bvid)
+          }
+          .layoutWeight(1).scrollBar(BarState.Off).width('100%')
+        } else if (this.dmStage === 'pages') {
+          Row() {
+            Text('选择分P(集)').fontSize(14).fontColor('#FFFFFF').layoutWeight(1)
+            Text('‹ 返回').fontSize(13).fontColor('#4D9EFF')
+              .onClick(() => { this.dmStage = 'search'; })
+          }.width('100%').padding({ bottom: 4 })
+          List({ space: 6 }) {
+            ForEach(this.dmPages, (p: BiliPage) => {
+              ListItem() {
+                Row() {
+                  Text(p.part === '' ? `P${p.cid}` : p.part).fontSize(13).fontColor('#FFFFFF')
+                    .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+                }.width('100%')
+              }
+              .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+              .borderRadius(8).backgroundColor('#22FFFFFF')
+              .onClick(() => {
+                biliDanmuByCid(p.cid).then((items: DanmuItem[]): void => {
+                  this.setDanmus(items);
+                  this.dmStage = 'main';
+                  this.showDmPanel = false;
+                  this.getUIContext().getPromptAction().showToast({
+                    message: items.length > 0 ? `已加载弹幕 ${items.length} 条` : '该分P无弹幕'
+                  });
+                });
+              })
+            }, (p: BiliPage) => `${p.cid}`)
+          }
+          .layoutWeight(1).scrollBar(BarState.Off).width('100%')
+        }
+      }
+      .width('100%').height('52%')
+      .backgroundColor('#D9262629')
+      .borderRadius({ topLeft: 16, topRight: 16 })
+      .padding(12)
+      .onClick(() => { })
+    }
+    .width('100%').height('100%')
   }
 
   // 批量下载选集面板(底部弹层):线路切换 + 全选/清空 + 集多选(带下载状态) + 下载按钮
