@@ -1670,6 +1670,7 @@ export struct PlayerPage {
               Row({ space: 6 }) {
                 Text('选集').fontSize(13).fontColor('#FFFFFF')
                 Image($r('app.media.ic_sort')).width(16).height(16)
+                  .rotate({ angle: 90 })   // ⇅ 转 90° 成横向双向箭头
                   .fillColor(this.epAscending ? '#FFFFFF' : '#4D9EFF')
                   .onClick(() => {
                     this.epAscending = !this.epAscending;
