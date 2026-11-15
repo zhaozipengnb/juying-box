@@ -19,7 +19,21 @@ export struct MovieGrid {
   @Param onPick: (m: Movie, idx: number) => void = (_m: Movie, _i: number) => {};
   @Param onLoadMore: () => void = () => {};
   @Local colW: number = 170;         // 单列宽（vp）：容器实测后校正
+  private areaW: number = 0;         // WaterFlow 实测净宽（onAreaChange 记录，列数变化时据此重算）
   private gridScroller: Scroller = new Scroller();
+
+  // 列数变化（图片尺寸设置）时容器总宽不变，onAreaChange 不会再触发——
+  // 不重算 colW 则 FlowItem 仍按旧列宽渲染、盖到相邻列上（"设置变了布局不动"的根因）
+  @Monitor('columns')
+  onColumnsChange(): void {
+    this.recalcColW();
+  }
+
+  private recalcColW(): void {
+    const n = this.columns >= 2 ? this.columns : 3;
+    if (this.areaW <= 0) { return; }
+    this.colW = (this.areaW - H_PAD * 2 - COL_GAP * (n - 1)) / n;
+  }
 
   private columnsTemplate(): string {
     const n = this.columns >= 2 ? this.columns : 3;
@@ -99,9 +113,9 @@ export struct MovieGrid {
     .layoutWeight(1)
     .padding({ left: H_PAD, right: H_PAD, top: 10 })
     .onAreaChange((_o: Area, n: Area) => {
-      // Area.width 含容器 padding：净宽 = 宽 - 2*padding，均分列再扣列间距
-      const n2 = this.columns >= 2 ? this.columns : 3;
-      this.colW = ((n.width as number) - H_PAD * 2 - COL_GAP * (n2 - 1)) / n2;
+      // Area.width 含容器 padding：净宽 = 宽 - 2*padding，记录后统一走 recalcColW
+      this.areaW = n.width as number;
+      this.recalcColW();
     })
     .onReachEnd(() => {
       // 触底：有更多且不在加载中时回调分页（页码推进在调用方）
