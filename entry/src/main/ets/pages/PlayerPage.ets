@@ -16,7 +16,7 @@ import { DrpyDriver } from '../spider/DrpyDriver';
 import { webview } from '@kit.ArkWeb';
 import { display, window } from '@kit.ArkUI';
 import settings from '@ohos.settings';
-import { common, Want } from '@kit.AbilityKit';
+import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 
 import { AppState } from '../state/AppState';
@@ -874,23 +874,6 @@ export struct PlayerPage {
     this.ctrlTimer = setTimeout(() => { this.showCtrl = false; this.ctrlTimer = -1; }, 4000);
   }
 
-  // 系统分享:视频直链交给系统分享面板(华为分享/隔空投送等由系统处理)
-  private shareVideo(): void {
-    const url = this.castUrl !== '' ? this.castUrl : (this.ep?.url ?? '');
-    if (url === '' || url.startsWith('file://')) {
-      this.getUIContext().getPromptAction().showToast({ message: '当前内容不支持分享' });
-      return;
-    }
-    const want: Want = {
-      action: 'ohos.want.action.sendData',
-      type: 'text/plain',
-      parameters: { content: url, title: this.movieName }
-    };
-    (getContext(this) as common.UIAbilityContext).startAbility(want).catch((e: Object): void => {
-      hilog.error(0x0000, 'OKV-Player', 'share fail: %{public}s', e instanceof Error ? e.message : String(e));
-    });
-  }
-
   // 全屏旋转锁:锁定后窗口方向固定(不随传感器转),解锁恢复按片源方向的传感器跟随
   private toggleRotationLock(): void {
     this.rotationLocked = !this.rotationLocked;
@@ -1400,8 +1383,6 @@ export struct PlayerPage {
                     }
                   };
                 })
-              Text('分享').fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => { this.shareVideo(); })
               Text('刷新').fontSize(12).fontColor('#FFFFFF')
                 .onClick(() => { this.playUrl = ''; this.prepare(); })
               // 跳过片头:常驻(仅直播隐藏)——第一次点=把当前位置标记为本剧片头结束点;
