@@ -369,23 +369,57 @@ export class DownloadManager {
     return false;
   }
 
+  // 删除本地文件/目录(递归);不存在或被占用时忽略
+  private deleteLocalFile(path: string): void {
+    if (path === '') { return; }
+    try {
+      const st = fs.statSync(path);
+      if (st.isDirectory()) {
+        const names = fs.listFileSync(path);
+        for (const n of names) { this.deleteLocalFile(path + '/' + n); }
+        fs.rmdirSync(path);
+      } else {
+        fs.unlinkSync(path);
+      }
+    } catch (e) { /* 已不存在:忽略 */ }
+  }
+
+  // 清空两个沙箱位置的 downloads 目录(ability 级 + application 级,统计口径与之对齐)
+  private clearDownloadDirs(): void {
+    if (!this.context) { return; }
+    const ctx = this.context;
+    const dirs: string[] = [`${ctx.filesDir}/downloads`];
+    const app = ctx.getApplicationContext();
+    if (app !== null) { dirs.push(`${app.filesDir}/downloads`); }
+    for (const d of dirs) {
+      try {
+        const names = fs.listFileSync(d);
+        for (const n of names) { this.deleteLocalFile(d + '/' + n); }
+      } catch (e) { /* 目录不存在:忽略 */ }
+    }
+  }
+
   async remove(id: string): Promise<void> {
     const task = this.taskMap.get(id);
     if (task) {
       try { await task.stop(); } catch (e) { /* ignore */ }
       this.taskMap.delete(id);
     }
-    this.items = this.items.filter((it: DownloadItem): boolean => it.id !== id);
+    const it = this.items.find((x: DownloadItem): boolean => x.id === id);
+    if (it) { this.deleteLocalFile(it.localPath); }   // 之前只删记录不删文件,磁盘一直占着
+    this.items = this.items.filter((x: DownloadItem): boolean => x.id !== id);
     this.save();
   }
 
-  // 清空全部:停 agent 任务、清 HLS 队列与进行中循环(循环内检测到条目被移除即中止)
+  // 清空全部:停 agent 任务、清 HLS 队列与进行中循环(循环内检测到条目被移除即中止),
+  // 并删除 downloads 目录下全部文件(与存储统计口径一致)
   removeAll(): void {
     this.hlsWaiting = [];
     this.taskMap.forEach((t: request.agent.Task): void => {
       try { t.stop(); } catch (e) { /* ignore */ }
     });
     this.taskMap.clear();
+    this.clearDownloadDirs();
     this.items = [];
     this.save();
   }
