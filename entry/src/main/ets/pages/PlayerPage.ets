@@ -1950,9 +1950,6 @@ export struct PlayerPage {
             this.showDlPanel = false;
             Nav.stack.pushPathByName('Download', '');   // 下载在后台继续,面板收起进列表页看进度
           })
-          Text('✕').fontSize(16).fontColor('#99FFFFFF')
-            .padding({ left: 10, right: 2, top: 4, bottom: 4 })
-            .onClick(() => { if (!this.dlBusy) { this.showDlPanel = false; } })
         }.width('100%')
         if (this.lines.length > 1) {
           Scroll() {
