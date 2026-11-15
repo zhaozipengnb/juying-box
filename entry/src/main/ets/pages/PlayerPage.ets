@@ -1463,7 +1463,8 @@ export struct PlayerPage {
           })
           .position({ x: 0, y: '50%' })
           .markAnchor({ x: 0, y: '50%' })
-          .translate({ x: 30 })
+          // 距边 70vp:横屏时前摄挖孔/胶囊恰在左缘垂直中部,30vp 会被摄像头挡住
+          .translate({ x: 70 })
       }
 
       // 缓冲加载指示(快进/慢网时 START→END 之间):转圈+缓冲进度,触摸穿透不挡手势
