@@ -1939,9 +1939,17 @@ export struct PlayerPage {
         .transition(TransitionEffect.OPACITY.animation({ duration: 200 }))
       Column({ space: 10 }) {
         Row() {
-          Text('下载选集')
+          Text('下载')
             .fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
           Blank()
+          Row({ space: 2 }) {
+            Text('下载列表').fontSize(12).fontColor('#FFFFFF')
+            Image($r('app.media.ic_chevron_right')).width(14).height(14).fillColor('#FFFFFF')
+          }
+          .onClick(() => {
+            this.showDlPanel = false;
+            Nav.stack.pushPathByName('Download', '');   // 下载在后台继续,面板收起进列表页看进度
+          })
           Text('✕').fontSize(16).fontColor('#99FFFFFF')
             .padding({ left: 10, right: 2, top: 4, bottom: 4 })
             .onClick(() => { if (!this.dlBusy) { this.showDlPanel = false; } })
