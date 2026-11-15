@@ -1919,9 +1919,10 @@ export struct PlayerPage {
         .constraintSize({ maxHeight: 300 })
       }
       .width('100%')
-      .padding({ top: 14, bottom: 16 })
+      .padding({ top: 14, bottom: 28 })
       .backgroundColor('#D9262629')
       .borderRadius({ topLeft: 14, topRight: 14 })
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       // 底部滑入/滑出
       .transition(TransitionEffect.translate({ y: '100%' }).animation({ duration: 220, curve: Curve.EaseOut }))
     }
@@ -2005,7 +2006,9 @@ export struct PlayerPage {
       .width('100%').height('58%')
       .backgroundColor('#D9262629')
       .borderRadius({ topLeft: 16, topRight: 16 })
-      .padding(12)
+      .padding({ left: 12, right: 12, top: 12, bottom: 28 })
+      // 铺到屏幕物理底边(导航条安全区默认不铺,底部露背景)——按钮用底部 padding 抬离小圆点
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       // 底部滑入/滑出
       .transition(TransitionEffect.translate({ y: '100%' }).animation({ duration: 220, curve: Curve.EaseOut }))
       // 卡片本体点击不关闭
