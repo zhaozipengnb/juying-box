@@ -370,13 +370,11 @@ export struct PlayerPage {
     return eps.slice(st, Math.min(st + 21, eps.length));
   }
 
-  // 集片底色按下载状态区分:默认灰/下载中蓝/已完成绿/失败暗红
-  private epChipBg(epName: string): string {
+  // 集片边框:下载中蓝(活动状态),其余黑
+  private epChipBorder(epName: string): string {
     const st = this.epDlState(epName);
-    if (st === 'completed') { return '#2E7D32'; }
-    if (st === 'failed') { return '#9E3B3B'; }
-    if (st !== '') { return '#007DFF'; }
-    return '#4D888888';
+    if (st !== '' && st !== 'completed' && st !== 'failed') { return '#007DFF'; }
+    return '#000000';
   }
 
   // 单集下载:点击哪一集下哪集——解析直链(与播放同链路)入队;解析期间防重复点击
@@ -1904,9 +1902,9 @@ export struct PlayerPage {
         .transition(TransitionEffect.OPACITY.animation({ duration: 200 }))
       Column({ space: 10 }) {
         Row() {
-          Text('选集').fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+          Text('选集').fontSize(16).fontWeight(FontWeight.Bold).fontColor('#000000')
           Blank()
-          Text('✕').fontSize(16).fontColor('#99FFFFFF')
+          Text('✕').fontSize(16).fontColor('#99000000')
             .padding({ left: 10, right: 2, top: 4, bottom: 4 })
             .onClick(() => { this.showEpSheet = false; })
         }.width('100%')
@@ -1915,16 +1913,16 @@ export struct PlayerPage {
             ListItem() {
               Row() {
                 Text(e.name).fontSize(14)
-                  .fontColor(this.epIdx === ei ? '#4D9EFF' : '#E6FFFFFF')
+                  .fontColor(this.epIdx === ei ? '#007DFF' : '#000000')
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
                 if (this.epIdx === ei) {
-                  Text('✓').fontSize(14).fontColor('#4D9EFF')
+                  Text('✓').fontSize(14).fontColor('#007DFF')
                 }
               }.width('100%')
             }
             .padding({ left: 16, right: 16, top: 11, bottom: 11 })
             .borderRadius(8)
-            .backgroundColor(this.epIdx === ei ? '#22FFFFFF' : Color.Transparent)
+            .backgroundColor(this.epIdx === ei ? '#F2F3F5' : Color.Transparent)
             .onClick(() => {
               this.showEpSheet = false;
               this.switchTo(this.lineIdx, ei);
@@ -1936,7 +1934,7 @@ export struct PlayerPage {
       }
       .width('100%')
       .padding({ top: 14, bottom: 28 })
-      .backgroundColor('#D9262629')
+      .backgroundColor('#FFFFFF')
       .borderRadius({ topLeft: 14, topRight: 14 })
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       // 底部滑入/滑出
@@ -1956,11 +1954,11 @@ export struct PlayerPage {
       Column({ space: 10 }) {
         Row() {
           Text('下载')
-            .fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+            .fontSize(16).fontWeight(FontWeight.Bold).fontColor('#000000')
           Blank()
           Row({ space: 2 }) {
-            Text('下载列表').fontSize(12).fontColor('#FFFFFF')
-            Image($r('app.media.ic_chevron_right')).width(14).height(14).fillColor('#FFFFFF')
+            Text('下载列表').fontSize(12).fontColor('#000000')
+            Image($r('app.media.ic_chevron_right')).width(14).height(14).fillColor('#000000')
           }
           .onClick(() => {
             this.showDlPanel = false;
@@ -1972,8 +1970,10 @@ export struct PlayerPage {
             Row({ space: 8 }) {
               ForEach(this.lines, (l: PlayLine, li: number) => {
                 Text(l.from || ('线路' + (li + 1)))
-                  .fontSize(12).fontColor('#FFFFFF')
-                  .backgroundColor(this.dlLineIdx === li ? '#007DFF' : '#4D888888')
+                  .fontSize(12)
+                  .fontColor(this.dlLineIdx === li ? '#007DFF' : '#000000')
+                  .backgroundColor('#FFFFFF')
+                  .border({ width: 1, color: this.dlLineIdx === li ? '#007DFF' : '#000000' })
                   .borderRadius(4).padding({ left: 8, right: 8, top: 4, bottom: 4 })
                   .onClick(() => {
                     if (li === this.dlLineIdx) { return; }
@@ -1991,8 +1991,10 @@ export struct PlayerPage {
             Row({ space: 8 }) {
               ForEach(this.dlTabRanges(), (r: string, ti: number) => {
                 Text(r)
-                  .fontSize(12).fontColor(this.dlTabIdx === ti ? '#FFFFFF' : '#DDDDDD')
-                  .backgroundColor(this.dlTabIdx === ti ? '#007DFF' : '#4D888888')
+                  .fontSize(12)
+                  .fontColor(this.dlTabIdx === ti ? '#007DFF' : '#000000')
+                  .backgroundColor('#FFFFFF')
+                  .border({ width: 1, color: this.dlTabIdx === ti ? '#007DFF' : '#000000' })
                   .borderRadius(4).padding({ left: 8, right: 8, top: 4, bottom: 4 })
                   .onClick(() => { this.dlTabIdx = ti; })
               }, (r: string, ti: number) => ti + r)
@@ -2006,8 +2008,9 @@ export struct PlayerPage {
             GridItem() {
               Text(ep.name + this.epDlSuffix(ep.name))
                 .fontSize(12)
-                .fontColor('#FFFFFF')
-                .backgroundColor(this.epChipBg(ep.name))
+                .fontColor('#000000')
+                .backgroundColor('#FFFFFF')
+                .border({ width: 1, color: this.epChipBorder(ep.name) })
                 .borderRadius(16)
                 .padding({ left: 10, right: 10, top: 6, bottom: 6 })
                 .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -2024,7 +2027,7 @@ export struct PlayerPage {
         .layoutWeight(1)
       }
       .width('100%').height('58%')
-      .backgroundColor('#D9262629')
+      .backgroundColor('#FFFFFF')
       .borderRadius({ topLeft: 16, topRight: 16 })
       .padding({ left: 12, right: 12, top: 12, bottom: 28 })
       // 铺到屏幕物理底边(导航条安全区默认不铺,底部露背景)——内容用底部 padding 抬离小圆点
