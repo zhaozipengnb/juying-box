@@ -1965,22 +1965,25 @@ export struct PlayerPage {
             Nav.stack.pushPathByName('Download', '');   // 下载在后台继续,面板收起进列表页看进度
           })
         }.width('100%')
-        // 分页 tab:每 21 集一组(纯文字样式,选中加粗+蓝色下划线,不用按钮底)
+        // 分页 tab:每 21 集一组(纯文字样式,选中加粗+文字底边框下划线)。
+        // 下划线不要用 width('100%') 子组件——挂在自适应宽度父 Column 里会撑满整行,
+        // 把后面的 tab 挤出屏幕被裁(表现为"只剩第 1 个 tab")
         if (this.dlTabCount() > 1) {
-          Row({ space: 18 }) {
-            ForEach(this.dlTabRanges(), (r: string, ti: number) => {
-              Column({ space: 4 }) {
+          Scroll() {
+            Row({ space: 18 }) {
+              ForEach(this.dlTabRanges(), (r: string, ti: number) => {
                 Text(r)
                   .fontSize(13)
                   .fontColor(this.dlTabIdx === ti ? '#000000' : '#999999')
                   .fontWeight(this.dlTabIdx === ti ? FontWeight.Bold : FontWeight.Normal)
-                Column()
-                  .width('100%').height(2).borderRadius(1)
-                  .backgroundColor(this.dlTabIdx === ti ? '#007DFF' : Color.Transparent)
-              }
-              .onClick(() => { this.dlTabIdx = ti; })
-            }, (r: string, ti: number) => ti + r)
+                  .padding({ bottom: 4 })
+                  .border({ width: { bottom: 2 }, color: this.dlTabIdx === ti ? '#007DFF' : Color.Transparent })
+                  .onClick(() => { this.dlTabIdx = ti; })
+              }, (r: string, ti: number) => ti + r)
+            }
           }
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
           .width('100%')
         }
         // 集网格:固定 3 列,点击哪一集就下载哪一集(片底色按状态区分,后缀显示进度/✓/✕)
