@@ -157,6 +157,8 @@ export struct PlayerPage {
   private danmuIdx: number = 0;        // 首条未上屏弹幕指针
   private danmuTimer: number = -1;     // 重绘循环
   private danmuLastSec: number = -999; // seek 检测基准
+  private danmuClockAt: number = 0;    // 最近一次引擎进度回调时刻:弹幕平滑外推锚点(回调间隔大,直锚 curTime 一顿一顿)
+  private danmuWCache: Map<number, number> = new Map();   // 文本宽度缓存(按条目下标,measureText 很贵)
   private danmu2D: CanvasRenderingContext2D = new CanvasRenderingContext2D(new RenderingContextSettings(true));
   @Local buffering: boolean = false;   // 播放器缓冲中(START→END 之间)
   @Local bufPercent: number = 0;       // 缓冲进度 0-100
@@ -428,6 +430,7 @@ export struct PlayerPage {
     this.danmus = items;
     this.danmuIdx = 0;
     this.danmuLastSec = -999;
+    this.danmuWCache.clear();   // 换集后下标对不上,宽度缓存作废
   }
 
   // 面板搜索:关键词 → B站视频列表(失败有 toast,不再静默)
@@ -470,7 +473,8 @@ export struct PlayerPage {
     }
   }
 
-  // 弹幕重绘:以 curTime 为播放锚点,滚动位置逐帧推进;暂停即冻结;seek 超过 3s 重置指针
+  // 弹幕重绘:播放头 = 引擎最后进度 + 距上次回调的经过时间(平滑外推)——
+  // 引擎进度回调几百 ms 一跳,直接锚 curTime 逐帧重绘就是一顿一顿;暂停冻结;seek 超 3s 重置指针
   private drawDanmaku(): void {
     const ctx = this.danmu2D;
     const W = Math.floor(this.areaW * this.density);
@@ -479,25 +483,33 @@ export struct PlayerPage {
     if (!this.dmOn) { ctx.clearRect(0, 0, W, H); return; }
     ctx.clearRect(0, 0, W, H);
     if (this.danmus.length === 0 || this.curTime <= 0 || this.resolving) { return; }
-    // seek/换集:curTime 跳变超 3s → 指针重定位到当前时间
-    if (Math.abs(this.curTime - this.danmuLastSec) > 3) {
-      this.danmuLastSec = this.curTime;
-      this.danmuIdx = 0;
-      while (this.danmuIdx < this.danmus.length && this.danmus[this.danmuIdx].t < this.curTime - 8) {
-        this.danmuIdx++;
-      }
+    const now = Date.now();
+    let t = this.curTime;
+    if (this.isPlaying) {
+      t += Math.min((now - this.danmuClockAt) / 1000, 1.5);   // 缓冲/卡顿时最多外推 1.5s,防止弹幕飘走
+    } else {
+      this.danmuClockAt = now;   // 暂停期间持续对齐锚点,恢复播放不跳变
     }
+    // seek/换集:t 跳变超 3s(后退也覆盖) → 指针归零,由下方推进重定位
+    if (Math.abs(t - this.danmuLastSec) > 3) { this.danmuIdx = 0; }
     const DUR = 8;   // 每条弹幕滚过全屏的时长(秒)
+    // 头部推进:已滚出窗口的历史弹幕直接跳过——原来每帧从 0 全量扫描几千条,是卡顿的另一半原因
+    while (this.danmuIdx < this.danmus.length && this.danmus[this.danmuIdx].t + this.dmOffset < t - DUR) {
+      this.danmuIdx++;
+    }
     const font = Math.floor(15 * this.density);
     ctx.font = `${font}px sans-serif`;
     ctx.textBaseline = 'top';
     ctx.globalAlpha = 0.75;   // 半透明:弹幕从人物身上"透"过去,不挡脸
     const laneH = Math.max(28 * this.density, H / 6);
     const scrollLanes: boolean[] = [];   // 泳道占用(滚动弹幕避让)
-    for (const d of this.danmus) {
-      const elapsed = this.curTime - (d.t + this.dmOffset);
-      if (elapsed < 0 || elapsed > DUR) { continue; }
-      const tw = ctx.measureText(d.text).width;
+    for (let i = this.danmuIdx; i < this.danmus.length; i++) {
+      const d = this.danmus[i];
+      const elapsed = t - (d.t + this.dmOffset);
+      if (elapsed < 0) { break; }   // 按出场时间升序:后面的都还没出现
+      if (elapsed > DUR) { continue; }
+      let tw = this.danmuWCache.get(i);
+      if (tw === undefined) { tw = ctx.measureText(d.text).width; this.danmuWCache.set(i, tw); }
       const scroll = d.mode !== 4 && d.mode !== 5;   // 底部/顶部固定弹幕不滚动
       ctx.fillStyle = '#000000';
       if (scroll) {
@@ -521,7 +533,7 @@ export struct PlayerPage {
       }
     }
     ctx.globalAlpha = 1;
-    this.danmuLastSec = this.curTime;
+    this.danmuLastSec = t;
   }
 
   private simpleHash(s: string): number {
@@ -676,6 +688,7 @@ export struct PlayerPage {
     const target = Math.max(0, Math.min(this.seekFrom + this.seekDelta, this.dur));
     this.engine.seek(target);
     this.curTime = target;
+    this.danmuClockAt = Date.now();
     this.lastPos = target;
     this.seekPending = true;   // 丢弃 seek 完成前的旧进度回调，防滑块回跳
     this.armCtrlHide();
@@ -968,6 +981,7 @@ export struct PlayerPage {
         return;
       }
       this.curTime = sec;
+      this.danmuClockAt = Date.now();   // 弹幕平滑外推锚点
       this.lastPos = sec;
       this.saveProgress(false);
     };
@@ -1289,6 +1303,7 @@ export struct PlayerPage {
                   this.seekPending = false;
                 }
                 this.curTime = value;
+                this.danmuClockAt = Date.now();   // 拖动预览时弹幕跟手
                 if (mode === SliderChangeMode.End) {
                   this.uiSeeking = false;
                   this.seekPending = true;
