@@ -1965,42 +1965,23 @@ export struct PlayerPage {
             Nav.stack.pushPathByName('Download', '');   // 下载在后台继续,面板收起进列表页看进度
           })
         }.width('100%')
-        if (this.lines.length > 1) {
-          Scroll() {
-            Row({ space: 8 }) {
-              ForEach(this.lines, (l: PlayLine, li: number) => {
-                Text(l.from || ('线路' + (li + 1)))
-                  .fontSize(12)
-                  .fontColor(this.dlLineIdx === li ? '#007DFF' : '#000000')
-                  .backgroundColor('#FFFFFF')
-                  .border({ width: 1, color: this.dlLineIdx === li ? '#007DFF' : '#000000' })
-                  .borderRadius(4).padding({ left: 8, right: 8, top: 4, bottom: 4 })
-                  .onClick(() => {
-                    if (li === this.dlLineIdx) { return; }
-                    this.dlLineIdx = li;
-                    this.dlTabIdx = 0;
-                  })
-              }, (l: PlayLine, li: number) => li + l.from)
-            }
-          }
-          .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).align(Alignment.Start).width('100%')
-        }
-        // 分页 tab:每 21 集一组
+        // 分页 tab:每 21 集一组(纯文字样式,选中加粗+蓝色下划线,不用按钮底)
         if (this.dlTabCount() > 1) {
-          Scroll() {
-            Row({ space: 8 }) {
-              ForEach(this.dlTabRanges(), (r: string, ti: number) => {
+          Row({ space: 18 }) {
+            ForEach(this.dlTabRanges(), (r: string, ti: number) => {
+              Column({ space: 4 }) {
                 Text(r)
-                  .fontSize(12)
-                  .fontColor(this.dlTabIdx === ti ? '#007DFF' : '#000000')
-                  .backgroundColor('#FFFFFF')
-                  .border({ width: 1, color: this.dlTabIdx === ti ? '#007DFF' : '#000000' })
-                  .borderRadius(4).padding({ left: 8, right: 8, top: 4, bottom: 4 })
-                  .onClick(() => { this.dlTabIdx = ti; })
-              }, (r: string, ti: number) => ti + r)
-            }
+                  .fontSize(13)
+                  .fontColor(this.dlTabIdx === ti ? '#000000' : '#999999')
+                  .fontWeight(this.dlTabIdx === ti ? FontWeight.Bold : FontWeight.Normal)
+                Column()
+                  .width('100%').height(2).borderRadius(1)
+                  .backgroundColor(this.dlTabIdx === ti ? '#007DFF' : Color.Transparent)
+              }
+              .onClick(() => { this.dlTabIdx = ti; })
+            }, (r: string, ti: number) => ti + r)
           }
-          .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).align(Alignment.Start).width('100%')
+          .width('100%')
         }
         // 集网格:固定 3 列,点击哪一集就下载哪一集(片底色按状态区分,后缀显示进度/✓/✕)
         Grid() {
