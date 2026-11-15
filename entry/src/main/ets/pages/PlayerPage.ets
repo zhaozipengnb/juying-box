@@ -892,6 +892,7 @@ export struct PlayerPage {
   // 视频区常驻（见 build），切换只改布局属性与窗口方向，Video 不重建、进度与解码状态天然保留
   private toggleTheater(): void {
     this.isTheater = !this.isTheater;
+    this.updateCutoutDepth();   // 每次进全屏重测挖孔(旋转/窗口变化后 rects 可能更新)
     if (this.isTheater) {
       this.setImmersive(true);
       // 竖屏片保持竖屏全屏(画面满宽居中),横屏片才转横屏。
@@ -924,11 +925,30 @@ export struct PlayerPage {
   // 设置页改完立即生效(播放页常驻导航栈不重建,没有重建时机)
   @Local wallpaperColors: Array<[ResourceColor, number]> = [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
   @Local videoFit: VideoFit = 'contain';
+  @Local cutoutDepth: number = 40;      // 前摄挖孔深度(vp):getCutoutInfo 实测,全屏两侧图标自动避让
   private settingsCb: (() => void) | null = null;
 
   private syncSettings(): void {
     this.wallpaperColors = this.settings.wallpaperColors();
     this.videoFit = this.settings.videoFit;
+  }
+
+  // 取前摄挖孔实际深度(px,自然方向=竖屏的 top 边):横屏时挖孔落在左右缘中部,两侧图标避让用。
+  // 取不到挖孔信息(老设备/模拟器)按 40vp 兜底
+  private async updateCutoutDepth(): Promise<void> {
+    try {
+      const info = await display.getDefaultDisplaySync().getCutoutInfo();
+      let maxPx = 0;
+      for (const r of info.boundingRects) {
+        maxPx = Math.max(maxPx, r.top + r.height);   // 本 SDK Rect 是 left/top/width/height
+      }
+      if (maxPx === 0) { this.cutoutDepth = 24; return; }
+      const d = maxPx / (this.density > 0 ? this.density : 3) + 10;   // 挖孔外再留 10vp
+      this.cutoutDepth = Math.max(36, Math.min(90, d));
+      hilog.info(0x0000, 'OKV-Player', 'cutout depth %{public}d vp', Math.round(this.cutoutDepth));
+    } catch (e) {
+      hilog.info(0x0000, 'OKV-Player', 'cutout info fail, keep fallback');
+    }
   }
 
   aboutToDisappear(): void {
@@ -945,6 +965,7 @@ export struct PlayerPage {
       this.density = d.densityPixels > 0 ? d.densityPixels : 1;
       this.videoH = d.width / this.density / 1.78;
     } catch (e) { }
+    this.updateCutoutDepth();
     if (gBrightness >= 0) { this.brightCache = gBrightness; }   // 延续上次手势亮度
     PlayerPage.activeEngine = this.engine;
     this.setupCastSession();
@@ -1439,7 +1460,7 @@ export struct PlayerPage {
           .position({ x: '100%', y: '50%' })
           .markAnchor({ x: '100%', y: '50%' })
           // 距边 70vp:反向横屏时前摄挖孔会落在右缘中部,同样往内避让
-          .translate({ x: -70, y: -44 })
+          .translate({ x: -this.cutoutDepth, y: -44 })
       }
 
       // 旋转锁:全屏右侧中部,随控制层显隐(锁定状态本身持续生效,仅图标隐藏)
@@ -1450,7 +1471,7 @@ export struct PlayerPage {
           .position({ x: '100%', y: '50%' })
           .markAnchor({ x: '100%', y: '50%' })
           // 距边 70vp:反向横屏时摄像头在右缘中部,同弹幕图标一并避让
-          .translate({ x: -70 })
+          .translate({ x: -this.cutoutDepth })
       }
 
       // 弹幕开关:全屏左侧中部(镜像右侧旋转锁),点亮=开,点灭清屏;与弹幕面板的开关同一状态并持久化
@@ -1465,8 +1486,8 @@ export struct PlayerPage {
           })
           .position({ x: 0, y: '50%' })
           .markAnchor({ x: 0, y: '50%' })
-          // 距边 70vp:横屏时前摄挖孔/胶囊恰在左缘垂直中部,30vp 会被摄像头挡住
-          .translate({ x: 70 })
+          // 距边 = 挖孔实测深度:横屏时前摄恰在左右缘中部
+          .translate({ x: this.cutoutDepth })
       }
 
       // 缓冲加载指示(快进/慢网时 START→END 之间):转圈+缓冲进度,触摸穿透不挡手势
