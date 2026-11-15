@@ -683,11 +683,13 @@ export struct PlayerPage {
   // 选集行"更多":打开全部剧集选择弹层(与全屏设置行"选集"同款,长剧横滑条摆不下全部)
   private showEpPicker(): void {
     if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
+    const idxs = this.epDisplayIdxs();
+    const eps = this.lines[this.lineIdx].episodes;
     this.picker = {
       title: '选集',
-      options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
-      index: this.epIdx,
-      onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
+      options: idxs.map((i: number): string => eps[i].name),
+      index: idxs.indexOf(this.epIdx),
+      onPick: (idx: number): void => { this.switchTo(this.lineIdx, idxs[idx]); }
     };
   }
 
