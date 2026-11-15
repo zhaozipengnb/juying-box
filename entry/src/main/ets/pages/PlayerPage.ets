@@ -1686,13 +1686,15 @@ export struct PlayerPage {
           .padding({ left: 16, right: 16, bottom: 10 })
         }
 
-        // 9. 简介
+        // 9. 简介(标题与线路/选集同缩进;desc trim 掉源站返回的首行空白)
         if (this.detail !== null && this.detail.desc !== '') {
           Column({ space: 4 }) {
-            Text('简介').fontSize(13).fontColor('#FFFFFF').padding({left:0})
-            Text(this.detail.desc)
+            Text('简介').fontSize(13).fontColor('#FFFFFF')
+            Text(this.detail.desc.trim())
               .fontSize(12).fontColor('#FFFFFF').lineHeight(20)
-          }.width('100%').padding({ left: 16, right: 16, bottom: 6 })
+              .width('100%')
+          }.width('100%')
+          .padding({ left: 16, right: 16, bottom: 6 })
         }
       }
       .width('100%')
