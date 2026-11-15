@@ -128,6 +128,20 @@ java -jar build/libs/proxy-server.jar <订阅地址> [端口]
 > - 二维码图片路径：`docs/wechat_group_qr.png`，过期后更新图片重新提交即可（群码支持 7 天有效期）
 > - 出于隐私考虑，**不建议**在公开仓库直接放个人微信号：公开页面会被爬虫抓取，骚扰无法撤回
 
+## ☕ 赞赏
+
+如果这个项目对你有帮助，欢迎请作者喝杯咖啡～**完全自愿**，不打赏不影响任何功能与支持。
+
+<p align="center">
+  <img src="docs/reward_wechat.png" width="220" alt="微信收款"/>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/reward_alipay.png" width="220" alt="支付宝收款"/>
+</p>
+
+> - 二维码图片路径：`docs/reward_wechat.png`（微信）/ `docs/reward_alipay.png`（支付宝）
+> - 微信收款码：我 → 服务 → 收付款 → 二维码收款 → 保存收款码；支付宝：首页「收钱」→ 保存图片
+> - 建议给收款码加个金额备注或改名（如"聚源盒交流群-xxx"），收款来路清晰
+
 ## ⚠️ 免责声明
 
 1. 本项目是基于开源技术的学习研究作品，**不内置、不存储、不上传任何影视内容**，也不提供任何内容服务。
