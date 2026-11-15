@@ -1422,6 +1422,16 @@ export struct PlayerPage {
           .position({ x: '50%', y: 60 }).markAnchor({ x: '50%' })
       }
 
+      // 返回:全屏右侧,锁定图标正上方——影院模式标题栏隐藏,这里直接退出播放页回详情
+      if (this.isTheater && this.showCtrl) {
+        Image($r('app.media.ic_back')).width(22).height(22)
+          .fillColor('#FFFFFF')
+          .onClick(() => { Nav.stack.pop(); })
+          .position({ x: '100%', y: '50%' })
+          .markAnchor({ x: '100%', y: '50%' })
+          .translate({ x: -30, y: -44 })
+      }
+
       // 旋转锁:全屏右侧中部,随控制层显隐(锁定状态本身持续生效,仅图标隐藏)
       if (this.isTheater && this.showCtrl) {
         Image(this.rotationLocked ? $r('app.media.ic_lock') : $r('app.media.ic_lock_open')).width(22).height(22)
