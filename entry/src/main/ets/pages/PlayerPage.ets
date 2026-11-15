@@ -1625,8 +1625,8 @@ export struct PlayerPage {
               Blank()
               if (this.ep !== null && this.settings.builtinDownload) {
                 Row({ space: 2 }) {
-                  Text('下载').fontSize(12).fontColor('#DDDDDD')
-                  Image($r('app.media.ic_chevron_right')).width(14).height(14).fillColor('#DDDDDD')
+                  Text('下载').fontSize(12).fontColor('#FFFFFF')
+                  Image($r('app.media.ic_chevron_right')).width(14).height(14).fillColor('#FFFFFF')
                 }
                 .onClick(() => { this.openDlPanel(); })
               }
@@ -1658,8 +1658,8 @@ export struct PlayerPage {
               Text('选集').fontSize(13).fontColor('#FFFFFF')
               Blank()
               Row({ space: 2 }) {
-                Text('更多').fontSize(12).fontColor('#DDDDDD')
-                Image($r('app.media.ic_chevron_right')).width(14).height(14).fillColor('#DDDDDD')
+                Text('更多').fontSize(12).fontColor('#FFFFFF')
+                Image($r('app.media.ic_chevron_right')).width(14).height(14).fillColor('#FFFFFF')
               }
               .onClick(() => { this.showEpPicker(); })
             }.width('100%')
