@@ -24,14 +24,13 @@ export function speedEnum(s: number): media.PlaybackSpeed {
 
 export class AVPlayerEngine {
   private player: media.AVPlayer | null = null;
-  isLive: boolean = false;                // 直播流:AVPlayer 不允许 setSpeed/setLoop(prepared 时调必抛)
+  isLive: boolean = false;                // 直播流:AVPlayer 不允许 setSpeed(prepared 时调必抛)
   private surfaceId: string = '';
   private state: EngineState = 'idle';
   private pendingPlay: boolean = false;   // prepared 后是否自动播放
   private localFd: number = -1;           // 本地文件播放的 fd(播放完/换址时关闭)
   url: string = '';
   speed: media.PlaybackSpeed = media.PlaybackSpeed.SPEED_FORWARD_1_00_X;
-  loop: boolean = false;
   onTime?: (sec: number) => void;
   onState?: (s: EngineState) => void;
   onVideoSize?: (w: number, h: number) => void;
@@ -97,7 +96,6 @@ export class AVPlayerEngine {
         this.state = 'prepared';
         if (!this.isLive) {
           p.setSpeed(this.speed);   // prepared 状态才允许 setSpeed;直播流不支持,调了直接 error
-          p.loop = this.loop;
         }
         this.onState?.('prepared');
         if (this.pendingPlay) {
@@ -163,14 +161,6 @@ export class AVPlayerEngine {
       this.player.setSpeed(e);
     }
     this.speed = e;
-  }
-
-  setLoop(v: boolean): void {
-    if (this.isLive) { return; }   // 直播流不支持循环
-    this.loop = v;
-    if (this.player !== null && (this.state === 'prepared' || this.state === 'playing' || this.state === 'paused')) {
-      this.player.loop = v;
-    }
   }
 
   async release(): Promise<void> {

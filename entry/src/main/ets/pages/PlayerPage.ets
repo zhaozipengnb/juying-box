@@ -59,7 +59,6 @@ export struct PlayerPage {
   @Local boost: number = 0;            // 长按加速中的倍速（0 = 未加速）
   @Local picker: PickerSpec | null = null;   // 居中选择弹层
   @Local channelLine: number = 0;      // 直播多线路当前线路（0 基）
-  @Local loopPlay: boolean = false;    // 单集循环
   @Local showIntroSec: number = 0;     // 本剧片头结束点(秒,0=未标记):点"跳过片头"时按当前位置标记
   @Local showOutroSec: number = 0;     // 本剧片尾长度(距结尾秒数,0=未标记):点"跳过片尾"时按当前位置标记
   private channelUrls: string[] = [];  // 直播多线路地址表（来自 PlayerParam）
@@ -976,12 +975,12 @@ export struct PlayerPage {
         this.getUIContext().getPromptAction().showToast({ message: '已自动跳过片头' });
         return;
       }
-      // 本集播完:自动切下一集(循环开启时引擎自循环;直播无末尾;已是最后一集则停在片尾)
+      // 本集播完:自动切下一集(直播无末尾;已是最后一集则停在片尾)
       // "跳尾"时长>0:距片尾 N 秒即切,跳过片尾字幕;=0:播到最后一秒才切。
       // 片尾窗口内进度回调每秒都会命中,autoNextFired 保证只触发一次;进度按看完落盘,
       // 避免下次续播正好落在窗口内、一打开又被自动切走
       const endAt = this.showOutroSec > 0 ? this.dur - this.showOutroSec : this.dur - 1;
-      if (!this.loopPlay && this.dur > this.showOutroSec + 60 && sec >= endAt && this.siteKey !== 'live'
+      if (this.dur > this.showOutroSec + 60 && sec >= endAt && this.siteKey !== 'live'
         && this.ep !== null && !this.autoNextFired) {
         this.autoNextFired = true;
         this.lastPos = this.dur;
@@ -1377,11 +1376,6 @@ export struct PlayerPage {
                 .onClick(() => { this.shareVideo(); })
               Text('刷新').fontSize(12).fontColor('#FFFFFF')
                 .onClick(() => { this.playUrl = ''; this.prepare(); })
-              Text(this.loopPlay ? '循环开' : '循环关').fontSize(12).fontColor('#FFFFFF')
-                .onClick(() => {
-                  this.loopPlay = !this.loopPlay;
-                  this.engine.setLoop(this.loopPlay);
-                })
               // 跳过片头:常驻(仅直播隐藏)——第一次点=把当前位置标记为本剧片头结束点;
               // 已标记过且还在片头内 → 直接跳到记忆点
               if (this.siteKey !== 'live') {
