@@ -6,6 +6,7 @@ export interface PickerSpec {
   options: string[];
   index: number;              // 当前选中项（高亮用，-1 = 无）
   onPick: (idx: number) => void;
+  bottom?: boolean;           // true = 底部弹层样式(白底滑入),false/缺省 = 居中弹窗
 }
 
 @ComponentV2

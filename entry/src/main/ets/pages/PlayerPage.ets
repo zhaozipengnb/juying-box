@@ -1138,7 +1138,11 @@ export struct PlayerPage {
       .backgroundImageSize(ImageSize.Cover)
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
 
-      if (this.picker !== null) {
+      if (this.picker !== null && this.picker.bottom === true) {
+        this.pickerSheet()
+      }
+
+      if (this.picker !== null && this.picker.bottom !== true) {
         OptionPicker({
           title: this.picker.title,
           options: this.picker.options,
@@ -1428,6 +1432,7 @@ export struct PlayerPage {
                       title: '切换线路',
                       options: this.lines.map((l: PlayLine): string => l.from),
                       index: this.lineIdx,
+                      bottom: true,
                       onPick: (idx: number): void => { this.switchTo(idx, this.epIdx); }
                     };
                   })
@@ -1484,6 +1489,7 @@ export struct PlayerPage {
                     title: '选集',
                     options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
                     index: this.epIdx,
+                    bottom: true,
                     onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
                   };
                 })
@@ -1908,6 +1914,54 @@ export struct PlayerPage {
   }
 
   // 批量下载选集面板(底部弹层):线路切换 + 全选/清空 + 集多选(带下载状态) + 下载按钮
+  // 通用底部弹层(全屏设置行的线路/倍速/选集):白底滑入,当前项蓝字打勾
+  @Builder
+  pickerSheet() {
+    Column() {
+      Column()
+        .width('100%').layoutWeight(1)
+        .onClick(() => { this.picker = null; })
+        .transition(TransitionEffect.OPACITY.animation({ duration: 200 }))
+      Column({ space: 10 }) {
+        Row() {
+          Text(this.picker?.title ?? '').fontSize(16).fontWeight(FontWeight.Bold).fontColor('#000000')
+          Blank()
+        }.width('100%')
+        List({ space: 2 }) {
+          ForEach(this.picker?.options ?? [], (o: string, oi: number) => {
+            ListItem() {
+              Row() {
+                Text(o).fontSize(14)
+                  .fontColor(this.picker?.index === oi ? '#007DFF' : '#000000')
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+                if (this.picker?.index === oi) {
+                  Text('✓').fontSize(14).fontColor('#007DFF')
+                }
+              }.width('100%')
+            }
+            .padding({ left: 16, right: 16, top: 11, bottom: 11 })
+            .borderRadius(8)
+            .backgroundColor(this.picker?.index === oi ? '#F2F3F5' : Color.Transparent)
+            .onClick(() => {
+              const pk: PickerSpec | null = this.picker;
+              this.picker = null;
+              if (pk !== null) { pk.onPick(oi); }
+            })
+          }, (o: string, oi: number) => oi + '_' + o)
+        }
+        .width('100%')
+        .constraintSize({ maxHeight: 320 })
+      }
+      .width('100%')
+      .padding({ top: 14, bottom: 28 })
+      .backgroundColor('#FFFFFF')
+      .borderRadius({ topLeft: 14, topRight: 14 })
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+      .transition(TransitionEffect.translate({ y: '100%' }).animation({ duration: 220, curve: Curve.EaseOut }))
+    }
+    .width('100%').height('100%')
+  }
+
   @Builder
   epSheet() {
     Column() {
