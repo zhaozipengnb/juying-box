@@ -178,9 +178,8 @@ export struct PlayerPage {
   @Local showDlPanel: boolean = false;
   @Local showEpSheet: boolean = false;  // '更多'选集底部弹层
   @Local dlLineIdx: number = 0;        // 面板内线路
-  @Local dlSel: boolean[] = [];        // 各集选中态
-  @Local dlResolveText: string = '';   // 批量解析进度/结果提示
-  private dlBusy: boolean = false;     // 批量解析进行中(防重复触发)
+  @Local dlTabIdx: number = 0;         // 下载面板分页:每 21 集一组
+  private dlInFlight: Set<string> = new Set();   // 解析中的集名(防重复点击)
   private xcController: XComponentController = new XComponentController();
   private webController: webview.WebviewController = new webview.WebviewController();
 
@@ -341,67 +340,84 @@ export struct PlayerPage {
     return it ? it.status : '';
   }
 
-  // 打开批量下载面板:默认停在当前播放线路,全不选
+  // 打开下载面板:默认停在当前播放线路,第 1 页
   private openDlPanel(): void {
     this.dlLineIdx = this.lineIdx;
-    const eps = this.lines[this.lineIdx]?.episodes ?? [];
-    this.dlSel = eps.map((_e: Episode): boolean => false);
-    this.dlResolveText = '';
+    this.dlTabIdx = 0;
     this.showDlPanel = true;
   }
 
-  // 批量下载:逐集解析直链(与播放同链路:drpy play → 通用解析),成功的入队,失败的跳过
-  private async batchDownload(): Promise<void> {
-    if (this.dlBusy) { return; }
-    const line = this.lines[this.dlLineIdx];
-    if (line === undefined) { return; }
-    const picks: Episode[] = [];
-    line.episodes.forEach((e: Episode, i: number): void => {
-      if (i < this.dlSel.length && this.dlSel[i] && this.epDlState(e.name) === '') {
-        picks.push(e);
-      }
-    });
-    if (picks.length === 0) { return; }
-    this.dlBusy = true;
-    let ok = 0;
-    const flag = line.from;
-    // 源站防盗链头:站点配置 header + 默认 UA——CDN 按 UA/Referer 掐流时下载必须带同样头
-    const dlHeaders: Record<string, string> = { 'User-Agent': 'okhttp/4.9.3' };
-    const site = AppState.instance.config?.sites.find((s: SiteConfig): boolean => s.key === this.siteKey);
-    if (site !== undefined) {
-      const ks = Object.keys(site.header);
-      for (const k of ks) { dlHeaders[k] = site.header[k]; }
+  // 下载面板分页:每 21 集一组
+  private dlTabCount(): number {
+    const len = this.lines[this.dlLineIdx]?.episodes.length ?? 0;
+    return Math.max(1, Math.ceil(len / 21));
+  }
+
+  private dlTabRanges(): string[] {
+    const out: string[] = [];
+    const len = this.lines[this.dlLineIdx]?.episodes.length ?? 0;
+    for (let t = 0; t < this.dlTabCount(); t++) {
+      const st = t * 21 + 1;
+      const en = Math.min((t + 1) * 21, len);
+      out.push(`${st}-${en}集`);
     }
-    if (await this.dl.wifiBlocked()) {
-      this.dlResolveText = '当前为移动网络，下载仅 Wi-Fi 已开启';
-      this.dlBusy = false;
-      setTimeout((): void => { if (!this.dlBusy) { this.dlResolveText = ''; } }, 3000);
+    return out;
+  }
+
+  private dlTabEps(): Episode[] {
+    const eps = this.lines[this.dlLineIdx]?.episodes ?? [];
+    const st = this.dlTabIdx * 21;
+    return eps.slice(st, Math.min(st + 21, eps.length));
+  }
+
+  // 集片底色按下载状态区分:默认灰/下载中蓝/已完成绿/失败暗红
+  private epChipBg(epName: string): string {
+    const st = this.epDlState(epName);
+    if (st === 'completed') { return '#2E7D32'; }
+    if (st === 'failed') { return '#9E3B3B'; }
+    if (st !== '') { return '#007DFF'; }
+    return '#4D888888';
+  }
+
+  // 单集下载:点击哪一集下哪集——解析直链(与播放同链路)入队;解析期间防重复点击
+  private async downloadOne(line: PlayLine, ep: Episode): Promise<void> {
+    if (line === undefined) { return; }
+    if (this.dlInFlight.has(ep.name)) { return; }
+    const st = this.epDlState(ep.name);
+    if (st !== '') {
+      this.getUIContext().getPromptAction().showToast({ message: `${ep.name} ${st === 'completed' ? '已下载' : '下载中/已暂停'}` });
       return;
     }
+    this.dlInFlight.add(ep.name);
     try {
-      for (let i = 0; i < picks.length; i++) {
-        const ep = picks[i];
-        this.dlResolveText = `解析 ${i + 1}/${picks.length}：${ep.name}`;
-        let direct = '';
-        const resolved = await this.resolveViaDrpy(ep, flag);
-        if (resolved !== null && isDirectMedia(resolved.url)) {
-          direct = resolved.url;
-        } else {
-          try {
-            const t = await resolvePlayUrl(ep.url, AppState.instance.makeFetchText());
-            if (isDirectMedia(t)) { direct = t; }
-          } catch (err) { }
-        }
-        if (direct === '') { continue; }
-        await this.dl.startDownload(this.movieName, ep.name, direct, this.siteKey, dlHeaders);
-        ok++;
+      // 源站防盗链头:站点配置 header + 默认 UA——CDN 按 UA/Referer 掐流时下载必须带同样头
+      const dlHeaders: Record<string, string> = { 'User-Agent': 'okhttp/4.9.3' };
+      const site = AppState.instance.config?.sites.find((s: SiteConfig): boolean => s.key === this.siteKey);
+      if (site !== undefined) {
+        const ks = Object.keys(site.header);
+        for (const k of ks) { dlHeaders[k] = site.header[k]; }
       }
+      if (await this.dl.wifiBlocked()) {
+        this.getUIContext().getPromptAction().showToast({ message: '当前为移动网络，下载仅 Wi-Fi 已开启' });
+        return;
+      }
+      let direct = '';
+      const resolved = await this.resolveViaDrpy(ep, line.from);
+      if (resolved !== null && isDirectMedia(resolved.url)) {
+        direct = resolved.url;
+      } else {
+        try {
+          const t = await resolvePlayUrl(ep.url, AppState.instance.makeFetchText());
+          if (isDirectMedia(t)) { direct = t; }
+        } catch (err) { }
+      }
+      if (direct === '') {
+        this.getUIContext().getPromptAction().showToast({ message: `${ep.name} 解析失败` });
+        return;
+      }
+      await this.dl.startDownload(this.movieName, ep.name, direct, this.siteKey, dlHeaders);
     } finally {
-      // 解析链路任何异常都不能卡死面板(dlBusy 卡住 = 面板按钮永久失效)
-      this.dlBusy = false;
-      this.dlResolveText = ok > 0 ? `已加入下载 ${ok} 集` : '解析失败，未加入下载';
-      this.dlSel = this.dlSel.map((_v: boolean): boolean => false);
-      setTimeout((): void => { if (!this.dlBusy) { this.dlResolveText = ''; } }, 2500);
+      this.dlInFlight.delete(ep.name);
     }
   }
 
@@ -1140,7 +1156,7 @@ export struct PlayerPage {
     // 影院模式时返回先还原竖屏播放界面（消费本次返回），再次返回才退出播放页
     .onBackPressed((): boolean => {
       if (this.showDlPanel) {
-        if (!this.dlBusy) { this.showDlPanel = false; }
+        this.showDlPanel = false;   // 单集下载后台继续,面板直接收起
         return true;
       }
       if (this.isTheater) {
@@ -1935,7 +1951,7 @@ export struct PlayerPage {
       // 上方遮罩:点空白关闭
       Column()
         .width('100%').layoutWeight(1)
-        .onClick(() => { if (!this.dlBusy) { this.showDlPanel = false; } })
+        .onClick(() => { this.showDlPanel = false; })
         .transition(TransitionEffect.OPACITY.animation({ duration: 200 }))
       Column({ space: 10 }) {
         Row() {
@@ -1960,59 +1976,54 @@ export struct PlayerPage {
                   .backgroundColor(this.dlLineIdx === li ? '#007DFF' : '#4D888888')
                   .borderRadius(4).padding({ left: 8, right: 8, top: 4, bottom: 4 })
                   .onClick(() => {
-                    if (this.dlBusy || li === this.dlLineIdx) { return; }
+                    if (li === this.dlLineIdx) { return; }
                     this.dlLineIdx = li;
-                    this.dlSel = (this.lines[li]?.episodes ?? []).map((_e: Episode): boolean => false);
+                    this.dlTabIdx = 0;
                   })
               }, (l: PlayLine, li: number) => li + l.from)
             }
           }
           .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).align(Alignment.Start).width('100%')
         }
-        Row({ space: 14 }) {
-          Text('全选').fontSize(12).fontColor('#4D9EFF')
-            .onClick(() => { if (!this.dlBusy) { this.dlSel = this.dlSel.map((_v: boolean): boolean => true); } })
-          Text('清空').fontSize(12).fontColor('#99FFFFFF')
-            .onClick(() => { if (!this.dlBusy) { this.dlSel = this.dlSel.map((_v: boolean): boolean => false); } })
-          Blank()
-          Text(this.dlResolveText).fontSize(12).fontColor('#FFEB3B').maxLines(1)
-        }.width('100%')
+        // 分页 tab:每 21 集一组
+        if (this.dlTabCount() > 1) {
+          Scroll() {
+            Row({ space: 8 }) {
+              ForEach(this.dlTabRanges(), (r: string, ti: number) => {
+                Text(r)
+                  .fontSize(12).fontColor(this.dlTabIdx === ti ? '#FFFFFF' : '#DDDDDD')
+                  .backgroundColor(this.dlTabIdx === ti ? '#007DFF' : '#4D888888')
+                  .borderRadius(4).padding({ left: 8, right: 8, top: 4, bottom: 4 })
+                  .onClick(() => { this.dlTabIdx = ti; })
+              }, (r: string, ti: number) => ti + r)
+            }
+          }
+          .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).align(Alignment.Start).width('100%')
+        }
+        // 集网格:点击哪一集就下载哪一集(片底色按状态区分,后缀显示进度/✓/✕)
         Scroll() {
           Flex({ wrap: FlexWrap.Wrap }) {
-            ForEach(this.lines[this.dlLineIdx]?.episodes ?? [], (e: Episode, ei: number) => {
-              Text(e.name + this.epDlSuffix(e.name))
+            ForEach(this.dlTabEps(), (ep: Episode) => {
+              Text(ep.name + this.epDlSuffix(ep.name))
                 .fontSize(12)
-                .fontColor(this.dlSel[ei] ? '#FFFFFF' : '#E6FFFFFF')
-                .fontWeight(this.dlSel[ei] ? FontWeight.Medium : FontWeight.Normal)
-                .backgroundColor(this.dlSel[ei] ? '#007DFF' : '#4D888888')
-                .opacity(this.epDlState(e.name) !== '' ? 0.55 : 1)
+                .fontColor('#FFFFFF')
+                .backgroundColor(this.epChipBg(ep.name))
                 .borderRadius(16)
-                .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+                .padding({ left: 10, right: 10, top: 6, bottom: 6 })
                 .margin({ right: 8, bottom: 8 })
-                .constraintSize({ maxWidth: '46%' })
                 .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                .onClick(() => {
-                  const st = this.epDlState(e.name);
-                  // 失败任务允许重新勾选重下
-                  if (this.dlBusy || (st !== '' && st !== 'failed')) { return; }
-                  this.dlSel[ei] = !this.dlSel[ei];
-                })
-            }, (e: Episode, ei: number) => this.dlLineIdx + '_' + ei + '_' + e.name)
+                .onClick(() => { this.downloadOne(this.lines[this.dlLineIdx], ep); })
+            }, (ep: Episode) => ep.name)
           }
-          .width('100%')
         }
-        .scrollable(ScrollDirection.Vertical).scrollBar(BarState.Off)
-        .width('100%').layoutWeight(1).align(Alignment.Top)
-        Button(`下载选中 ${this.dlSel.filter((v: boolean): boolean => v).length} 集`)
-          .width('100%').fontSize(14).fontColor('#FFFFFF')
-          .backgroundColor(this.dlBusy ? '#66666666' : '#007DFF')
-          .onClick(() => { this.batchDownload(); })
+        .width('100%').layoutWeight(1)
+        .align(Alignment.Top)
       }
       .width('100%').height('58%')
       .backgroundColor('#D9262629')
       .borderRadius({ topLeft: 16, topRight: 16 })
       .padding({ left: 12, right: 12, top: 12, bottom: 28 })
-      // 铺到屏幕物理底边(导航条安全区默认不铺,底部露背景)——按钮用底部 padding 抬离小圆点
+      // 铺到屏幕物理底边(导航条安全区默认不铺,底部露背景)——内容用底部 padding 抬离小圆点
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       // 底部滑入/滑出
       .transition(TransitionEffect.translate({ y: '100%' }).animation({ duration: 220, curve: Curve.EaseOut }))
