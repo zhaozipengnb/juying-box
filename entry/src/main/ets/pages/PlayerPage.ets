@@ -1693,7 +1693,9 @@ export struct PlayerPage {
             Text(this.detail.desc.trim())
               .fontSize(12).fontColor('#FFFFFF').lineHeight(20)
               .width('100%')
-          }.width('100%')
+          }
+          .alignItems(HorizontalAlign.Start)   // Column 默认 alignItems=Center,无宽度的标题会被居中
+          .width('100%')
           .padding({ left: 16, right: 16, bottom: 6 })
         }
       }
