@@ -22,7 +22,7 @@ import { util } from '@kit.ArkTS';
 import { AppState } from '../state/AppState';
 import { AppSettings, VideoFit } from '../state/AppSettings';
 import { DownloadManager, DownloadItem } from '../state/DownloadManager';
-import { DanmuItem, BiliSearchItem, BiliPage, biliDanmu, biliDanmuByCid, biliSearchList, biliPagelist } from '../net/DanmuApi';
+import { DanmuItem, BiliSearchItem, BiliPage, biliDanmu, biliDanmuByCid, biliSearchList, biliPagelist, dandanDanmu } from '../net/DanmuApi';
 import { HlsAdFilterServer } from '../net/HlsAdFilterServer';
 import { SniffProxy } from '../net/SniffProxyServer';
 import { PlayHistory } from '../state/PlayHistory';
@@ -458,11 +458,21 @@ export struct PlayerPage {
     if (W > 0 && H > 0) { this.danmu2D.clearRect(0, 0, W, H); }
   }
 
-  // 拉取当前集弹幕(B站匿名链路,零配置):片名+集名搜索 → 分P对齐 → 弹幕
+  // 拉取当前集弹幕:弹弹play 已配置则优先(聚合源,按剧+集精确匹配),空手/失败回退 B站匿名
   private async loadDanmaku(): Promise<void> {
     this.setDanmus([]);
     if (!this.settings.danmakuOn || this.siteKey === 'live' || this.useWeb || this.ep === null) {
       return;
+    }
+    try {
+      const dd = await dandanDanmu(this.movieName, this.ep.name, this.epIdx);
+      if (dd.length > 0) {
+        this.setDanmus(dd);
+        hilog.info(0x0000, 'OKV-Player', 'danmu(dandan) %{public}d', dd.length);
+        return;
+      }
+    } catch (e) {
+      hilog.error(0x0000, 'OKV-Player', 'danmu(dandan) fail: %{public}s', e instanceof Error ? e.message : String(e));
     }
     const bili = await biliDanmu(this.movieName, this.ep.name, this.epIdx);
     if (bili.length > 0) {

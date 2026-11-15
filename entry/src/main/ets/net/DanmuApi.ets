@@ -273,3 +273,105 @@ export async function biliDanmu(movieName: string, epName: string, epIdx: number
   }
   return [];
 }
+
+// ===== 弹弹play 聚合源:凭据内置(开发者去 api.dandanplay.net 免费申请一次,填进下面两个常量) =====
+// 为空时自动只用B站匿名弹幕,用户端零配置
+const DANDAN_APP_ID = '';
+const DANDAN_SECRET = '';
+
+// 官方 Open API 强制签名:X-Signature = base64(HMAC-SHA256(AppId + 时间戳, Secret))
+async function dandanSign(appId: string, ts: string, secret: string): Promise<string> {
+  const gen = cryptoFramework.createSymKeyGenerator('HMAC');
+  const keyData: cryptoFramework.DataBlob = { data: bytesOf(secret) };
+  const key = await gen.convertKey(keyData);
+  const mac = cryptoFramework.createMac('SHA256');
+  await mac.init(key);
+  const msgData: cryptoFramework.DataBlob = { data: bytesOf(appId + ts) };
+  await mac.update(msgData);
+  const out = await mac.doFinal();   // Mac 的取结果是 doFinal(不是 Md 的 digest)
+  return new util.Base64Helper().encodeToStringSync(out.data);
+}
+
+async function dandanGet(path: string, appId: string, secret: string): Promise<string> {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const sig = await dandanSign(appId, ts, secret);
+  const r = await httpFetch(`https://api.dandanplay.net${path}`, {
+    headers: {
+      'Accept': 'application/json',
+      'User-Agent': UA,
+      'X-AppId': appId,
+      'X-Timestamp': ts,
+      'X-Signature': sig
+    }
+  });
+  return utf8Decode(new Uint8Array(r.body));
+}
+
+// 搜 episode → 选标题最贴合的 match → 按集号对齐分集(对不上按集序) → 拉弹幕转 DanmuItem
+export async function dandanDanmu(movieName: string, epName: string, epIdx: number): Promise<DanmuItem[]> {
+  if (DANDAN_APP_ID === '' || DANDAN_SECRET === '') { return []; }
+  hilog.info(0x0000, DTAG, 'dandan start: %{public}s ep=%{public}s', movieName, epName);
+  const epNum = epNumberOf(epName);
+  const tries: string[] = [];
+  if (epNum >= 0) { tries.push(`${movieName} 第${epNum}集`, `${movieName} ${epNum}`); }
+  tries.push(movieName);
+  for (const kw of tries) {
+    try {
+      const raw = await dandanGet(`/api/v2/search/episode?keyword=${encodeURIComponent(kw)}`, DANDAN_APP_ID, DANDAN_SECRET);
+      const obj = JSON.parse(raw) as Record<string, Object>;
+      const matches = (obj['matches'] ?? obj['animes'] ?? []) as Object[];
+      if (matches.length === 0) { continue; }
+      // 标题最贴合:含片名核心词(前4字)的 match 优先
+      const kwCore = movieName.length > 4 ? movieName.substring(0, 4) : movieName;
+      let best: Record<string, Object> | null = null;
+      for (const m of matches) {
+        const mm = m as Record<string, Object>;
+        if (best === null) { best = mm; continue; }
+        if (kwCore === '') { continue; }
+        const title = mm['animeTitle'] as string ?? '';
+        const bestTitle = best['animeTitle'] as string ?? '';
+        if (title.indexOf(kwCore) >= 0 && bestTitle.indexOf(kwCore) < 0) { best = mm; }
+      }
+      const eps = (best !== null ? (best['episodes'] ?? []) : []) as Object[];
+      if (eps.length === 0) { continue; }
+      let epId = -1;
+      for (const e of eps) {
+        const ee = e as Record<string, Object>;
+        if (epNum >= 0 && epNumberOf(ee['episodeTitle'] as string ?? '') === epNum) {
+          epId = ee['episodeId'] as number;
+          break;
+        }
+      }
+      if (epId < 0) {
+        epId = (eps[Math.min(epIdx, eps.length - 1)] as Record<string, Object>)['episodeId'] as number;
+      }
+      const crawl = await dandanGet(`/api/v2/comment/${epId}`, DANDAN_APP_ID, DANDAN_SECRET);
+      const cobj = JSON.parse(crawl) as Record<string, Object>;
+      const comments = (cobj['comments'] ?? []) as Object[];
+      const items: DanmuItem[] = [];
+      for (const c of comments) {
+        const cc = c as Record<string, Object>;
+        const p = (cc['p'] as string ?? '').split(',');
+        const tSec = parseFloat(p[0]);
+        const modeN = parseInt(p[1]);
+        const colorN = parseInt(p[2]);
+        const text = cc['m'] as string ?? '';
+        if (isNaN(tSec) || text === '') { continue; }
+        items.push({
+          t: tSec, text: text,
+          color: isNaN(colorN) ? '#FFFFFF' : '#' + (colorN & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase(),
+          mode: isNaN(modeN) ? 1 : modeN
+        });
+      }
+      items.sort((a: DanmuItem, b: DanmuItem): number => a.t - b.t);
+      if (items.length > 0) {
+        hilog.info(0x0000, DTAG, 'dandan hit ep%{public}d: %{public}d danmaku', epId, items.length);
+        return items;
+      }
+      hilog.info(0x0000, DTAG, 'dandan kw empty danmaku: %{public}s', kw);
+    } catch (e) {
+      hilog.error(0x0000, DTAG, 'dandan fail kw=%{public}s: %{public}s', kw, e instanceof Error ? e.message : String(e));
+    }
+  }
+  return [];
+}
