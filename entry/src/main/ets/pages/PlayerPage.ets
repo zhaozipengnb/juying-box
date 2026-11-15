@@ -1470,7 +1470,7 @@ export struct PlayerPage {
             this.settings.save();
           })
           .position({ x: 0, y: '50%' })
-          .markAnchor({ y: '50%' })
+          .markAnchor({ x: 0, y: '50%' })
           .translate({ x: 30 })
       }
 
