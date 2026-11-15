@@ -106,14 +106,6 @@ java -jar build/libs/proxy-server.jar <订阅地址> [端口]
 3. 底部导航：首页（点播）/ 直播 / 设置
 4. 播放页支持换源、投屏、下载、收藏等操作
 
-## 📸 截图
-
-> 待补充：建议放 4-6 张（首页 / 播放器 / 弹幕 / 下载面板 / 直播），放到 `screenshots/` 目录后把下面占位替换为真实文件。
-
-| 首页 | 播放器 | 弹幕 | 下载面板 |
-|------|--------|------|----------|
-| ![首页](screenshots/home.png) | ![播放器](screenshots/player.png) | ![弹幕](screenshots/danmu.png) | ![下载](screenshots/download.png) |
-
 ## 🤝 参与贡献
 
 1. **Issue 反馈**：问题与建议优先走 [Issues](https://gitee.com/ZKingp/juyuan-box/issues)——公开讨论、可追溯，回复也帮到其他人
