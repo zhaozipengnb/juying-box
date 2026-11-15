@@ -1438,7 +1438,8 @@ export struct PlayerPage {
           .onClick(() => { this.toggleTheater(); })
           .position({ x: '100%', y: '50%' })
           .markAnchor({ x: '100%', y: '50%' })
-          .translate({ x: -30, y: -44 })
+          // 距边 70vp:反向横屏时前摄挖孔会落在右缘中部,同样往内避让
+          .translate({ x: -70, y: -44 })
       }
 
       // 旋转锁:全屏右侧中部,随控制层显隐(锁定状态本身持续生效,仅图标隐藏)
@@ -1448,7 +1449,8 @@ export struct PlayerPage {
           .onClick(() => { this.toggleRotationLock(); })
           .position({ x: '100%', y: '50%' })
           .markAnchor({ x: '100%', y: '50%' })
-          .translate({ x: -30 })
+          // 距边 70vp:反向横屏时摄像头在右缘中部,同弹幕图标一并避让
+          .translate({ x: -70 })
       }
 
       // 弹幕开关:全屏左侧中部(镜像右侧旋转锁),点亮=开,点灭清屏;与弹幕面板的开关同一状态并持久化
