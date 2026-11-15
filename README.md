@@ -120,7 +120,11 @@ java -jar build/libs/proxy-server.jar <订阅地址> [端口]
 2. **代码贡献**：Fork 本仓库 → 新建分支修改 → 提交 Pull Request，会尽快 review
    - 重点维护方向见功能特性列表；改 `net/`、`spider/`、构建配置的 PR 请在描述里说明动机
 3. **QQ 交流群**：聊用法、交流源配置、协作开发
-   - 群号：`建群后填入`（QQ 群二维码永久有效，群号可直接搜索加入，无 7 天过期问题）
+   - 群号：`1132945356`（QQ 搜索群号直接加入，二维码永久有效）
+
+<p align="center">
+  <img src="docs/qq_group_qr.jpg" width="200" alt="QQ 交流群二维码"/>
+</p>
 
 ## ☕ 赞赏
 
@@ -132,9 +136,7 @@ java -jar build/libs/proxy-server.jar <订阅地址> [端口]
   <img src="docs/reward_alipay.png" width="220" alt="支付宝收款"/>
 </p>
 
-> - 二维码图片路径：`docs/reward_wechat.png`（微信）/ `docs/reward_alipay.png`（支付宝）
-> - 微信收款码：我 → 服务 → 收付款 → 二维码收款 → 保存收款码；支付宝：首页「收钱」→ 保存图片
-> - 建议给收款码加个金额备注或改名（如"聚源盒交流群-xxx"），收款来路清晰
+> 微信 / 支付宝扫码即可，金额随意～
 
 ## ⚠️ 免责声明
 
