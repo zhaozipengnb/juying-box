@@ -52,36 +52,53 @@ export struct HomePage {
   private lastConfigRef: Object | null = null;
 
   aboutToAppear(): void {
+    this.settingsCb = (): void => { this.syncSettings(); };
+    this.settings.onChange(this.settingsCb);
+    this.syncSettings();
     this.refreshSites();
     this.lastConfigRef = this.app.config;
     this.loadHome(true);
     this.searchHistory = SearchHistory.instance.getAll();
   }
 
-  // @Computed 直接读取 @Trace 属性，确保 V2 依赖建立，壁纸变更立即生效
-  @Computed get wallpaperColors(): Array<[ResourceColor, number]> {
-    const w = this.settings.wallpaper;
-    if (w === 'dark') { return [['#FF141416', 0.0], ['#FF232326', 1.0]]; }
-    if (w === 'blue') { return [['#FF0E1E3C', 0.0], ['#FF1B3A5E', 1.0]]; }
-    if (w === 'green') { return [['#FF12291F', 0.0], ['#FF1E4030', 1.0]]; }
-    return [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  aboutToDisappear(): void {
+    if (this.settingsCb !== null) { this.settings.offChange(this.settingsCb); this.settingsCb = null; }
   }
 
-  @Computed get isDarkWallpaper(): boolean {
+  // 设置镜像:V2 对 @ObservedV2 单例直读不建立响应依赖(实测坑),onChange 显式通知刷镜像。
+  // 首页是常驻 Tab 不重建,没有 onShown/重建时机——只有镜像能保证设置页改完立即生效
+  @Local wallpaperColors: Array<[ResourceColor, number]> = [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  @Local wallpaperUriM: string = '';
+  @Local incognitoOn: boolean = false;
+  @Local picSizeM: PicSize = 'normal';
+  @Local showSiteOn: boolean = true;
+  @Local siteFilterOn: boolean = false;
+  private settingsCb: (() => void) | null = null;
+
+  private syncSettings(): void {
+    this.wallpaperColors = this.settings.wallpaperColors();
+    this.wallpaperUriM = this.settings.wallpaperUri;
+    this.incognitoOn = this.settings.incognito;
+    this.picSizeM = this.settings.picSize;
+    this.showSiteOn = this.settings.showSite;
+    this.siteFilterOn = this.settings.siteFilter;
+  }
+
+  get isDarkWallpaper(): boolean {
     return true;   // 默认背景为青橙渐变图，文字统一白色
   }
 
-  @Computed get wallpaperUri(): string {
-    return this.settings.wallpaperUri;
+  get wallpaperUri(): string {
+    return this.wallpaperUriM;
   }
 
-  @Computed get isIncognito(): boolean {
-    return this.settings.incognito;
+  get isIncognito(): boolean {
+    return this.incognitoOn;
   }
 
   // 图片尺寸设置 → 网格列数（small=4 / normal=3 / large=2）
   private gridColumns(): number {
-    const p: PicSize = this.settings.picSize;
+    const p: PicSize = this.picSizeM;
     if (p === 'small') { return 4; }
     if (p === 'large') { return 2; }
     return 3;
@@ -98,7 +115,7 @@ export struct HomePage {
 
   // 搜索结果角标（显示站源开 + 聚合结果有归属时展示；下标与 visibleItems 对齐）
   private siteLabels(): string[] {
-    if (!this.settings.showSite || this.kind !== 'search' || this.aggSiteNames.length === 0) { return []; }
+    if (!this.showSiteOn || this.kind !== 'search' || this.aggSiteNames.length === 0) { return []; }
     return this.visibleIdxs().map((i: number): string => this.aggSiteNames[i] ?? '');
   }
 
@@ -407,7 +424,7 @@ export struct HomePage {
       }
 
       // 站源筛选 chips：聚合结果就绪且开关开启时展示（站源搜索）
-      if (this.settings.siteFilter && this.kind === 'search' && this.filterSiteOptions().length > 0) {
+      if (this.siteFilterOn && this.kind === 'search' && this.filterSiteOptions().length > 0) {
         Scroll() {
           Row({ space: 8 }) {
             Text('全部')

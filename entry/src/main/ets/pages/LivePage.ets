@@ -10,21 +10,24 @@ import { LiveFavs } from '../state/LiveFavs';
 @ComponentV2
 export struct LivePage {
   settings: AppSettings = AppSettings.instance;
+
   favs: LiveFavs = LiveFavs.instance;
   @Local groups: LiveGroup[] = [];
   @Local groupIdx: number = 0;
   @Local loading: boolean = false;
   @Local errMsg: string = '';
 
-  @Computed get wallpaperColors(): Array<[ResourceColor, number]> {
-    const w = this.settings.wallpaper;
-    if (w === 'dark') { return [['#FF141416', 0.0], ['#FF232326', 1.0]]; }
-    if (w === 'blue') { return [['#FF0E1E3C', 0.0], ['#FF1B3A5E', 1.0]]; }
-    if (w === 'green') { return [['#FF12291F', 0.0], ['#FF1E4030', 1.0]]; }
-    return [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  // 设置镜像:V2 对 @ObservedV2 单例直读不建立响应依赖(实测坑),onChange 显式通知刷镜像
+  @Local wallpaperColors: Array<[ResourceColor, number]> = [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  @Local bgUri: string | Resource = $r('app.media.bg_default_gradient');
+  private settingsCb: (() => void) | null = null;
+
+  private syncSettings(): void {
+    this.wallpaperColors = this.settings.wallpaperColors();
+    this.bgUri = this.settings.bgImage();
   }
 
-  @Computed get isDarkWallpaper(): boolean {
+  get isDarkWallpaper(): boolean {
     return true;   // 默认背景为青橙渐变图，文字统一白色
   }
 
@@ -50,6 +53,9 @@ export struct LivePage {
   }
 
   aboutToAppear(): void {
+    this.settingsCb = (): void => { this.syncSettings(); };
+    this.settings.onChange(this.settingsCb);
+    this.syncSettings();
     this.load();
   }
 
@@ -174,7 +180,7 @@ export struct LivePage {
       }
       .width('100%').height('100%')
       .linearGradient({ angle: 160, colors: this.wallpaperColors })
-      .backgroundImage(this.settings.bgImage())
+      .backgroundImage(this.bgUri)
       .backgroundImageSize(ImageSize.Cover)
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }

@@ -20,7 +20,7 @@ import { common, Want } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 
 import { AppState } from '../state/AppState';
-import { AppSettings } from '../state/AppSettings';
+import { AppSettings, VideoFit } from '../state/AppSettings';
 import { DownloadManager, DownloadItem } from '../state/DownloadManager';
 import { DanmuItem, BiliSearchItem, BiliPage, biliDanmu, biliDanmuByCid, biliSearchList, biliPagelist } from '../net/DanmuApi';
 import { HlsAdFilterServer } from '../net/HlsAdFilterServer';
@@ -60,6 +60,8 @@ export struct PlayerPage {
   @Local picker: PickerSpec | null = null;   // 居中选择弹层
   @Local channelLine: number = 0;      // 直播多线路当前线路（0 基）
   @Local loopPlay: boolean = false;    // 单集循环
+  @Local showIntroSec: number = 0;     // 本剧片头结束点(秒,0=未标记):点"跳过片头"时按当前位置标记
+  @Local showOutroSec: number = 0;     // 本剧片尾长度(距结尾秒数,0=未标记):点"跳过片尾"时按当前位置标记
   private channelUrls: string[] = [];  // 直播多线路地址表（来自 PlayerParam）
   private epScroller: Scroller = new Scroller();  // 选集横滑定位当前集
   @Local sniffUrl: string = '';        // 嗅探中:正在加载的网页地址(非空 = 嗅探中)
@@ -68,8 +70,8 @@ export struct PlayerPage {
   private sniffController: webview.WebviewController = new webview.WebviewController();
   private sniffTimer: number = -1;
   private videoFitEnum(): ImageFit {
-    if (this.settings.videoFit === 'cover') { return ImageFit.Cover; }
-    if (this.settings.videoFit === 'fill') { return ImageFit.Fill; }
+    if (this.videoFit === 'cover') { return ImageFit.Cover; }
+    if (this.videoFit === 'fill') { return ImageFit.Fill; }
     return ImageFit.Contain;
   }
 
@@ -87,14 +89,14 @@ export struct PlayerPage {
 
   private xcDims(): number[] {
     if (this.vidW <= 0 || this.vidH <= 0 || this.areaW <= 0 || this.areaH <= 0) { return [0, 0]; }
-    if (this.settings.videoFit === 'fill') { return [0, 0]; }
+    if (this.videoFit === 'fill') { return [0, 0]; }
     const den = this.density > 0 ? this.density : 1;
     const vw = this.vidW / den;
     const vh = this.vidH / den;
     if (vw <= 0 || vh <= 0) { return [0, 0]; }
     const sx = this.areaW / vw;
     const sy = this.areaH / vh;
-    const s = this.settings.videoFit === 'cover' ? Math.max(sx, sy) : Math.min(sx, sy);
+    const s = this.videoFit === 'cover' ? Math.max(sx, sy) : Math.min(sx, sy);
     return [Math.floor(vw * s), Math.floor(vh * s)];
   }
   @Local isFav: boolean = false;
@@ -113,6 +115,7 @@ export struct PlayerPage {
   private lastDur: number = 0;
   private lastSaveAt: number = 0;      // 上次持久化时间戳（节流 5s）
   private seekedResume: boolean = false;  // 断点续播只 seek 一次
+  private autoNextFired: boolean = false; // 播完/跳尾只触发一次(片尾窗口长达 90s,不挡会每秒重复切集弹 toast)
   private pendingResume: number = 0;      // 播放开始前读好的断点(首帧进度会覆盖历史,必须先取)
   private liveSkip: number = 0;           // 直播自动换台已跳过的死频道数
   @Local rotationLocked: boolean = false;  // 全屏旋转锁定(锁定后不跟随传感器)
@@ -219,6 +222,7 @@ export struct PlayerPage {
       ? (this.ph.resumePosition(this.siteKey, m0.vodId, this.ep.url)
         || this.ph.resumePositionByName(this.movieName, this.ep.name, this.epIdx)) : 0;
     this.seekedResume = false;
+    this.autoNextFired = false;
     if (this.siteKey === 'live') { this.armLiveWatchdog(); }
     if (target.startsWith('file://')) {
       // 已下载的本地文件:直接播,不走解析/防盗链代理/投屏队列(文件在沙箱里,链路都无意义)
@@ -574,6 +578,18 @@ export struct PlayerPage {
     if (this.ep !== null) { this.prepare(); }
   }
 
+  // 本集播完自动连播下一集(已是最后一集则停在片尾)
+  private autoNextEpisode(): void {
+    if (this.ep === null) { return; }
+    const eps = this.lines[this.lineIdx]?.episodes ?? [];
+    const next = this.epIdx + 1;
+    if (next >= eps.length) {
+      this.getUIContext().getPromptAction().showToast({ message: '已播完全部剧集' });
+      return;
+    }
+    this.switchTo(this.lineIdx, next);
+  }
+
   private switchTo(li: number, ei: number): void {
     if (this.siteKey === 'live') { this.liveSkip = 0; }   // 用户手动选台重置换台计数
     if (li < 0 || li >= this.lines.length) { return; }
@@ -587,6 +603,38 @@ export struct PlayerPage {
     this.errMsg = '';
     this.useWeb = false;
     this.prepare();
+  }
+
+  // "跳过片头"点击:已标记且仍在片头内 → 直接跳到记忆点;否则以当前位置标记为本剧片头结束点。
+  // 标记后本剧后续集起播自动跳到该位置(无断点时)
+  private markSkipIntro(): void {
+    if (this.showIntroSec > 0 && this.curTime < this.showIntroSec - 2) {
+      this.seekPending = true;
+      this.engine.seek(this.showIntroSec);
+      this.curTime = this.showIntroSec;
+      this.lastPos = this.showIntroSec;
+      this.armCtrlHide();
+      return;
+    }
+    this.showIntroSec = Math.max(1, Math.round(this.curTime));
+    this.persistShowSkip();
+    this.getUIContext().getPromptAction().showToast({ message: '已记住本剧片头位置，后续集自动跳过' });
+  }
+
+  // "跳过片尾"点击:立即连播下一集,并把距结尾时长记为本剧片尾长度(后续集到点自动连播)
+  private markSkipOutro(): void {
+    if (this.dur > 0) {
+      this.showOutroSec = Math.max(5, Math.round(this.dur - this.curTime));
+      this.persistShowSkip();
+    }
+    this.autoNextEpisode();
+  }
+
+  // 本剧跳过标记落盘:按 site+vodId 各剧独立记忆(换剧/重启后各自保留)
+  private persistShowSkip(): void {
+    const m = this.detail?.movie;
+    if (m === null || m === undefined) { return; }
+    this.settings.setShowSkip(this.siteKey, m.vodId, this.showIntroSec, this.showOutroSec);
   }
 
   // 进度落盘：final=退出时强制；否则节流 5s。无痕模式不记
@@ -839,16 +887,25 @@ export struct PlayerPage {
     if (this.epIdx < eps.length - 1) { this.switchTo(this.lineIdx, this.epIdx + 1); }
   }
 
-  // 统一壁纸配色（视频区以外透出，与其它页面一致）
-  @Computed get wallpaperColors(): Array<[ResourceColor, number]> {
-    const w = this.settings.wallpaper;
-    if (w === 'dark') { return [['#FF141416', 0.0], ['#FF232326', 1.0]]; }
-    if (w === 'blue') { return [['#FF0E1E3C', 0.0], ['#FF1B3A5E', 1.0]]; }
-    if (w === 'green') { return [['#FF12291F', 0.0], ['#FF1E4030', 1.0]]; }
-    return [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  // 壁纸/画面比例镜像:V2 对 @ObservedV2 单例直读不建立响应依赖(实测坑),onChange 显式通知刷镜像,
+  // 设置页改完立即生效(播放页常驻导航栈不重建,没有重建时机)
+  @Local wallpaperColors: Array<[ResourceColor, number]> = [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  @Local videoFit: VideoFit = 'contain';
+  private settingsCb: (() => void) | null = null;
+
+  private syncSettings(): void {
+    this.wallpaperColors = this.settings.wallpaperColors();
+    this.videoFit = this.settings.videoFit;
+  }
+
+  aboutToDisappear(): void {
+    if (this.settingsCb !== null) { this.settings.offChange(this.settingsCb); this.settingsCb = null; }
   }
 
   aboutToAppear(): void {
+    this.settingsCb = (): void => { this.syncSettings(); };
+    this.settings.onChange(this.settingsCb);
+    this.syncSettings();
     // 视频区初始高度按屏宽/1.78 预置，避免首帧 0 高；onAreaChange 随实际容器宽度修正
     try {
       const d = display.getDefaultDisplaySync();
@@ -885,6 +942,29 @@ export struct PlayerPage {
       if (!this.seekedResume && this.pendingResume > 0) {
         this.seekedResume = true;
         this.engine.seek(this.pendingResume);
+        return;
+      }
+      // 自动跳过片头("跳头"时长>0):无断点续播时开播直接跳过片头;有断点尊重用户进度。
+      // 片长>片头时长的 3 倍才跳(短片没有片头;也保证跳完不会落进片尾窗口被立刻切下一集)
+      if (!this.seekedResume && this.pendingResume <= 0 && this.showIntroSec > 0
+        && this.dur > this.showIntroSec * 3 && this.siteKey !== 'live') {
+        this.seekedResume = true;   // 复用一次性标记:每集只跳一次,手动回跳片头不会重跳
+        this.engine.seek(this.showIntroSec);
+        this.getUIContext().getPromptAction().showToast({ message: '已自动跳过片头' });
+        return;
+      }
+      // 本集播完:自动切下一集(循环开启时引擎自循环;直播无末尾;已是最后一集则停在片尾)
+      // "跳尾"时长>0:距片尾 N 秒即切,跳过片尾字幕;=0:播到最后一秒才切。
+      // 片尾窗口内进度回调每秒都会命中,autoNextFired 保证只触发一次;进度按看完落盘,
+      // 避免下次续播正好落在窗口内、一打开又被自动切走
+      const endAt = this.showOutroSec > 0 ? this.dur - this.showOutroSec : this.dur - 1;
+      if (!this.loopPlay && this.dur > this.showOutroSec + 60 && sec >= endAt && this.siteKey !== 'live'
+        && this.ep !== null && !this.autoNextFired) {
+        this.autoNextFired = true;
+        this.lastPos = this.dur;
+        this.saveProgress(true);
+        this.getUIContext().getPromptAction().showToast({ message: '已自动跳过片尾' });
+        this.autoNextEpisode();
         return;
       }
       this.curTime = sec;
@@ -1002,7 +1082,15 @@ export struct PlayerPage {
       }
       else { this.errMsg = '播放参数缺失'; this.resolving = false; }
       const m = this.detail?.movie;
-      if (m !== null && m !== undefined) { this.isFav = this.favs.isFav(this.siteKey, m.vodId); }
+      if (m !== null && m !== undefined) {
+        this.isFav = this.favs.isFav(this.siteKey, m.vodId);
+        // 装载本剧跳过配置(须在 prepare 之前:起播自动跳片头用的就是这组值)
+        const cfg = this.settings.showSkip(this.siteKey, m.vodId);
+        if (cfg !== null) {
+          this.showIntroSec = cfg.introSec;
+          this.showOutroSec = cfg.outroSec;
+        }
+      }
       if (this.ep !== null) { this.prepare(); }
       this.setStatusBarContent('#FFFFFF');
     })
@@ -1269,6 +1357,19 @@ export struct PlayerPage {
                   this.loopPlay = !this.loopPlay;
                   this.engine.setLoop(this.loopPlay);
                 })
+              // 跳过片头:开播前 5 分钟内出现——第一次点=把当前位置标记为本剧片头结束点;
+              // 已标记过且还在片头内 → 直接跳到记忆点
+              if (this.siteKey !== 'live' && this.curTime < 300) {
+                Text('跳过片头').fontSize(12).fontColor('#FFFFFF')
+                  .onClick(() => { this.markSkipIntro(); })
+              }
+              // 跳过片尾:距结尾 10 分钟内且有下一集时出现(拖到片尾附近也看得到)——
+              // 点了立即连播下一集,并把距结尾时长记为本剧片尾长度(后续集到点自动连播)
+              if (this.siteKey !== 'live' && this.dur > 0 && this.dur - this.curTime < 600
+                && this.epIdx + 1 < (this.lines[this.lineIdx]?.episodes.length ?? 0)) {
+                Text('跳过片尾').fontSize(12).fontColor('#FFFFFF')
+                  .onClick(() => { this.markSkipOutro(); })
+              }
               Text('选集').fontSize(12).fontColor('#FFFFFF')
                 .onClick(() => {
                   if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }

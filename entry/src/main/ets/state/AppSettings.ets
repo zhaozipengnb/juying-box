@@ -9,6 +9,14 @@ export type WallpaperKind = 'default' | 'dark' | 'blue' | 'green';
 export type VideoFit = 'contain' | 'cover' | 'fill';
 
 const KEY_SETTINGS = 'juying_settings_json';
+const KEY_SHOW_SKIP = 'juying_show_skip_json';
+
+// 按剧记忆的跳过标记点:每部剧片头片尾长短不一,由用户点"跳过片头/片尾"按钮时就地标记(key=siteKey_vodId)
+// introSec=片头结束点(开播起秒数,0=未标记);outroSec=片尾长度(距结尾秒数,0=未标记)
+export interface ShowSkipCfg {
+  introSec: number;
+  outroSec: number;
+}
 
 // 播放倍速档位（起播默认与长按共用取值域）
 export const SPEED_OPTIONS: number[] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
@@ -35,6 +43,7 @@ export class AppSettings {
   @Trace videoFit: VideoFit = 'contain';     // 播放画面缩放：contain=适应 contain/cover=裁剪铺满/fill=拉伸
   @Trace lineAutoPlay: boolean = true;       // 线路播放：播放失败时自动切换下一条线路
   @Trace danmakuOn: boolean = true;          // 播放页弹幕(B站匿名链路零配置,个性设置可关)
+  private skipMap: Record<string, ShowSkipCfg> = {};   // 按剧跳过时长记忆(非响应式,播放页用本地镜像)
   @Trace disabledSites: string[] = [];       // 站点管理：已禁用的站点 key（下拉/搜索/跳源全部隐藏）
   @Trace detailGrid: boolean = false;          // 详情页聚合视图记忆：false=列表 true=海报网格（跨进出保留）
   @Trace wallpaper: WallpaperKind = 'default'; // 全局壁纸（颜色主题）
@@ -48,12 +57,33 @@ export class AppSettings {
   attach(store: KVStore): void {
     this.store = store;
     this.load();
+    this.loadSkipMap();
   }
 
   load(): void {
     const raw = this.store?.getSync(KEY_SETTINGS);
     if (raw === undefined || raw === '') { return; }
     this.applyJson(raw);
+  }
+
+  // 按剧跳过配置:读取(未配置过返回 null,调用方用全局默认值)
+  showSkip(siteKey: string, vodId: string): ShowSkipCfg | null {
+    return this.skipMap[`${siteKey}_${vodId}`] ?? null;
+  }
+
+  // 按剧跳过配置:写入并立即落盘(独立 KV 键,不混在通用设置 json 里)
+  setShowSkip(siteKey: string, vodId: string, introSec: number, outroSec: number): void {
+    this.skipMap[`${siteKey}_${vodId}`] = { introSec: introSec, outroSec: outroSec };
+    if (this.store === null) { return; }
+    this.store.putSync(KEY_SHOW_SKIP, JSON.stringify(this.skipMap));
+  }
+
+  private loadSkipMap(): void {
+    const raw = this.store?.getSync(KEY_SHOW_SKIP);
+    if (raw === undefined || raw === '') { return; }
+    try {
+      this.skipMap = JSON.parse(raw) as Record<string, ShowSkipCfg>;
+    } catch (e) { /* 坏数据按无配置处理 */ }
   }
 
   // 备份导入：JSON 字符串恢复全部设置并落盘（坏数据按默认值跳过）
@@ -155,6 +185,18 @@ export class AppSettings {
     return JSON.stringify(obj);
   }
 
+  // 设置变更监听:V2 对 @ObservedV2 单例直读不建立响应依赖(实测坑),各页注册回调刷 @Local 镜像,
+  // 保证设置页改完立即生效(不依赖框架观察)
+  private listeners: (() => void)[] = [];
+  onChange(cb: () => void): void { this.listeners.push(cb); }
+  offChange(cb: () => void): void {
+    const i = this.listeners.indexOf(cb);
+    if (i >= 0) { this.listeners.splice(i, 1); }
+  }
+  private notifyChange(): void {
+    for (const cb of this.listeners) { cb(); }
+  }
+
   // 任一设置变更后由 UI 调用（fire-and-forget 语义，putSync+flush 同步落盘）
   save(): void {
     if (this.store === null) { return; }
@@ -168,6 +210,7 @@ export class AppSettings {
       'proxyUrl': this.proxyUrl
     };
     this.store.putSync(KEY_SETTINGS, JSON.stringify(obj));
+    this.notifyChange();
   }
 
   // 壁纸背景渐变色标（default 为纯白）

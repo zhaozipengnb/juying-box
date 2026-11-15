@@ -20,25 +20,34 @@ export struct SearchPage {
   @Local searchHistory: string[] = [];
   @Local hotWords: string[] = HOT_FALLBACK;
 
-  @Computed get isDarkWallpaper(): boolean {
+  // 设置镜像:V2 对 @ObservedV2 单例直读不建立响应依赖(实测坑),onChange 显式通知刷镜像
+  @Local wallpaperColors: Array<[ResourceColor, number]> = [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  @Local wallpaperUriM: string = '';
+  private settingsCb: (() => void) | null = null;
+
+  private syncSettings(): void {
+    this.wallpaperColors = this.settings.wallpaperColors();
+    this.wallpaperUriM = this.settings.wallpaperUri;
+  }
+
+  get isDarkWallpaper(): boolean {
     return true;   // 默认背景为青橙渐变图，文字统一白色
   }
 
-  @Computed get wallpaperUri(): string {
-    return this.settings.wallpaperUri;
-  }
-
-  @Computed get wallpaperColors(): Array<[ResourceColor, number]> {
-    const w = this.settings.wallpaper;
-    if (w === 'dark') { return [['#FF141416', 0.0], ['#FF232326', 1.0]]; }
-    if (w === 'blue') { return [['#FF0E1E3C', 0.0], ['#FF1B3A5E', 1.0]]; }
-    if (w === 'green') { return [['#FF12291F', 0.0], ['#FF1E4030', 1.0]]; }
-    return [['#FFFFFFFF', 0.0], ['#FFFFFFFF', 1.0]];
+  get wallpaperUri(): string {
+    return this.wallpaperUriM;
   }
 
   aboutToAppear(): void {
+    this.settingsCb = (): void => { this.syncSettings(); };
+    this.settings.onChange(this.settingsCb);
+    this.syncSettings();
     this.searchHistory = SearchHistory.instance.getAll();
     this.loadHotWords();
+  }
+
+  aboutToDisappear(): void {
+    if (this.settingsCb !== null) { this.settings.offChange(this.settingsCb); this.settingsCb = null; }
   }
 
   // 豆瓣实时热门（公开 web 接口，需 Referer）；电影+剧集各取 5，失败保留兜底词
