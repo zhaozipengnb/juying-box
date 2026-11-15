@@ -1450,11 +1450,11 @@ export struct PlayerPage {
           .position({ x: '50%', y: 60 }).markAnchor({ x: '50%' })
       }
 
-      // 返回:全屏右侧,锁定图标正上方——影院模式标题栏隐藏,这里直接退出播放页回详情
+      // 返回:全屏右侧,锁定图标正上方——效果与进度条右侧的收缩图标一致(退出全屏回嵌入模式)
       if (this.isTheater && this.showCtrl) {
         Image($r('app.media.ic_back')).width(22).height(22)
           .fillColor('#FFFFFF')
-          .onClick(() => { Nav.stack.pop(); })
+          .onClick(() => { this.toggleTheater(); })
           .position({ x: '100%', y: '50%' })
           .markAnchor({ x: '100%', y: '50%' })
           .translate({ x: -30, y: -44 })
