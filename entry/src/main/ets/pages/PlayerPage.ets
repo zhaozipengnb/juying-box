@@ -177,6 +177,7 @@ export struct PlayerPage {
   // 批量下载选集面板(原型:下载=选集弹层,可切线路/多选/显示各集下载状态)
   @Local showDlPanel: boolean = false;
   @Local showEpSheet: boolean = false;  // '更多'选集底部弹层
+  @Local epTabIdx: number = 0;          // 选集弹层分页:每 21 集一组
   @Local dlLineIdx: number = 0;        // 面板内线路
   @Local dlTabIdx: number = 0;         // 下载面板分页:每 21 集一组
   private dlInFlight: Set<string> = new Set();   // 解析中的集名(防重复点击)
@@ -347,20 +348,35 @@ export struct PlayerPage {
     this.showDlPanel = true;
   }
 
-  // 下载面板分页:每 21 集一组
-  private dlTabCount(): number {
-    const len = this.lines[this.dlLineIdx]?.episodes.length ?? 0;
+  // 分页 tab 辅助:每 21 集一组(下载面板/选集弹层共用)
+  private tabCountOf(len: number): number {
     return Math.max(1, Math.ceil(len / 21));
   }
 
-  private dlTabRanges(): string[] {
+  private tabRangesOf(len: number): string[] {
     const out: string[] = [];
-    const len = this.lines[this.dlLineIdx]?.episodes.length ?? 0;
-    for (let t = 0; t < this.dlTabCount(); t++) {
+    for (let t = 0; t < this.tabCountOf(len); t++) {
       const st = t * 21 + 1;
       const en = Math.min((t + 1) * 21, len);
       out.push(`${st}-${en}集`);
     }
+    return out;
+  }
+
+  private dlTabCount(): number {
+    return this.tabCountOf(this.lines[this.dlLineIdx]?.episodes.length ?? 0);
+  }
+
+  private dlTabRanges(): string[] {
+    return this.tabRangesOf(this.lines[this.dlLineIdx]?.episodes.length ?? 0);
+  }
+
+  // 选集弹层:当前 tab 的真实集下标数组
+  private epTabIdxs(): number[] {
+    const eps = this.lines[this.lineIdx]?.episodes ?? [];
+    const st = this.epTabIdx * 21;
+    const out: number[] = [];
+    for (let i = st; i < Math.min(st + 21, eps.length); i++) { out.push(i); }
     return out;
   }
 
@@ -1908,11 +1924,30 @@ export struct PlayerPage {
             .padding({ left: 10, right: 2, top: 4, bottom: 4 })
             .onClick(() => { this.showEpSheet = false; })
         }.width('100%')
+        // 分页 tab:每 21 集一组(与下载面板同款文字样式)
+        if (this.tabCountOf(this.lines[this.lineIdx]?.episodes.length ?? 0) > 1) {
+          Scroll() {
+            Row({ space: 18 }) {
+              ForEach(this.tabRangesOf(this.lines[this.lineIdx]?.episodes.length ?? 0), (r: string, ti: number) => {
+                Text(r)
+                  .fontSize(13)
+                  .fontColor(this.epTabIdx === ti ? '#000000' : '#999999')
+                  .fontWeight(this.epTabIdx === ti ? FontWeight.Bold : FontWeight.Normal)
+                  .padding({ bottom: 4 })
+                  .border({ width: { bottom: 2 }, color: this.epTabIdx === ti ? '#007DFF' : Color.Transparent })
+                  .onClick(() => { this.epTabIdx = ti; })
+              }, (r: string, ti: number) => ti + r)
+            }
+          }
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
+          .width('100%')
+        }
         List({ space: 2 }) {
-          ForEach(this.lines[this.lineIdx]?.episodes ?? [], (e: Episode, ei: number) => {
+          ForEach(this.epTabIdxs(), (ei: number) => {
             ListItem() {
               Row() {
-                Text(e.name).fontSize(14)
+                Text(this.lines[this.lineIdx].episodes[ei].name).fontSize(14)
                   .fontColor(this.epIdx === ei ? '#007DFF' : '#000000')
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
                 if (this.epIdx === ei) {
@@ -1927,7 +1962,7 @@ export struct PlayerPage {
               this.showEpSheet = false;
               this.switchTo(this.lineIdx, ei);
             })
-          }, (e: Episode, ei: number) => ei + '_' + e.name)
+          }, (ei: number) => ei + '_' + (this.lines[this.lineIdx].episodes[ei]?.name ?? ''))
         }
         .width('100%')
         .constraintSize({ maxHeight: 300 })
