@@ -1428,6 +1428,21 @@ export struct PlayerPage {
           .translate({ x: -30 })
       }
 
+      // 弹幕开关:全屏左侧中部(镜像右侧旋转锁),点亮=开,点灭清屏;与弹幕面板的开关同一状态并持久化
+      if (this.isTheater && this.showCtrl) {
+        Image($r('app.media.ic_danmu')).width(22).height(22)
+          .fillColor(this.dmOn ? '#4D9EFF' : '#FFFFFF')
+          .onClick(() => {
+            this.dmOn = !this.dmOn;
+            if (!this.dmOn) { this.clearDanmaku(); }
+            this.settings.danmakuOn = this.dmOn;
+            this.settings.save();
+          })
+          .position({ x: 0, y: '50%' })
+          .markAnchor({ y: '50%' })
+          .translate({ x: 30 })
+      }
+
       // 缓冲加载指示(快进/慢网时 START→END 之间):转圈+缓冲进度,触摸穿透不挡手势
       if (this.buffering && this.playUrl !== '' && !this.resolving) {
         Column({ space: 8 }) {
