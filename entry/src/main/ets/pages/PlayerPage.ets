@@ -2017,7 +2017,7 @@ export struct PlayerPage {
         .layoutWeight(1)
       }
       .width('100%').height('58%')
-      .padding({ top: 14, bottom: 28 })
+      .padding({ left: 12, right: 12, top: 14, bottom: 28 })
       .backgroundColor('#FFFFFF')
       .borderRadius({ topLeft: 14, topRight: 14 })
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
