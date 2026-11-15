@@ -1920,9 +1920,6 @@ export struct PlayerPage {
         Row() {
           Text('选集').fontSize(16).fontWeight(FontWeight.Bold).fontColor('#000000')
           Blank()
-          Text('✕').fontSize(16).fontColor('#99000000')
-            .padding({ left: 10, right: 2, top: 4, bottom: 4 })
-            .onClick(() => { this.showEpSheet = false; })
         }.width('100%')
         // 分页 tab:每 21 集一组(与下载面板同款文字样式)
         if (this.tabCountOf(this.lines[this.lineIdx]?.episodes.length ?? 0) > 1) {
@@ -1943,31 +1940,35 @@ export struct PlayerPage {
           .scrollBar(BarState.Off)
           .width('100%')
         }
-        List({ space: 2 }) {
+        // 集网格:与下载面板同款 3 列;当前集蓝框蓝字
+        Grid() {
           ForEach(this.epTabIdxs(), (ei: number) => {
-            ListItem() {
-              Row() {
-                Text(this.lines[this.lineIdx].episodes[ei].name).fontSize(14)
-                  .fontColor(this.epIdx === ei ? '#007DFF' : '#000000')
-                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-                if (this.epIdx === ei) {
-                  Text('✓').fontSize(14).fontColor('#007DFF')
-                }
-              }.width('100%')
+            GridItem() {
+              Text(this.lines[this.lineIdx].episodes[ei].name)
+                .fontSize(12)
+                .fontColor(this.epIdx === ei ? '#007DFF' : '#000000')
+                .backgroundColor('#FFFFFF')
+                .border({ width: 1, color: this.epIdx === ei ? '#007DFF' : '#000000' })
+                .borderRadius(16)
+                .height(36)
+                .padding({ left: 10, right: 10 })
+                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+                .textAlign(TextAlign.Center)
+                .onClick(() => {
+                  this.showEpSheet = false;
+                  this.switchTo(this.lineIdx, ei);
+                })
             }
-            .padding({ left: 16, right: 16, top: 11, bottom: 11 })
-            .borderRadius(8)
-            .backgroundColor(this.epIdx === ei ? '#F2F3F5' : Color.Transparent)
-            .onClick(() => {
-              this.showEpSheet = false;
-              this.switchTo(this.lineIdx, ei);
-            })
           }, (ei: number) => ei + '_' + (this.lines[this.lineIdx].episodes[ei]?.name ?? ''))
         }
+        .columnsTemplate('1fr 1fr 1fr')
+        .columnsGap(8)
+        .rowsGap(8)
         .width('100%')
-        .constraintSize({ maxHeight: 300 })
+        .layoutWeight(1)
       }
-      .width('100%')
+      .width('100%').height('58%')
       .padding({ top: 14, bottom: 28 })
       .backgroundColor('#FFFFFF')
       .borderRadius({ topLeft: 14, topRight: 14 })
