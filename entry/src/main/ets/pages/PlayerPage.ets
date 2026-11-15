@@ -1617,10 +1617,20 @@ export struct PlayerPage {
           }.width('100%').padding({ left: 16, right: 16, bottom: 10 })
         }
 
-        // 7. 线路 + 下载
+        // 7. 线路(标题行+chips 行,与选集块同构);下载入口用"更多"同款文字+箭头样式
         if (this.lines.length > 0) {
-          Row({ space: 8 }) {
-            Text('线路').fontSize(13).fontColor('#FFFFFF')
+          Column({ space: 8 }) {
+            Row() {
+              Text('线路').fontSize(13).fontColor('#FFFFFF')
+              Blank()
+              if (this.ep !== null && this.settings.builtinDownload) {
+                Row({ space: 2 }) {
+                  Text('下载').fontSize(12).fontColor('#DDDDDD')
+                  Image($r('app.media.ic_chevron_right')).width(14).height(14).fillColor('#DDDDDD')
+                }
+                .onClick(() => { this.openDlPanel(); })
+              }
+            }.width('100%')
             Scroll() {
               Row({ space: 8 }) {
                 ForEach(this.lines, (line: PlayLine, li: number) => {
@@ -1634,15 +1644,10 @@ export struct PlayerPage {
                 }, (line: PlayLine, li: number) => li + line.from)
               }
             }
-            .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).align(Alignment.Start).layoutWeight(1)
-            if (this.ep !== null && this.settings.builtinDownload && this.lines.length > 0) {
-              Text('下载')
-                .fontSize(12).fontColor('#333333')
-                .backgroundColor('#4D888888').borderRadius(4)
-                .padding({ left: 8, right: 8, top: 4, bottom: 4 })
-                .onClick(() => { this.openDlPanel(); })
-            }
-          }.width('100%').padding({ left: 16, right: 16, bottom: 10 })
+            .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).align(Alignment.Start).width('100%')
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, bottom: 10 })
         }
 
         // 8. 选集（横滑 chips，当前集黄色高亮并自动定位）
