@@ -276,8 +276,8 @@ export async function biliDanmu(movieName: string, epName: string, epIdx: number
 
 // ===== 弹弹play 聚合源:凭据内置(开发者去 api.dandanplay.net 免费申请一次,填进下面两个常量) =====
 // 为空时自动只用B站匿名弹幕,用户端零配置
-const DANDAN_APP_ID = '';
-const DANDAN_SECRET = '';
+const DANDAN_APP_ID: string = '';
+const DANDAN_SECRET: string = '';
 
 // 官方签名模式(doc.dandanplay.com/open):X-Signature = base64(SHA256(AppId + Timestamp + Path + AppSecret))
 // Path = 接口路径(小写、以/开头、不含 ? 及查询参数);Timestamp 为 UTC 秒级,机器时钟偏差会签名失败
@@ -382,6 +382,94 @@ export async function dandanDanmu(movieName: string, epName: string, epIdx: numb
     if (items.length > 0) { return items; }
   } catch (e) {
     hilog.error(0x0000, DTAG, 'dandan fallback fail: %{public}s', e instanceof Error ? e.message : String(e));
+  }
+  return [];
+}
+
+// ===== LogVar danmu_api 聚合源(免费,自部署):爱优腾芒哔咪人韩巴狐乐西埋帆红,dandanplay 兼容协议 =====
+// 部署(huangxd-/danmu_api 到 Vercel/Cloudflare/Node,免费)后把地址填进常量,如 https://danmu-api-xxx.vercel.app
+// 留空时自动跳过。匿名可调(部署未改 TOKEN 时),无需签名
+const DANMU_API_BASE: string = '';
+
+async function httpGetText(url: string): Promise<string> {
+  const r = await httpFetch(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } });
+  return utf8Decode(new Uint8Array(r.body));
+}
+
+// 选标题最贴合的 match(含片名核心词前4字的优先)
+function pickBestAnime(list: Object[], kwCore: string): Record<string, Object> | null {
+  let best: Record<string, Object> | null = null;
+  for (const m of list) {
+    const mm = m as Record<string, Object>;
+    if (best === null) { best = mm; continue; }
+    if (kwCore === '') { continue; }
+    const title = mm['animeTitle'] as string ?? '';
+    const bestTitle = best['animeTitle'] as string ?? '';
+    if (title.indexOf(kwCore) >= 0 && bestTitle.indexOf(kwCore) < 0) { best = mm; }
+  }
+  return best;
+}
+
+// 按集号对齐分集,对不上按集序兜底,返回 commentId(=episodeId)
+function pickEpisodeId(eps: Object[], epNum: number, epIdx: number): number {
+  for (const e of eps) {
+    const ee = e as Record<string, Object>;
+    if (epNum >= 0 && epNumberOf(ee['episodeTitle'] as string ?? '') === epNum) {
+      return ee['episodeId'] as number;
+    }
+  }
+  return (eps[Math.min(Math.max(epIdx, 0), eps.length - 1)] as Record<string, Object>)['episodeId'] as number;
+}
+
+// dandanplay 兼容 comments JSON → DanmuItem(p = "时间,模式,颜色,...", m = 文本)
+function parseDanmuComments(comments: Object[]): DanmuItem[] {
+  const items: DanmuItem[] = [];
+  for (const c of comments) {
+    const cc = c as Record<string, Object>;
+    const p = (cc['p'] as string ?? '').split(',');
+    const tSec = parseFloat(p[0]);
+    const modeN = parseInt(p[1]);
+    const colorN = parseInt(p[2]);
+    const text = cc['m'] as string ?? '';
+    if (isNaN(tSec) || text === '') { continue; }
+    items.push({
+      t: tSec, text: text,
+      color: isNaN(colorN) ? '#FFFFFF' : '#' + (colorN & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase(),
+      mode: isNaN(modeN) ? 1 : modeN
+    });
+  }
+  items.sort((a: DanmuItem, b: DanmuItem): number => a.t - b.t);
+  return items;
+}
+
+// danmu_api 聚合弹幕:剧名搜 anime(两个搜索接口兜底) → 集号对齐 → 拉弹幕
+export async function logvarDanmu(movieName: string, epName: string, epIdx: number): Promise<DanmuItem[]> {
+  if (DANMU_API_BASE === '') { return []; }
+  hilog.info(0x0000, DTAG, 'logvar start: %{public}s ep=%{public}s', movieName, epName);
+  const epNum = epNumberOf(epName);
+  const kwCore = movieName.length > 4 ? movieName.substring(0, 4) : movieName;
+  const base = DANMU_API_BASE.endsWith('/') ? DANMU_API_BASE.substring(0, DANMU_API_BASE.length - 1) : DANMU_API_BASE;
+  const searchPaths: string[] = ['/api/v2/search/anime?keyword=', '/api/v2/search/episodes?anime='];
+  for (const sp of searchPaths) {
+    try {
+      const raw = await httpGetText(`${base}${sp}${encodeURIComponent(movieName)}`);
+      const obj = JSON.parse(raw) as Record<string, Object>;
+      const animes = (obj['animes'] ?? obj['matches'] ?? []) as Object[];
+      if (animes.length === 0) { continue; }
+      const best = pickBestAnime(animes, kwCore);
+      const eps = (best !== null ? (best['episodes'] ?? []) : []) as Object[];
+      if (eps.length === 0) { continue; }
+      const epId = pickEpisodeId(eps, epNum, epIdx);
+      const crawl = await httpGetText(`${base}/api/v2/comment/${epId}?format=json`);
+      const cobj = JSON.parse(crawl) as Record<string, Object>;
+      const items = parseDanmuComments((cobj['comments'] ?? []) as Object[]);
+      if (items.length > 0) {
+        hilog.info(0x0000, DTAG, 'logvar hit ep%{public}d: %{public}d danmaku', epId, items.length);
+        return items;
+      }
+    } catch (e) {
+      hilog.error(0x0000, DTAG, 'logvar fail sp=%{public}s: %{public}s', sp, e instanceof Error ? e.message : String(e));
+    }
   }
   return [];
 }
