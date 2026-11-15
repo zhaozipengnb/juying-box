@@ -128,7 +128,8 @@ export struct PlayerPage {
   private uiSeeking: boolean = false;  // Slider 拖动中：屏蔽 onTime 回写，否则滑块被旧进度拽回(拖不动)
   private seekPending: boolean = false;// seek 已发出：丢弃引擎seek前的首个进度回调，防滑块回跳
   @Local gestureTip: string = '';      // 左右半屏竖滑的音量/亮度提示气泡
-  private vbVolumeSide: boolean = false; // 本次竖滑落在右半屏(音量)；false=左半屏(亮度)
+  private vbVolumeSide: boolean = false;
+  private vbActive: boolean = false;      // 竖滑只在左右边缘区域激活(中部下拉不误触) // 本次竖滑落在右半屏(音量)；false=左半屏(亮度)
   private volCur: number = -1;         // 当前媒体音量(应用侧同步跟踪,setVolume 后立即更新)
   private volReady: boolean = false;   // 音量基准就绪(首次异步读取完成前手势不动,避免旧基准跳变)
   private volHoldTimer: number = -1;   // 音量重申定时器
@@ -687,7 +688,7 @@ export struct PlayerPage {
 
   private panSeekMove(offsetX: number): void {
     if (!this.panSeeking) { return; }
-    this.seekDelta = offsetX * 0.3;
+    this.seekDelta = offsetX * 0.15;   // 0.3s/vp 太灵敏,降到 0.15
   }
 
   private panSeekEnd(): void {
@@ -707,10 +708,16 @@ export struct PlayerPage {
   // 音量走 AudioManager(MEDIA 流)，亮度走窗口 setWindowBrightness；提示气泡居中显示，松手延时消退
   private vbStart(e: GestureEvent): void {
     if (this.useWeb || this.errMsg !== '' || this.playUrl === '') { return; }
-    if (this.tipTimer >= 0) { clearTimeout(this.tipTimer); this.tipTimer = -1; }
     const fl = e.fingerList;
     const x = fl.length > 0 ? fl[0].localX : 0;
-    this.vbVolumeSide = x > this.areaW / 2;
+    // 只在左右边缘 30% 区域响应竖滑——屏幕中部下拉(拉通知栏)不再误触亮度/音量
+    if (x > this.areaW * 0.3 && x < this.areaW * 0.7) {
+      this.vbActive = false;
+      return;
+    }
+    this.vbActive = true;
+    if (this.tipTimer >= 0) { clearTimeout(this.tipTimer); this.tipTimer = -1; }
+    this.vbVolumeSide = x >= this.areaW * 0.7;
     if (this.vbVolumeSide) {
       // 每次手势强制重读系统真实音量(系统音量可能被外部改变:硬件键/其他应用/重启)
       this.volReady = false;
@@ -738,10 +745,10 @@ export struct PlayerPage {
   }
 
   private vbMove(e: GestureEvent): void {
-    if (this.useWeb || this.errMsg !== '' || this.playUrl === '') { return; }
+    if (!this.vbActive || this.useWeb || this.errMsg !== '' || this.playUrl === '') { return; }
     const dy = e.offsetY;   // vp，上滑为负
     if (this.vbVolumeSide && this.volReady && this.volMax > 0 && this.volCur >= 0) {
-      let v = Math.round(this.volCur + this.volMax * (-dy / 300));
+      let v = Math.round(this.volCur + this.volMax * (-dy / 500));   // 500vp 拉满全量程,降灵敏度
       hilog.info(0x0000, 'OKV-VOL', 'move dy=%{public}d v=%{public}d', Math.round(dy), v);
       v = Math.max(0, Math.min(this.volMax, v));
       if (v !== this.volLast) {   // 去重：拖动事件远密于音量档位，避免洪水式 setVolume
@@ -753,7 +760,7 @@ export struct PlayerPage {
       }
       this.gestureTip = '音量 ' + Math.round(v * 100 / this.volMax) + '%';
     } else if (!this.vbVolumeSide) {
-      let b = this.brightCache + (-dy / 300);
+      let b = this.brightCache + (-dy / 500);   // 500vp 拉 0→1,降灵敏度
       b = Math.max(0.05, Math.min(1, b));
       this.brightCache = b;
       gBrightness = b;
@@ -775,6 +782,7 @@ export struct PlayerPage {
   }
 
   private vbEnd(): void {
+    this.vbActive = false;
     if (this.tipTimer >= 0) { clearTimeout(this.tipTimer); }
     this.tipTimer = setTimeout(() => { this.gestureTip = ''; this.tipTimer = -1; }, 700);
   }
@@ -811,11 +819,20 @@ export struct PlayerPage {
     const s = this.avSession;
     if (s === null || url === '') { return; }
     try {
-      await s.setAVMetadata({ assetId: url, title: name });
+      const m = this.detail?.movie;
+      const showTitle = this.movieName !== '' ? this.movieName : name;
+      // 下拉/锁屏媒体卡:标题=剧名、艺人=集名、封面=海报(此前只传集名,卡上没有剧报)
+      const meta: AVSessionManager.AVMetadata = {
+        assetId: url,
+        title: showTitle,
+        artist: name,
+        mediaImage: (m !== null && m !== undefined && m.pic !== '') ? m.pic : undefined
+      };
+      await s.setAVMetadata(meta);
       await s.setAVQueueTitle(this.movieName);
       await s.setAVQueueItems([{
         itemId: 0,
-        description: { assetId: url, title: name, mediaType: 'video' }
+        description: { assetId: url, title: showTitle, mediaType: 'video' }
       }]);
     } catch (e) { }
   }
