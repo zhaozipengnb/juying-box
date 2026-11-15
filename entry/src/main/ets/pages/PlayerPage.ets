@@ -176,6 +176,7 @@ export struct PlayerPage {
   @Local dmOffset: number = 0;             // 弹幕时间偏移(秒,正值=弹幕延后出现)
   // 批量下载选集面板(原型:下载=选集弹层,可切线路/多选/显示各集下载状态)
   @Local showDlPanel: boolean = false;
+  @Local showEpSheet: boolean = false;  // '更多'选集底部弹层
   @Local dlLineIdx: number = 0;        // 面板内线路
   @Local dlSel: boolean[] = [];        // 各集选中态
   @Local dlResolveText: string = '';   // 批量解析进度/结果提示
@@ -1121,6 +1122,10 @@ export struct PlayerPage {
         })
       }
 
+      if (this.showEpSheet) {
+        this.epSheet()
+      }
+
       if (this.showDlPanel) {
         this.downloadPanel()
       }
@@ -1874,12 +1879,63 @@ export struct PlayerPage {
 
   // 批量下载选集面板(底部弹层):线路切换 + 全选/清空 + 集多选(带下载状态) + 下载按钮
   @Builder
+  epSheet() {
+    Column() {
+      // 上方遮罩:点空白关闭
+      Column()
+        .width('100%').layoutWeight(1)
+        .onClick(() => { this.showEpSheet = false; })
+        .transition(TransitionEffect.OPACITY.animation({ duration: 200 }))
+      Column({ space: 10 }) {
+        Row() {
+          Text('选集').fontSize(16).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+          Blank()
+          Text('✕').fontSize(16).fontColor('#99FFFFFF')
+            .padding({ left: 10, right: 2, top: 4, bottom: 4 })
+            .onClick(() => { this.showEpSheet = false; })
+        }.width('100%')
+        List({ space: 2 }) {
+          ForEach(this.lines[this.lineIdx]?.episodes ?? [], (e: Episode, ei: number) => {
+            ListItem() {
+              Row() {
+                Text(e.name).fontSize(14)
+                  .fontColor(this.epIdx === ei ? '#4D9EFF' : '#E6FFFFFF')
+                  .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+                if (this.epIdx === ei) {
+                  Text('✓').fontSize(14).fontColor('#4D9EFF')
+                }
+              }.width('100%')
+            }
+            .padding({ left: 16, right: 16, top: 11, bottom: 11 })
+            .borderRadius(8)
+            .backgroundColor(this.epIdx === ei ? '#22FFFFFF' : Color.Transparent)
+            .onClick(() => {
+              this.showEpSheet = false;
+              this.switchTo(this.lineIdx, ei);
+            })
+          }, (e: Episode, ei: number) => ei + '_' + e.name)
+        }
+        .width('100%')
+        .constraintSize({ maxHeight: 300 })
+      }
+      .width('100%')
+      .padding({ top: 14, bottom: 16 })
+      .backgroundColor('#D9262629')
+      .borderRadius({ topLeft: 14, topRight: 14 })
+      // 底部滑入/滑出
+      .transition(TransitionEffect.translate({ y: '100%' }).animation({ duration: 220, curve: Curve.EaseOut }))
+    }
+    .width('100%').height('100%')
+  }
+
+  @Builder
   downloadPanel() {
     Column() {
       // 上方遮罩:点空白关闭
       Column()
         .width('100%').layoutWeight(1)
         .onClick(() => { if (!this.dlBusy) { this.showDlPanel = false; } })
+        .transition(TransitionEffect.OPACITY.animation({ duration: 200 }))
       Column({ space: 10 }) {
         Row() {
           Text('下载选集')
@@ -1950,6 +2006,8 @@ export struct PlayerPage {
       .backgroundColor('#D9262629')
       .borderRadius({ topLeft: 16, topRight: 16 })
       .padding(12)
+      // 底部滑入/滑出
+      .transition(TransitionEffect.translate({ y: '100%' }).animation({ duration: 220, curve: Curve.EaseOut }))
       // 卡片本体点击不关闭
       .onClick(() => { })
     }
