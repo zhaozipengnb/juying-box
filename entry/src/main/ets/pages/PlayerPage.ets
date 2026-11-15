@@ -1357,15 +1357,15 @@ export struct PlayerPage {
                   this.loopPlay = !this.loopPlay;
                   this.engine.setLoop(this.loopPlay);
                 })
-              // 跳过片头:开播前 5 分钟内出现——第一次点=把当前位置标记为本剧片头结束点;
+              // 跳过片头:常驻(仅直播隐藏)——第一次点=把当前位置标记为本剧片头结束点;
               // 已标记过且还在片头内 → 直接跳到记忆点
-              if (this.siteKey !== 'live' && this.curTime < 300) {
+              if (this.siteKey !== 'live') {
                 Text('跳过片头').fontSize(12).fontColor('#FFFFFF')
                   .onClick(() => { this.markSkipIntro(); })
               }
-              // 跳过片尾:距结尾 10 分钟内且有下一集时出现(拖到片尾附近也看得到)——
-              // 点了立即连播下一集,并把距结尾时长记为本剧片尾长度(后续集到点自动连播)
-              if (this.siteKey !== 'live' && this.dur > 0 && this.dur - this.curTime < 600
+              // 跳过片尾:常驻(有下一集且非直播)——点了立即连播下一集,
+              // 并把距结尾时长记为本剧片尾长度(后续集到点自动连播)
+              if (this.siteKey !== 'live'
                 && this.epIdx + 1 < (this.lines[this.lineIdx]?.episodes.length ?? 0)) {
                 Text('跳过片尾').fontSize(12).fontColor('#FFFFFF')
                   .onClick(() => { this.markSkipOutro(); })
