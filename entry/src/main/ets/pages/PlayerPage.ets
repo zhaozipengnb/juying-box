@@ -670,6 +670,17 @@ export struct PlayerPage {
     this.settings.setShowSkip(this.siteKey, m.vodId, this.showIntroSec, this.showOutroSec);
   }
 
+  // 选集行"更多":打开全部剧集选择弹层(与全屏设置行"选集"同款,长剧横滑条摆不下全部)
+  private showEpPicker(): void {
+    if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
+    this.picker = {
+      title: '选集',
+      options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
+      index: this.epIdx,
+      onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
+    };
+  }
+
   // 进度落盘：final=退出时强制；否则节流 5s。无痕模式不记
   private saveProgress(final: boolean): void {
     const m = this.detail?.movie;
@@ -1635,9 +1646,18 @@ export struct PlayerPage {
         }
 
         // 8. 选集（横滑 chips，当前集黄色高亮并自动定位）
+        // padding 必须挂在 Column 上:原先误挂在 List 上导致"选集"标题没有左缩进、与"线路"不齐
         if (this.lines.length > 0 && this.lines[this.lineIdx] !== undefined) {
           Column({ space: 8 }) {
-            Text('选集').fontSize(13).fontColor('#FFFFFF')
+            Row() {
+              Text('选集').fontSize(13).fontColor('#FFFFFF')
+              Blank()
+              Row({ space: 2 }) {
+                Text('更多').fontSize(12).fontColor('#DDDDDD')
+                Image($r('app.media.ic_chevron_right')).width(14).height(14).fillColor('#DDDDDD')
+              }
+              .onClick(() => { this.showEpPicker(); })
+            }.width('100%')
             List({ space: 8, scroller: this.epScroller }) {
               ForEach(this.lines[this.lineIdx].episodes, (e: Episode, ei: number) => {
                 ListItem() {
@@ -1656,7 +1676,9 @@ export struct PlayerPage {
             .scrollBar(BarState.Off)
             .width('100%')
             .height(40)
-        }.width('100%').padding({ left: 16, right: 16, bottom: 10 })
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, bottom: 10 })
         }
 
         // 9. 简介
