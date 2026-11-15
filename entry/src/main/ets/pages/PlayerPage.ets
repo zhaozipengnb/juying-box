@@ -2012,7 +2012,8 @@ export struct PlayerPage {
                 .backgroundColor('#FFFFFF')
                 .border({ width: 1, color: this.epChipBorder(ep.name) })
                 .borderRadius(16)
-                .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+                .height(36)   // 加高集片按钮
+                .padding({ left: 10, right: 10 })
                 .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 .width('100%')
                 .textAlign(TextAlign.Center)
