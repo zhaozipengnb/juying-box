@@ -2000,24 +2000,28 @@ export struct PlayerPage {
           }
           .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).align(Alignment.Start).width('100%')
         }
-        // 集网格:点击哪一集就下载哪一集(片底色按状态区分,后缀显示进度/✓/✕)
-        Scroll() {
-          Flex({ wrap: FlexWrap.Wrap }) {
-            ForEach(this.dlTabEps(), (ep: Episode) => {
+        // 集网格:固定 3 列,点击哪一集就下载哪一集(片底色按状态区分,后缀显示进度/✓/✕)
+        Grid() {
+          ForEach(this.dlTabEps(), (ep: Episode) => {
+            GridItem() {
               Text(ep.name + this.epDlSuffix(ep.name))
                 .fontSize(12)
                 .fontColor('#FFFFFF')
                 .backgroundColor(this.epChipBg(ep.name))
                 .borderRadius(16)
                 .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-                .margin({ right: 8, bottom: 8 })
                 .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+                .textAlign(TextAlign.Center)
                 .onClick(() => { this.downloadOne(this.lines[this.dlLineIdx], ep); })
-            }, (ep: Episode) => ep.name)
-          }
+            }
+          }, (ep: Episode) => ep.name)
         }
-        .width('100%').layoutWeight(1)
-        .align(Alignment.Top)
+        .columnsTemplate('1fr 1fr 1fr')
+        .columnsGap(8)
+        .rowsGap(8)
+        .width('100%')
+        .layoutWeight(1)
       }
       .width('100%').height('58%')
       .backgroundColor('#D9262629')
