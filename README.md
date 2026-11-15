@@ -114,6 +114,20 @@ java -jar build/libs/proxy-server.jar <订阅地址> [端口]
 |------|--------|------|----------|
 | ![首页](screenshots/home.png) | ![播放器](screenshots/player.png) | ![弹幕](screenshots/danmu.png) | ![下载](screenshots/download.png) |
 
+## 🤝 参与贡献
+
+1. **Issue 反馈**：问题与建议优先走 [Issues](https://gitee.com/ZKingp/juyuan-box/issues)——公开讨论、可追溯，回复也帮到其他人
+2. **代码贡献**：Fork 本仓库 → 新建分支修改 → 提交 Pull Request，会尽快 review
+   - 重点维护方向见功能特性列表；改 `net/`、`spider/`、构建配置的 PR 请在描述里说明动机
+3. **微信交流群**：聊用法、交流源配置、协作开发，扫码加入
+
+<p align="center">
+  <img src="docs/wechat_group_qr.png" width="240" alt="微信交流群二维码"/>
+</p>
+
+> - 二维码图片路径：`docs/wechat_group_qr.png`，过期后更新图片重新提交即可（群码支持 7 天有效期）
+> - 出于隐私考虑，**不建议**在公开仓库直接放个人微信号：公开页面会被爬虫抓取，骚扰无法撤回
+
 ## ⚠️ 免责声明
 
 1. 本项目是基于开源技术的学习研究作品，**不内置、不存储、不上传任何影视内容**，也不提供任何内容服务。
