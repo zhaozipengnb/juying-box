@@ -63,6 +63,7 @@ export struct PlayerPage {
   @Local showOutroSec: number = 0;     // 本剧片尾长度(距结尾秒数,0=未标记):点"跳过片尾"时按当前位置标记
   private channelUrls: string[] = [];  // 直播多线路地址表（来自 PlayerParam）
   private epScroller: Scroller = new Scroller();  // 选集横滑定位当前集
+  @Local epAscending: boolean = true;             // 选集显示序:true=正序(第01集在前),false=倒序
   @Local sniffUrl: string = '';        // 嗅探中:正在加载的网页地址(非空 = 嗅探中)
   @Local sniffing: boolean = false;
   private sniffReferer: string = '';
@@ -631,7 +632,8 @@ export struct PlayerPage {
     this.lineIdx = li;
     this.epIdx = ei;
     this.ep = eps[ei];
-    this.epScroller.scrollToIndex(ei);
+    const disp = this.epDisplayIdxs().indexOf(ei);
+    this.epScroller.scrollToIndex(disp >= 0 ? disp : ei);   // 倒序时滚到显示位
     this.playUrl = '';
     this.errMsg = '';
     this.useWeb = false;
@@ -670,14 +672,24 @@ export struct PlayerPage {
     this.settings.setShowSkip(this.siteKey, m.vodId, this.showIntroSec, this.showOutroSec);
   }
 
+  // 选集显示序:正序=源顺序;倒序=反转。返回真实集下标数组(条目点击/选集弹层按此映射回真实下标)
+  private epDisplayIdxs(): number[] {
+    const eps = this.lines[this.lineIdx]?.episodes ?? [];
+    const idxs: number[] = eps.map((_e: Episode, i: number): number => i);
+    if (!this.epAscending) { idxs.reverse(); }
+    return idxs;
+  }
+
   // 选集行"更多":打开全部剧集选择弹层(与全屏设置行"选集"同款,长剧横滑条摆不下全部)
   private showEpPicker(): void {
     if (this.lines.length === 0 || this.lines[this.lineIdx] === undefined) { return; }
+    const idxs = this.epDisplayIdxs();
+    const eps = this.lines[this.lineIdx].episodes;
     this.picker = {
       title: '选集',
-      options: this.lines[this.lineIdx].episodes.map((e: Episode): string => e.name),
-      index: this.epIdx,
-      onPick: (idx: number): void => { this.switchTo(this.lineIdx, idx); }
+      options: idxs.map((i: number): string => eps[i].name),
+      index: idxs.indexOf(this.epIdx),
+      onPick: (idx: number): void => { this.switchTo(this.lineIdx, idxs[idx]); }
     };
   }
 
@@ -1655,7 +1667,16 @@ export struct PlayerPage {
         if (this.lines.length > 0 && this.lines[this.lineIdx] !== undefined) {
           Column({ space: 8 }) {
             Row() {
-              Text('选集').fontSize(13).fontColor('#FFFFFF')
+              Row({ space: 6 }) {
+                Text('选集').fontSize(13).fontColor('#FFFFFF')
+                Image($r('app.media.ic_sort')).width(16).height(16)
+                  .fillColor(this.epAscending ? '#FFFFFF' : '#4D9EFF')
+                  .onClick(() => {
+                    this.epAscending = !this.epAscending;
+                    const disp = this.epDisplayIdxs().indexOf(this.epIdx);
+                    if (disp >= 0) { this.epScroller.scrollToIndex(disp); }   // 反序后当前集滚回可视区
+                  })
+              }
               Blank()
               Row({ space: 2 }) {
                 Text('更多').fontSize(12).fontColor('#FFFFFF')
@@ -1664,18 +1685,18 @@ export struct PlayerPage {
               .onClick(() => { this.showEpPicker(); })
             }.width('100%')
             List({ space: 8, scroller: this.epScroller }) {
-              ForEach(this.lines[this.lineIdx].episodes, (e: Episode, ei: number) => {
+              ForEach(this.epDisplayIdxs(), (di: number) => {
                 ListItem() {
-                  Text(e.name)
+                  Text(this.lines[this.lineIdx].episodes[di].name)
                     .fontSize(12)
-                    .fontColor(this.epIdx === ei ? '#FFEB3B' : '#DDDDDD')
+                    .fontColor(this.epIdx === di ? '#FFEB3B' : '#DDDDDD')
                     .backgroundColor('#4D888888')
                     .borderRadius(18)
                     .padding({ left: 14, right: 14, top: 7, bottom: 7 })
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                 }
-                .onClick(() => { this.switchTo(this.lineIdx, ei); })
-              }, (e: Episode, ei: number) => ei + e.name)
+                .onClick(() => { this.switchTo(this.lineIdx, di); })
+              }, (di: number) => di + '_' + (this.lines[this.lineIdx].episodes[di]?.name ?? ''))
             }
             .listDirection(Axis.Horizontal)
             .scrollBar(BarState.Off)
